@@ -1,12 +1,17 @@
 name: Deploy dev tool
 
 # Publishes the game (/) and the world inspector (/dev/) to GitHub Pages, so
-# there is one stable URL that always reflects the latest push.
+# there is one stable URL that always reflects what's on main.
+#
+# main only, deliberately. The `github-pages` environment restricts deployments
+# to the default branch, so a feature-branch trigger fails at the environment
+# gate before the job even starts — a red X on every PR that deploys nothing.
+# Use workflow_dispatch to publish a branch on purpose (its policy has to allow
+# that branch too).
 on:
   push:
     branches:
       - main
-      - claude/noahs-ark-roguelike-plan-tky1jp
   workflow_dispatch:
 
 permissions:
