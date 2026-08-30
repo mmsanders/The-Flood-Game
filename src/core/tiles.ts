@@ -38,6 +38,31 @@ export const enum Tile {
   DungeonEntrance = 0x31,
   HeartContainer = 0x32,
   TownDoor = 0x33,
+
+  // -- 0x40 dungeon terrain -------------------------------------------------
+  DungeonFloor = 0x40,
+  DungeonWall = 0x41,
+  Stairs = 0x42,
+  /** Built over a chasm, at the cost of gopher wood. */
+  Bridge = 0x43,
+  /** Rigged across a ledge, at the cost of fiber. */
+  Rope = 0x44,
+  DoorOpen = 0x45,
+
+  // -- 0x50 dungeon obstacles (blocking, clearable) -------------------------
+  Chasm = 0x50,
+  Ledge = 0x51,
+  DoorLocked = 0x52,
+
+  /**
+   * Walkable, unlike the obstacles above — a pit is a trap rather than a gate.
+   * Step in one and it costs a heart and spits you back out.
+   */
+  Pit = 0x53,
+
+  // -- 0x60 dungeon pickups -------------------------------------------------
+  Key = 0x60,
+  Chest = 0x61,
 }
 
 export const enum Biome {
@@ -101,16 +126,54 @@ export function isResourceNode(tile: number): boolean {
 }
 
 /**
- * Can the player stand here (ignoring floodwater)?
+ * Tiles the player cannot stand on, declared rather than inferred from where
+ * their ID happens to fall.
  *
  * Resource nodes block movement — you harvest them from an adjacent tile,
  * which is what makes a node inside a thicket genuinely awkward to reach.
- * POI tiles are walkable so the player can step onto them to interact.
+ * POI and pickup tiles stay walkable so stepping on them can trigger.
  */
+const BLOCKING: readonly Tile[] = [
+  Tile.Tree,
+  Tile.Shrub,
+  Tile.Rock,
+  Tile.Cliff,
+  Tile.Water,
+
+  Tile.Flax,
+  Tile.GopherTree,
+  Tile.StoneNode,
+  Tile.PitchSeep,
+
+  Tile.DungeonWall,
+
+  Tile.Chasm,
+  Tile.Ledge,
+  Tile.DoorLocked,
+];
+
+/**
+ * A 256-entry lookup built once at module load. A range check would silently
+ * mis-classify the next tile group added above it; this cannot.
+ */
+const WALKABLE = (() => {
+  const table = new Uint8Array(256).fill(1);
+  for (const tile of BLOCKING) table[tile] = 0;
+  return table;
+})();
+
+/** Can the player stand here, ignoring floodwater? */
 export function isWalkable(tile: number): boolean {
-  if (tile >= Tile.Tree && tile <= Tile.Water) return false;
-  if (isResourceNode(tile)) return false;
-  return true;
+  return WALKABLE[tile & 0xff] === 1;
+}
+
+/** Obstacles that can be cleared by spending ark material. */
+export function isClearableObstacle(tile: number): boolean {
+  return tile === Tile.Chasm || tile === Tile.Ledge || tile === Tile.DoorLocked;
+}
+
+export function isDungeonTile(tile: number): boolean {
+  return tile >= Tile.DungeonFloor && tile <= Tile.Chest;
 }
 
 /** Blocking scenery that worldgen may carve away to restore connectivity. */
@@ -156,6 +219,18 @@ export const TILE_NAMES: Record<number, string> = {
   [Tile.DungeonEntrance]: 'Dungeon',
   [Tile.HeartContainer]: 'Heart Container',
   [Tile.TownDoor]: 'Town',
+  [Tile.DungeonFloor]: 'Dungeon Floor',
+  [Tile.DungeonWall]: 'Dungeon Wall',
+  [Tile.Stairs]: 'Stairs',
+  [Tile.Bridge]: 'Plank Bridge',
+  [Tile.Rope]: 'Rope',
+  [Tile.DoorOpen]: 'Open Door',
+  [Tile.Chasm]: 'Chasm',
+  [Tile.Ledge]: 'Ledge',
+  [Tile.DoorLocked]: 'Locked Door',
+  [Tile.Pit]: 'Pit',
+  [Tile.Key]: 'Key',
+  [Tile.Chest]: 'Chest',
 };
 
 export function tileName(tile: number): string {

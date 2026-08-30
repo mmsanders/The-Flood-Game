@@ -62,6 +62,29 @@ test.describe('dev tool', () => {
     }
   });
 
+  test('views a dungeon interior', async ({ page }, info) => {
+    await page.goto(`/dev/?seed=${SEED}&day=0`);
+    await page.waitForFunction(() => 'flood' in window);
+    await page.waitForTimeout(400);
+
+    // The second chip is the first dungeon.
+    const chips = page.locator('#map-chips .chip');
+    await expect(chips).toHaveCount(5); // overworld + one per biome
+    await chips.nth(1).click();
+    await page.waitForTimeout(350);
+    await page.screenshot({ path: `${OUT}/devtool-${info.project.name}-dungeon.png` });
+
+    // Tapping a room opens the same panel inspector the overworld uses.
+    const box = await page.locator('#map').boundingBox();
+    if (box) {
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await expect(page.locator('#panel-sheet')).toBeVisible();
+      await expect(page.locator('#panel-body')).toContainText(/underground/i);
+      await page.waitForTimeout(250);
+      await page.screenshot({ path: `${OUT}/devtool-${info.project.name}-dungeon-room.png` });
+    }
+  });
+
   test('opens the panel inspector on tap', async ({ page }, info) => {
     await page.goto(`/dev/?seed=${SEED}&day=6`);
     await page.waitForFunction(() => 'flood' in window);
@@ -108,6 +131,43 @@ test.describe('game', () => {
     });
     expect(Number.isFinite(moved.x) && Number.isFinite(moved.y)).toBe(true);
 
+    expect(errors, errors.join('\n')).toEqual([]);
+  });
+
+  test('shows the dungeon trade in front of an obstacle', async ({ page }, info) => {
+    if (info.project.name !== 'desktop') test.skip();
+
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(String(e)));
+
+    await page.goto(`/?seed=${SEED}&speed=1`);
+    await page.waitForFunction(() => 'flood' in window);
+    await page.waitForTimeout(400);
+
+    // Drop the player into the first dungeon, facing a chasm, holding wood.
+    await page.evaluate(() => {
+      const w = window as unknown as { flood: { state: any; render: () => void } };
+      const s = w.flood.state;
+      const d = s.world.dungeons[0];
+
+      s.location = { kind: 'dungeon', dungeonId: 0, returnTo: { x: 1, y: 1 } };
+      const spot = d.stairs;
+      d.tiles[spot.y * d.w + spot.x] = 0x40; // floor
+      d.tiles[spot.y * d.w + spot.x + 1] = 0x50; // chasm
+      s.player.x = spot.x * 16 + 3;
+      s.player.y = spot.y * 16 + 2;
+      s.player.dir = 3; // right
+      s.carried[1] = 14; // gopher wood
+      s.camera.panelX = Math.floor(spot.x / 16);
+      s.camera.panelY = Math.floor(spot.y / 11);
+      s.camera.fromX = s.camera.panelX;
+      s.camera.fromY = s.camera.panelY;
+      s.camera.scroll = 0;
+      w.flood.render();
+    });
+
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${OUT}/game-dungeon-trade.png` });
     expect(errors, errors.join('\n')).toEqual([]);
   });
 

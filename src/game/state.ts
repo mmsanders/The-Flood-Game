@@ -6,8 +6,16 @@
  */
 
 import { PANEL_H, PANEL_PX_H, PANEL_PX_W, PANEL_W, TILE_PX } from '../core/config.js';
+import {
+  type Dungeon,
+  OBSTACLE_CLEARS_TO,
+  OBSTACLE_COST,
+  REWARD_NAMES,
+  RewardKind,
+} from '../core/dungeon.js';
 import { waterLevelAtSeconds } from '../core/flood.js';
 import { ARK_RECIPE, NODE_YIELD, PLAYER_TILES_PER_SEC } from '../core/resources.js';
+import type { TileMap } from '../core/tilemap.js';
 import {
   RESOURCE_COUNT,
   type Resource,
@@ -16,7 +24,7 @@ import {
   isWalkable,
   resourceOf,
 } from '../core/tiles.js';
-import type { World } from '../core/world.js';
+import type { Point, World } from '../core/world.js';
 
 export const enum Dir {
   Down = 0,
@@ -39,6 +47,8 @@ const DROWN_INTERVAL = 2.0;
 const WADE_SPEED_SCALE = 0.55;
 const SCROLL_TIME = 0.4;
 const MESSAGE_TIME = 3.2;
+/** Tiles converted in one clear. Generous enough for any doorway band. */
+const CLEAR_LIMIT = 32;
 
 export interface Player {
   /** Top-left of the hitbox, in world pixels. */
@@ -66,8 +76,18 @@ export interface Camera {
   fromY: number;
 }
 
+/** Where the player currently is. Dungeons are separate maps, not sub-areas. */
+export interface Location {
+  kind: 'overworld' | 'dungeon';
+  /** Index into `world.dungeons`, or -1 above ground. */
+  dungeonId: number;
+  /** Overworld tile to put the player back on when they surface. */
+  returnTo: Point | null;
+}
+
 export interface GameState {
   world: World;
+  location: Location;
   player: Player;
   /** Carried resources, indexed by Resource. */
   carried: number[];
@@ -80,11 +100,21 @@ export interface GameState {
   messageTimer: number;
   harvested: number;
   heartsFound: number;
+  /** Keys are per-dungeon: they do not travel between them. */
+  keysHeld: number;
+  /** Last non-hazard tile stood on, for spitting the player out of a pit. */
+  safeSpot: Point | null;
+  /** Units gathered per swing. The Budding Rod doubles it. */
+  harvestYield: number;
+  /** Swing reach in tiles. The Serpent Rod extends it. */
+  rodReach: number;
+  dungeonsCleared: boolean[];
 }
 
 export function createGame(world: World): GameState {
   return {
     world,
+    location: { kind: 'overworld', dungeonId: -1, returnTo: null },
     player: {
       x: world.spawn.x * TILE_PX + (TILE_PX - PLAYER_W) / 2,
       y: world.spawn.y * TILE_PX + (TILE_PX - PLAYER_H) / 2,
@@ -113,7 +143,31 @@ export function createGame(world: World): GameState {
     messageTimer: 0,
     harvested: 0,
     heartsFound: 0,
+    keysHeld: 0,
+    safeSpot: null,
+    harvestYield: NODE_YIELD,
+    rodReach: 1,
+    dungeonsCleared: world.dungeons.map(() => false),
   };
+}
+
+/**
+ * The map the player is standing on.
+ *
+ * Movement, collision, harvesting and rendering all read this rather than
+ * `state.world`, which is what lets a dungeon be a whole separate map without
+ * a single "am I underground" branch in any of them.
+ */
+export function activeMap(state: GameState): TileMap {
+  return state.location.kind === 'dungeon'
+    ? state.world.dungeons[state.location.dungeonId]
+    : state.world;
+}
+
+export function currentDungeon(state: GameState): Dungeon | null {
+  return state.location.kind === 'dungeon'
+    ? state.world.dungeons[state.location.dungeonId]
+    : null;
 }
 
 export function waterLevel(state: GameState): number {
@@ -128,6 +182,8 @@ export interface StepInput {
   moveX: number;
   moveY: number;
   attackPressed: boolean;
+  /** Enter a dungeon, climb out, or pay to clear the obstacle in front. */
+  interactPressed?: boolean;
 }
 
 export function step(state: GameState, input: StepInput, dt: number): void {
@@ -159,6 +215,9 @@ export function step(state: GameState, input: StepInput, dt: number): void {
     swingRod(state);
   }
 
+  if (input.interactPressed) handleInteract(state);
+
+  rememberSafeSpot(state);
   stepTileEffects(state);
   applyFlood(state, dt);
   updateCamera(state);
@@ -231,7 +290,7 @@ function moveAxis(state: GameState, dx: number, dy: number): void {
  * rising tide would freeze you in place instead of chasing you uphill.
  */
 function canOccupy(state: GameState, x: number, y: number): boolean {
-  const { world } = state;
+  const map = activeMap(state);
   const alreadyWading = isSubmergedAt(
     state,
     state.player.x + PLAYER_W / 2,
@@ -249,21 +308,22 @@ function canOccupy(state: GameState, x: number, y: number): boolean {
   for (const [cx, cy] of corners) {
     const tx = Math.floor(cx / TILE_PX);
     const ty = Math.floor(cy / TILE_PX);
-    if (tx < 0 || ty < 0 || tx >= world.w || ty >= world.h) return false;
-    const i = ty * world.w + tx;
-    if (!isWalkable(world.tiles[i])) return false;
-    if (!alreadyWading && world.elev[i] < level) return false;
+    if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return false;
+    const i = ty * map.w + tx;
+    if (!isWalkable(map.tiles[i])) return false;
+    if (map.floods && !alreadyWading && map.elev[i] < level) return false;
   }
 
   return true;
 }
 
 function isSubmergedAt(state: GameState, pxX: number, pxY: number): boolean {
-  const { world } = state;
+  const map = activeMap(state);
+  if (!map.floods) return false;
   const tx = Math.floor(pxX / TILE_PX);
   const ty = Math.floor(pxY / TILE_PX);
-  if (tx < 0 || ty < 0 || tx >= world.w || ty >= world.h) return false;
-  return world.elev[ty * world.w + tx] < waterLevel(state);
+  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return false;
+  return map.elev[ty * map.w + tx] < waterLevel(state);
 }
 
 // ---------------------------------------------------------------- the rod
@@ -277,7 +337,7 @@ function swingRod(state: GameState): void {
   const cx = p.x + PLAYER_W / 2;
   const cy = p.y + PLAYER_H / 2;
 
-  const reach = TILE_PX;
+  const reach = TILE_PX * state.rodReach;
   const tx = Math.floor((cx + dirX(p.dir) * reach) / TILE_PX);
   const ty = Math.floor((cy + dirY(p.dir) * reach) / TILE_PX);
 
@@ -285,17 +345,17 @@ function swingRod(state: GameState): void {
 }
 
 function harvestAt(state: GameState, tx: number, ty: number): void {
-  const { world } = state;
-  if (tx < 0 || ty < 0 || tx >= world.w || ty >= world.h) return;
+  const map = activeMap(state);
+  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return;
 
-  const i = ty * world.w + tx;
-  const res = resourceOf(world.tiles[i]);
+  const i = ty * map.w + tx;
+  const res = resourceOf(map.tiles[i]);
   if (res === null) return;
 
-  world.tiles[i] = carveTo(world.biome[i]);
-  state.carried[res] += NODE_YIELD;
-  state.harvested++;
-  say(state, `+${NODE_YIELD} ${RESOURCE_LABEL[res]}`);
+  map.tiles[i] = carveTo(map.biome[i]);
+  state.carried[res] += state.harvestYield;
+  state.harvested += state.harvestYield;
+  say(state, `+${state.harvestYield} ${RESOURCE_LABEL[res]}`);
 }
 
 const RESOURCE_LABEL = ['fiber', 'gopher wood', 'stone', 'pitch'];
@@ -311,16 +371,17 @@ function dirY(dir: Dir): number {
 // ---------------------------------------------------------------- tile effects
 
 function stepTileEffects(state: GameState): void {
-  const { world, player } = state;
+  const map = activeMap(state);
+  const { player } = state;
   const tx = Math.floor((player.x + PLAYER_W / 2) / TILE_PX);
   const ty = Math.floor((player.y + PLAYER_H / 2) / TILE_PX);
-  if (tx < 0 || ty < 0 || tx >= world.w || ty >= world.h) return;
+  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return;
 
-  const i = ty * world.w + tx;
+  const i = ty * map.w + tx;
 
-  switch (world.tiles[i]) {
+  switch (map.tiles[i]) {
     case Tile.HeartContainer: {
-      world.tiles[i] = carveTo(world.biome[i]);
+      map.tiles[i] = carveTo(map.biome[i]);
       player.maxHearts++;
       player.hearts = player.maxHearts;
       state.heartsFound++;
@@ -331,13 +392,274 @@ function stepTileEffects(state: GameState): void {
       deliverToArk(state);
       break;
     }
-    case Tile.DungeonEntrance: {
-      say(state, 'The door is sealed. Not yet.');
+    case Tile.Key: {
+      map.tiles[i] = Tile.DungeonFloor;
+      state.keysHeld++;
+      say(state, 'A key. Something here is locked.');
       break;
     }
+    case Tile.Chest: {
+      map.tiles[i] = Tile.DungeonFloor;
+      openChest(state);
+      break;
+    }
+    case Tile.Pit: {
+      fallInPit(state);
+      break;
+    }
+    // Stairs and dungeon doors are entered deliberately, never by walking
+    // over them — otherwise arriving would immediately bounce you back out.
     default:
       break;
   }
+}
+
+/** Costs a heart and returns the player to the last ground they stood on. */
+function fallInPit(state: GameState): void {
+  const p = state.player;
+  const before = p.invuln;
+  damage(state, 1);
+  // Invulnerability frames would otherwise let a player walk a pit for free.
+  if (before > 0) return;
+
+  if (state.safeSpot) {
+    p.x = state.safeSpot.x;
+    p.y = state.safeSpot.y;
+  }
+  say(state, 'You fall. The dark is deeper than it looked.');
+}
+
+function openChest(state: GameState): void {
+  const dungeon = currentDungeon(state);
+  if (!dungeon) return;
+  if (state.dungeonsCleared[dungeon.id]) return;
+
+  state.dungeonsCleared[dungeon.id] = true;
+
+  switch (dungeon.reward) {
+    case RewardKind.HeartContainer:
+      state.player.maxHearts++;
+      state.player.hearts = state.player.maxHearts;
+      state.heartsFound++;
+      break;
+    case RewardKind.BuddingRod:
+      state.harvestYield = 2;
+      break;
+    case RewardKind.SerpentRod:
+      state.rodReach = 2;
+      break;
+  }
+
+  say(state, `${REWARD_NAMES[dungeon.reward]}! Take it and go.`);
+}
+
+// ---------------------------------------------------------------- interaction
+
+/** Tile the player is standing on. */
+function tileUnder(state: GameState): { map: TileMap; tx: number; ty: number; i: number } {
+  const map = activeMap(state);
+  const tx = Math.floor((state.player.x + PLAYER_W / 2) / TILE_PX);
+  const ty = Math.floor((state.player.y + PLAYER_H / 2) / TILE_PX);
+  return { map, tx, ty, i: ty * map.w + tx };
+}
+
+/** Tile the player is facing, within the rod's reach. */
+export function facingTile(state: GameState): { map: TileMap; tx: number; ty: number } {
+  const map = activeMap(state);
+  const p = state.player;
+  const tx = Math.floor((p.x + PLAYER_W / 2 + dirX(p.dir) * TILE_PX) / TILE_PX);
+  const ty = Math.floor((p.y + PLAYER_H / 2 + dirY(p.dir) * TILE_PX) / TILE_PX);
+  return { map, tx, ty };
+}
+
+export interface ObstaclePrompt {
+  tile: Tile;
+  label: string;
+  affordable: boolean;
+}
+
+/**
+ * What the player could pay for right now, if anything.
+ *
+ * The HUD renders this verbatim. Making the price and your balance visible at
+ * the moment of the decision is the whole point of the mechanic — a cost you
+ * discover only after paying it isn't a trade, it's a surprise.
+ */
+export function obstacleInFront(state: GameState): ObstaclePrompt | null {
+  const { map, tx, ty } = facingTile(state);
+  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return null;
+
+  const tile = map.tiles[ty * map.w + tx] as Tile;
+
+  if (tile === Tile.DoorLocked) {
+    return {
+      tile,
+      label:
+        state.keysHeld > 0 ? 'Unlock the door — 1 key' : 'Locked. A key is somewhere here.',
+      affordable: state.keysHeld > 0,
+    };
+  }
+
+  const cost = OBSTACLE_COST[tile];
+  if (!cost) return null;
+
+  const held = state.carried[cost.resource];
+  const verb = tile === Tile.Chasm ? 'Bridge the chasm' : 'Rope the ledge';
+  return {
+    tile,
+    label: `${verb} — ${cost.amount} ${RESOURCE_LABEL[cost.resource]} (you have ${held})`,
+    affordable: held >= cost.amount,
+  };
+}
+
+function handleInteract(state: GameState): void {
+  const { map, i } = tileUnder(state);
+  const standing = map.tiles[i];
+
+  if (standing === Tile.DungeonEntrance) {
+    enterDungeon(state);
+    return;
+  }
+  if (standing === Tile.Stairs) {
+    exitDungeon(state);
+    return;
+  }
+
+  const { tx, ty } = facingTile(state);
+  tryClear(state, tx, ty);
+}
+
+function enterDungeon(state: GameState): void {
+  if (state.location.kind === 'dungeon') return;
+
+  const { tx, ty } = tileUnder(state);
+  const dungeon = state.world.dungeons.find(
+    (d) => d.overworldEntrance.x === tx && d.overworldEntrance.y === ty,
+  );
+  if (!dungeon) return;
+
+  // Once the water reaches the mouth, that dungeon is gone for the run. This
+  // is what makes a low-lying dungeon a decision about when, not whether.
+  if (state.world.elev[ty * state.world.w + tx] < waterLevel(state)) {
+    say(state, 'The way down is underwater. Too late for this one.');
+    return;
+  }
+
+  state.location = {
+    kind: 'dungeon',
+    dungeonId: dungeon.id,
+    returnTo: { x: tx, y: ty },
+  };
+  // Keys never travel between dungeons: each lock is opened by its own key.
+  state.keysHeld = 0;
+  state.safeSpot = null;
+  placeOn(state, dungeon.stairs);
+  say(state, 'Down into the dark. The water does not wait.');
+}
+
+function exitDungeon(state: GameState): void {
+  const back = state.location.returnTo;
+  if (state.location.kind !== 'dungeon' || !back) return;
+
+  state.location = { kind: 'overworld', dungeonId: -1, returnTo: null };
+  state.keysHeld = 0;
+  state.safeSpot = null;
+  placeOn(state, back);
+  say(state, 'Daylight. Or what is left of it.');
+}
+
+/** Move the player onto a tile and snap the camera to its panel. */
+function placeOn(state: GameState, tile: Point): void {
+  state.player.x = tile.x * TILE_PX + (TILE_PX - PLAYER_W) / 2;
+  state.player.y = tile.y * TILE_PX + (TILE_PX - PLAYER_H) / 2;
+  snapCamera(state);
+}
+
+/**
+ * Put the camera on the player's panel with no transition.
+ *
+ * Any teleport has to do this. A scroll left running would swallow the next
+ * frame's input entirely, since panel transitions deliberately lock control.
+ */
+export function snapCamera(state: GameState): void {
+  const panelX = Math.floor((state.player.x + PLAYER_W / 2) / PANEL_PX_W);
+  const panelY = Math.floor((state.player.y + PLAYER_H / 2) / PANEL_PX_H);
+  state.camera.panelX = panelX;
+  state.camera.panelY = panelY;
+  state.camera.fromX = panelX;
+  state.camera.fromY = panelY;
+  state.camera.scroll = 0;
+}
+
+/**
+ * Pay to cross. Costs come out of the same stock the ark needs, which is the
+ * entire reason dungeons are interesting rather than just long.
+ */
+function tryClear(state: GameState, tx: number, ty: number): void {
+  const map = activeMap(state);
+  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return;
+
+  const i = ty * map.w + tx;
+  const tile = map.tiles[i] as Tile;
+
+  if (tile === Tile.DoorLocked) {
+    if (state.keysHeld < 1) {
+      say(state, 'Locked. A key is somewhere in here.');
+      return;
+    }
+    state.keysHeld--;
+    convertConnected(map, tx, ty, tile, Tile.DoorOpen);
+    say(state, 'The key turns.');
+    return;
+  }
+
+  const cost = OBSTACLE_COST[tile];
+  if (!cost) return;
+
+  const held = state.carried[cost.resource];
+  const name = RESOURCE_LABEL[cost.resource];
+  if (held < cost.amount) {
+    say(state, `Not enough ${name} — ${cost.amount} needed, you have ${held}.`);
+    return;
+  }
+
+  state.carried[cost.resource] -= cost.amount;
+  convertConnected(map, tx, ty, tile, OBSTACLE_CLEARS_TO[tile]);
+  say(state, `${cost.amount} ${name} spent. The ark will notice.`);
+}
+
+/**
+ * Convert a whole obstacle band in one payment.
+ *
+ * An obstacle spans both sides of a doorway, so charging per tile would bill
+ * the player several times for one crossing.
+ */
+function convertConnected(map: TileMap, tx: number, ty: number, from: Tile, to: Tile): void {
+  const queue = [ty * map.w + tx];
+  let converted = 0;
+
+  while (queue.length > 0 && converted < CLEAR_LIMIT) {
+    const i = queue.pop() as number;
+    if (map.tiles[i] !== from) continue;
+    map.tiles[i] = to;
+    converted++;
+
+    const x = i % map.w;
+    const y = (i / map.w) | 0;
+    if (x > 0) queue.push(i - 1);
+    if (x < map.w - 1) queue.push(i + 1);
+    if (y > 0) queue.push(i - map.w);
+    if (y < map.h - 1) queue.push(i + map.w);
+  }
+}
+
+/** Track the last safe ground, so a pit has somewhere to spit the player out. */
+function rememberSafeSpot(state: GameState): void {
+  const { map, i } = tileUnder(state);
+  if (i < 0 || i >= map.tiles.length) return;
+  if (map.tiles[i] === Tile.Pit) return;
+  if (!isWalkable(map.tiles[i])) return;
+  state.safeSpot = { x: state.player.x, y: state.player.y };
 }
 
 function deliverToArk(state: GameState): void {

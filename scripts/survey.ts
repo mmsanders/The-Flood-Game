@@ -9,6 +9,7 @@
  */
 
 import { DEFAULT_PARAMS, FLOOD_DAYS, withParams } from '../src/core/config.js';
+import { OBSTACLE_COST, REWARD_NAMES } from '../src/core/dungeon.js';
 import { drownDayForElev } from '../src/core/flood.js';
 import { ARK_RECIPE } from '../src/core/resources.js';
 import { BIOME_NAMES, Biome, RESOURCE_NAMES, Resource } from '../src/core/tiles.js';
@@ -32,6 +33,11 @@ let total = 0;
 let connected = 0;
 let solvable = 0;
 let genMs = 0;
+let dungeonCount = 0;
+let dungeonToll = 0;
+let dungeonRooms = 0;
+const rewardCounts = new Map<string, number>();
+const sealDays: number[] = [];
 
 for (let i = 0; i < count; i++) {
   const seed = 1000 + i * 7919;
@@ -49,6 +55,20 @@ for (let i = 0; i < count; i++) {
   if (world.stats.connected) connected++;
   if (world.stats.solvable) solvable++;
   else console.log(`  seed ${seed}: ${world.stats.problems.join('; ')}`);
+
+  for (const d of world.dungeons) {
+    dungeonCount++;
+    dungeonRooms += d.rooms.length;
+    dungeonToll += d.obstacles.reduce(
+      (sum, o) => sum + (OBSTACLE_COST[o.tile]?.amount ?? 0),
+      0,
+    );
+    const name = REWARD_NAMES[d.reward];
+    rewardCounts.set(name, (rewardCounts.get(name) ?? 0) + 1);
+    sealDays.push(
+      drownDayForElev(world.elev[d.overworldEntrance.y * world.w + d.overworldEntrance.x]),
+    );
+  }
 }
 
 const avg = (n: number): string => (n / count).toFixed(0);
@@ -76,6 +96,22 @@ for (let r = 0; r < 4; r++) {
       `need ${String(need).padStart(3)}  ` +
       `supply x${ratio.toFixed(1)}`,
   );
+}
+
+console.log('\nDungeons');
+console.log(`  per world       ${(dungeonCount / count).toFixed(1)}`);
+console.log(`  rooms each      ${(dungeonRooms / Math.max(1, dungeonCount)).toFixed(1)}`);
+console.log(
+  `  toll on the ark ${(dungeonToll / Math.max(1, dungeonCount)).toFixed(1)} units mean`,
+);
+sealDays.sort((a, b) => a - b);
+if (sealDays.length > 0) {
+  const at = (f: number): string => sealDays[Math.floor(sealDays.length * f)].toFixed(1);
+  // When the entrance drowns: the deadline for raiding each one.
+  console.log(`  sealed by day   ${at(0)} / ${at(0.5)} / ${at(0.99)}  (first / median / last)`);
+}
+for (const [name, n] of [...rewardCounts.entries()].sort()) {
+  console.log(`  ${name.padEnd(16)}${n}`);
 }
 
 console.log('\nHealth');

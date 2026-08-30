@@ -7,7 +7,10 @@
  */
 
 import { DEFAULT_PARAMS, FLOOD_DAYS, PANEL_H, PANEL_W } from '../core/config.js';
+import { REWARD_NAMES } from '../core/dungeon.js';
 import { parseSeed, randomSeed } from '../core/rng.js';
+import type { TileMap } from '../core/tilemap.js';
+import { BIOME_NAMES, type Biome } from '../core/tiles.js';
 import type { World } from '../core/world.js';
 import { generateValidWorld } from '../core/worldgen/index.js';
 import {
@@ -34,6 +37,8 @@ interface State {
   day: number;
   overlay: Overlay;
   showPois: boolean;
+  /** -1 for the overworld, otherwise the dungeon index being viewed. */
+  viewing: number;
 }
 
 const url = new URL(window.location.href);
@@ -47,16 +52,26 @@ const state: State = {
   day: initialDay,
   overlay: isOverlay(initialOverlay) ? initialOverlay : 'tiles',
   showPois: url.searchParams.get('pins') !== '0',
+  viewing: Number(url.searchParams.get('dungeon') ?? -1),
 };
+
+/**
+ * The map on screen. Dungeons are TileMaps just like the overworld, so every
+ * renderer below takes them without modification — that is the payoff of
+ * making a dungeon room exactly one panel.
+ */
+function viewedMap(): TileMap {
+  return state.viewing >= 0 ? state.world.dungeons[state.viewing] : state.world;
+}
 
 /** Cached 1px-per-tile bitmap; only rebuilt when the world, day or overlay changes. */
 let bitmap: HTMLCanvasElement | OffscreenCanvas | null = null;
 let bitmapKey = '';
 
 function overviewBitmap(): HTMLCanvasElement | OffscreenCanvas {
-  const key = `${state.seed}|${state.day}|${state.overlay}`;
+  const key = `${state.seed}|${state.day}|${state.overlay}|${state.viewing}`;
   if (!bitmap || key !== bitmapKey) {
-    bitmap = renderOverviewBitmap(state.world, {
+    bitmap = renderOverviewBitmap(viewedMap(), {
       day: state.day,
       overlay: state.overlay,
       showPois: state.showPois,
@@ -76,19 +91,51 @@ const viewport = new Viewport(mapCanvas, {
   minScale: 0.4,
   maxScale: 24,
   onDraw: (ctx, scale) => {
+    const map = viewedMap();
     ctx.drawImage(overviewBitmap() as CanvasImageSource, 0, 0);
-    drawPanelGrid(ctx, state.world, scale);
-    if (state.showPois) drawPoiMarkers(ctx, state.world, scale);
+    drawPanelGrid(ctx, map, scale);
+    if (state.showPois && state.viewing < 0) drawPoiMarkers(ctx, state.world, scale);
+    if (state.showPois && state.viewing >= 0) drawDungeonMarkers(ctx, scale);
   },
   onTap: (x, y) => {
+    const map = viewedMap();
     const px = Math.floor(x / PANEL_W);
     const py = Math.floor(y / PANEL_H);
-    if (px < 0 || py < 0 || px >= state.world.params.panelsX || py >= state.world.params.panelsY) {
-      return;
-    }
-    openPanelSheet(sheetRefs, state.world, px, py, state.day);
+    if (px < 0 || py < 0 || px * PANEL_W >= map.w || py * PANEL_H >= map.h) return;
+    openPanelSheet(sheetRefs, map, px, py, state.day);
   },
 });
+
+/** Stairs, key and chest, so a dungeon's shape reads at a glance. */
+function drawDungeonMarkers(ctx: CanvasRenderingContext2D, scale: number): void {
+  const d = state.world.dungeons[state.viewing];
+  if (!d) return;
+
+  const r = Math.max(3.5, Math.min(9, 30 / scale));
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  for (const [point, color, glyph] of [
+    [d.stairs, '#8a7fa8', 'S'],
+    [d.key, '#e8c84a', 'K'],
+    [d.chest, '#c98a2e', 'X'],
+  ] as const) {
+    ctx.beginPath();
+    ctx.arc(point.x + 0.5, point.y + 0.5, r, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.lineWidth = Math.max(0.5, r * 0.25);
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.stroke();
+    if (r * scale >= 9) {
+      ctx.fillStyle = '#fff';
+      ctx.font = `bold ${r * 1.3}px system-ui, sans-serif`;
+      ctx.fillText(glyph, point.x + 0.5, point.y + 0.5);
+    }
+  }
+  ctx.restore();
+}
 
 window.addEventListener('resize', () => viewport.resize());
 
@@ -137,6 +184,46 @@ for (const chip of el('overlay-chips').querySelectorAll<HTMLButtonElement>('[dat
   });
 }
 
+/** One chip per map: the overworld plus each dungeon. */
+function buildMapChips(): void {
+  const bar = el('map-chips');
+  bar.innerHTML = '';
+
+  const add = (label: string, viewing: number, title: string): void => {
+    const chip = document.createElement('button');
+    chip.className = 'chip';
+    chip.textContent = label;
+    chip.title = title;
+    chip.classList.toggle('is-active', state.viewing === viewing);
+    chip.addEventListener('click', () => {
+      state.viewing = viewing;
+      bitmap = null;
+      closePanelSheet(sheetRefs);
+      buildMapChips();
+      syncReadout();
+      syncUrl();
+      resizeViewportToMap();
+    });
+    bar.appendChild(chip);
+  };
+
+  add('Overworld', -1, 'The 12x40 panel overworld');
+  state.world.dungeons.forEach((d, i) => {
+    add(
+      `${BIOME_NAMES[d.biomeKind as Biome]} ⌂`,
+      i,
+      `${d.roomsX}x${d.roomsY} rooms — ${REWARD_NAMES[d.reward]}`,
+    );
+  });
+}
+
+/** Dungeons are a different size to the overworld, so refit on every swap. */
+function resizeViewportToMap(): void {
+  const map = viewedMap();
+  viewport.setContentSize(map.w, map.h);
+  viewport.fit();
+}
+
 dayInput.addEventListener('input', () => {
   state.day = clampDay(Number(dayInput.value));
   syncDayLabels();
@@ -169,8 +256,9 @@ function regenerate(seed: number): void {
   state.world = generateValidWorld(seed, DEFAULT_PARAMS).world;
   bitmap = null;
   closePanelSheet(sheetRefs);
+  buildMapChips();
   syncAll();
-  viewport.requestDraw();
+  resizeViewportToMap();
 }
 
 function syncAll(): void {
@@ -205,6 +293,8 @@ function syncUrl(): void {
     next.searchParams.set('seed', String(state.seed));
     next.searchParams.set('day', String(state.day));
     next.searchParams.set('overlay', state.overlay);
+    if (state.viewing >= 0) next.searchParams.set('dungeon', String(state.viewing));
+    else next.searchParams.delete('dungeon');
     if (!state.showPois) next.searchParams.set('pins', '0');
     else next.searchParams.delete('pins');
     window.history.replaceState(null, '', next);
@@ -234,9 +324,10 @@ for (const chip of el('overlay-chips').querySelectorAll<HTMLButtonElement>('[dat
 }
 poiToggle.classList.toggle('is-active', state.showPois);
 
+buildMapChips();
 syncAll();
 viewport.resize();
-viewport.fit();
+resizeViewportToMap();
 
 // Fade the gesture hint once you've had a moment to read it.
 setTimeout(() => hint.setAttribute('data-faded', 'true'), 3500);

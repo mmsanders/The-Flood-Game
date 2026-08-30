@@ -100,6 +100,15 @@ export class Viewport {
     return this.canvas.height / this.dpr;
   }
 
+  /**
+   * Swap the content this viewport frames. Dungeons are a different size to
+   * the overworld, so the picker changes this before refitting.
+   */
+  setContentSize(w: number, h: number): void {
+    this.opts.contentW = w;
+    this.opts.contentH = h;
+  }
+
   /** Scale and centre so the whole world is visible. */
   fit(padding = 12): void {
     const sx = (this.viewW - padding * 2) / this.opts.contentW;

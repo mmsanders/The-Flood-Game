@@ -79,7 +79,14 @@ function frame(now: number): void {
   while (accumulator >= STEP && steps < 240) {
     step(
       state,
-      { moveX: intents.moveX, moveY: intents.moveY, attackPressed: intents.attackPressed && steps === 0 },
+      {
+        moveX: intents.moveX,
+        moveY: intents.moveY,
+        // Edge-triggered intents fire on the first substep only, so one key
+        // press cannot swing or pay several times in a single frame.
+        attackPressed: intents.attackPressed && steps === 0,
+        interactPressed: intents.interactPressed && steps === 0,
+      },
       STEP,
     );
     accumulator -= STEP;

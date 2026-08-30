@@ -102,17 +102,67 @@ to drown) and it is deposited automatically. The recipe is 40 fiber, 60 gopher w
 
 ---
 
+## Dungeons
+
+One per biome, 4x4 rooms where **each room is exactly one panel**, so a dungeon shares the
+overworld's byte format, renderer and inspector view with no new drawing code.
+
+**Structure is guaranteed, not hoped for**, mirroring the overworld connectivity pass:
+
+- a randomised spanning tree from the entrance means every room is reachable
+- loop edges are added *before* distances are measured, so a shortcut cannot bypass the
+  edges obstacles were placed to gate
+- the treasure room is the furthest from the entrance, then cut back to a single approach
+  so the locked door is a real gate
+- the key is placed strictly before the door it opens — asserted across many seeds
+
+**The trade is the point.** Obstacles are paid for out of the same stock the ark needs:
+
+| Obstacle | Costs | Becomes |
+|---|---|---|
+| Chasm | 2 gopher wood | Plank bridge |
+| Ledge | 2 fiber | Rope |
+| Locked door | a key found inside | Open door |
+
+Pitch is never spendable — it is the scarce thing gating the ark, and letting a dungeon eat
+it could strand a run underground. A whole dungeon costs about 6 units against a recipe
+wanting 60 wood and 40 fiber: a real bite, not a run-ender.
+
+The price and your balance are on screen at the moment of the decision
+(*"Bridge the chasm — 2 gopher wood (you have 14)"*). A cost discovered only after paying
+it is a surprise, not a trade.
+
+**Danger** is the resource toll, the clock (the flood keeps rising while you are
+underground), and pits, which cost a heart and spit you back onto the last safe ground.
+Pits sit well inside rooms so they can always be walked around — a pit that sealed a
+corridor would be an obstacle, and obstacles are things you pay to cross.
+
+**Rewards**, fixed per biome so every run offers the whole set:
+
+| Dungeon | Reward |
+|---|---|
+| Valley | Heart container |
+| Forest | **The Budding Rod** — harvest 2 per swing (Numbers 17) |
+| Scrub | Heart container |
+| Mountain | **The Serpent Rod** — +1 tile reach (Exodus 7:12) |
+
+The Budding Rod is the loop closing: ark material spent on a tool that gathers ark material
+twice as fast. It sits in the forest so it lands mid-run, while doubling still pays.
+
+**The flood reaches the entrance, not the interior.** Once the mouth submerges that dungeon
+is gone for the run, which makes a low-lying one a decision about *when*, not whether — the
+first typically seals around day 7, when you have barely gathered enough to pay its toll.
+Interiors never flood. Surfacing into water is not special-cased: the ordinary flood rules
+take over.
+
+---
+
 ## Deferred
 
-### Dungeons
-One per biome, placed at generation time (the slots already exist in worldgen and render
-as `D` pins in the inspector; the doors report "sealed"). Dangerous — platforms, enemies,
-or both — and each holds an upgrade.
-
-The interesting tension is that dungeon-running consumables come from the *same* materials
-as the ark: rope for descents, planks for bridges. Every rope you tie is hull you didn't
-build. That trade is the reason dungeons should exist at all, so it should be legible in
-the UI from the first version of them.
+### Enemies
+Nothing currently threatens the player but water and pits. Two or three types with distinct
+movement (walker, chaser, shooter), which also gives the Rod something to do besides
+harvest. Biblical flavour: locusts, serpents, foxes; Nephilim as dungeon bosses.
 
 ### Towns and money
 One per biome, with shekels as currency. Shops that sell what you'd otherwise spend days

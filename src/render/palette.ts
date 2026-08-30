@@ -47,6 +47,21 @@ export const PALETTE = {
   waterShallow: '#4a8fd0',
   floodTint: 'rgba(30, 90, 170, 0.62)',
 
+  // Dungeon
+  dungeonFloor: '#3a3742',
+  dungeonWall: '#232028',
+  dungeonWallTop: '#4a4653',
+  stairs: '#8a7fa8',
+  chasm: '#0a0910',
+  ledge: '#5a4a3a',
+  bridge: '#9a6b3c',
+  rope: '#c8a86a',
+  doorLocked: '#b8912e',
+  doorOpen: '#2a2733',
+  key: '#e8c84a',
+  chest: '#c98a2e',
+  pit: '#12101a',
+
   // UI
   ink: '#1a1a20',
   paper: '#efe6d2',
@@ -85,6 +100,21 @@ export const TILE_COLOR: Record<number, string> = {
   0x31: PALETTE.dungeon,
   0x32: PALETTE.heart,
   0x33: PALETTE.town,
+
+  0x40: PALETTE.dungeonFloor,
+  0x41: PALETTE.dungeonWall,
+  0x42: PALETTE.stairs,
+  0x43: PALETTE.bridge,
+  0x44: PALETTE.rope,
+  0x45: PALETTE.doorOpen,
+
+  0x50: PALETTE.chasm,
+  0x51: PALETTE.ledge,
+  0x52: PALETTE.doorLocked,
+  0x53: PALETTE.pit,
+
+  0x60: PALETTE.key,
+  0x61: PALETTE.chest,
 };
 
 export function tileColor(tile: number): string {

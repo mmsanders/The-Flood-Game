@@ -13,10 +13,11 @@ import {
   tileHeight,
   tileWidth,
 } from '../config.js';
+import { generateDungeon } from '../dungeon.js';
 import { checkSolvable } from '../resources.js';
 import { deriveSeed } from '../rng.js';
 import { BIOME_COUNT, RESOURCE_COUNT, isWalkable, resourceOf } from '../tiles.js';
-import type { World, WorldStats } from '../world.js';
+import { PoiKind, type World, type WorldStats } from '../world.js';
 import { ensureConnected } from './connectivity.js';
 import { generateElevation } from './elevation.js';
 import { paintTiles } from './paint.js';
@@ -35,6 +36,12 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
   const connectivity = ensureConnected(tiles, biome, params);
   const { spawn, ark, pois } = placePois(seed, params, tiles, elev, biome);
 
+  // One dungeon per entrance placed above. They are separate maps, so nothing
+  // here touches the overworld's own connectivity or solvability.
+  const dungeons = pois
+    .filter((poi) => poi.kind === PoiKind.Dungeon)
+    .map((poi, i) => generateDungeon(seed, i, poi.biome, { x: poi.x, y: poi.y }));
+
   const solvability = checkSolvable(tiles, elev, w, h, spawn, params);
 
   const stats = collectStats(tiles, biome, w, h);
@@ -46,7 +53,21 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
     ...solvability.problems,
   ];
 
-  return { seed, params, w, h, tiles, elev, biome, spawn, ark, pois, stats };
+  return {
+    seed,
+    params,
+    w,
+    h,
+    tiles,
+    elev,
+    biome,
+    floods: true,
+    spawn,
+    ark,
+    pois,
+    dungeons,
+    stats,
+  };
 }
 
 /**
