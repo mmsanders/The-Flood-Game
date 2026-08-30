@@ -47,9 +47,12 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'npm run build && npx vite preview --port 4173 --strictPort',
+    // --host 127.0.0.1 is load-bearing: vite preview otherwise binds "localhost",
+    // which resolves to ::1 on CI runners while this readiness check polls the
+    // IPv4 address, so the server never appears to come up.
+    command: 'npm run build && npx vite preview --port 4173 --strictPort --host 127.0.0.1',
     url: 'http://127.0.0.1:4173',
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    timeout: 180_000,
   },
 });
