@@ -68,6 +68,12 @@ generator.
 **The Rod of Aaron is weapon and tool.** The same swing that will fight things later is what
 harvests a resource node now.
 
+**Dungeons cost you the ark.** One per biome, 4x4 rooms where each room is exactly one panel
+— so they share the overworld's format, renderer and inspector for free. Chasms are bridged
+with gopher wood and ledges roped with fiber, both drawn from the same stock the hull needs,
+and the price is on screen while you decide. A dungeon's entrance seals when the water
+reaches it; the first usually goes under around day 7.
+
 ## Tuning
 
 Every worldgen number lives in one typed object, `DEFAULT_PARAMS` in `src/core/config.ts` —
@@ -84,6 +90,6 @@ the flood. Biome bands and resource densities were both set this way.
 
 ## Status
 
-The foundation is built and playable end to end: worldgen, the flood, resource gathering,
-the ark, and win/lose. Dungeons, towns and money, the voice of God as a recurring character,
-and the ocean stage are designed for but not yet built — see `docs/DESIGN.md`.
+Playable end to end: worldgen, the flood, resource gathering, the ark, win/lose, and
+dungeons with the resource trade. Enemies, towns and money, the voice of God as a recurring
+character, and the ocean stage are designed for but not yet built — see `docs/DESIGN.md`.

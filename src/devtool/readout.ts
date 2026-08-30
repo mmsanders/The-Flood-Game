@@ -7,6 +7,7 @@
  */
 
 import { FLOOD_DAYS } from '../core/config.js';
+import { OBSTACLE_COST, REWARD_NAMES } from '../core/dungeon.js';
 import { drownDayForElev } from '../core/flood.js';
 import { ARK_RECIPE } from '../core/resources.js';
 import {
@@ -67,6 +68,24 @@ export function renderReadout(world: World, day: number): string {
       row('Explicit size', `${(worldToBytes(world).length / 1024).toFixed(0)} KB`),
       row('Seed form', '16 B'),
     ]),
+
+    group(
+      'Dungeons',
+      world.dungeons.map((d) => {
+        const toll = d.obstacles.reduce(
+          (sum, o) => sum + (OBSTACLE_COST[o.tile]?.amount ?? 0),
+          0,
+        );
+        const drowns = drownDayForElev(
+          world.elev[d.overworldEntrance.y * world.w + d.overworldEntrance.x],
+        );
+        return row(
+          `${BIOME_NAMES[d.biomeKind as Biome]}`,
+          `${REWARD_NAMES[d.reward]} <span class="dim">· ${toll} toll · sealed day ${drowns.toFixed(0)}</span>`,
+          BIOME_COLORS[d.biomeKind],
+        );
+      }),
+    ),
 
     group('Flood', [
       row('Day', `${day.toFixed(2)} / ${FLOOD_DAYS}`),

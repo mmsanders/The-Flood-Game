@@ -9,6 +9,7 @@
 
 import { PANEL_H, PANEL_W, TILE_PX } from '../core/config.js';
 import { waterLevelAtDay } from '../core/flood.js';
+import { type TileMap, panelsHigh, panelsWide } from '../core/tilemap.js';
 import { isWalkable } from '../core/tiles.js';
 import type { World } from '../core/world.js';
 import { BIOME_COLORS, PALETTE, elevationColor, tileColor } from './palette.js';
@@ -69,22 +70,22 @@ function makeCanvas(w: number, h: number): Canvas {
 }
 
 /** One pixel per tile. This is the expensive pass, so it stays 1:1. */
-export function renderOverviewBitmap(world: World, opts: OverviewOptions): Canvas {
-  const canvas = makeCanvas(world.w, world.h);
+export function renderOverviewBitmap(map: TileMap, opts: OverviewOptions): Canvas {
+  const canvas = makeCanvas(map.w, map.h);
   const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
-  const image = ctx.createImageData(world.w, world.h);
+  const image = ctx.createImageData(map.w, map.h);
   const data = image.data;
 
   const level = waterLevelAtDay(opts.day);
 
-  for (let i = 0; i < world.tiles.length; i++) {
-    const tile = world.tiles[i];
-    const elev = world.elev[i];
+  for (let i = 0; i < map.tiles.length; i++) {
+    const tile = map.tiles[i];
+    const elev = map.elev[i];
 
     let rgb: Rgb;
     switch (opts.overlay) {
       case 'biome':
-        rgb = BIOME_RGB[world.biome[i]];
+        rgb = BIOME_RGB[map.biome[i]];
         break;
       case 'elevation':
         rgb = elevRgb(elev);
@@ -98,7 +99,7 @@ export function renderOverviewBitmap(world: World, opts: OverviewOptions): Canva
 
     let [r, g, b] = rgb;
 
-    if (elev < level) {
+    if (map.floods && elev < level) {
       // Depth of submersion drives the tint, so the trench in the south reads
       // as deeper water than ground that only just went under.
       const depth = Math.min(1, (level - elev) / 60);
@@ -127,7 +128,7 @@ export function renderOverviewBitmap(world: World, opts: OverviewOptions): Canva
  */
 export function drawPanelGrid(
   ctx: CanvasRenderingContext2D,
-  world: World,
+  map: TileMap,
   scale: number,
 ): void {
   if (scale < 1.5) return;
@@ -135,13 +136,13 @@ export function drawPanelGrid(
   ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
   ctx.lineWidth = 1 / scale;
   ctx.beginPath();
-  for (let px = 1; px < world.params.panelsX; px++) {
+  for (let px = 1; px < panelsWide(map); px++) {
     ctx.moveTo(px * PANEL_W, 0);
-    ctx.lineTo(px * PANEL_W, world.h);
+    ctx.lineTo(px * PANEL_W, map.h);
   }
-  for (let py = 1; py < world.params.panelsY; py++) {
+  for (let py = 1; py < panelsHigh(map); py++) {
     ctx.moveTo(0, py * PANEL_H);
-    ctx.lineTo(world.w, py * PANEL_H);
+    ctx.lineTo(map.w, py * PANEL_H);
   }
   ctx.stroke();
   ctx.restore();
@@ -200,7 +201,7 @@ export function drawPoiMarkers(
  * Used by the dev tool's panel inspector.
  */
 export function renderPanel(
-  world: World,
+  map: TileMap,
   panelX: number,
   panelY: number,
   opts: { day: number; scale: number },
@@ -218,8 +219,8 @@ export function renderPanel(
     const wy = panelY * PANEL_H + ty;
     for (let tx = 0; tx < PANEL_W; tx++) {
       const wx = panelX * PANEL_W + tx;
-      const i = wy * world.w + wx;
-      const tile = world.tiles[i];
+      const i = wy * map.w + wx;
+      const tile = map.tiles[i];
 
       ctx.drawImage(
         sheet as CanvasImageSource,
@@ -233,8 +234,8 @@ export function renderPanel(
         TILE_PX,
       );
 
-      if (world.elev[i] < level) {
-        const depth = Math.min(1, (level - world.elev[i]) / 60);
+      if (map.floods && map.elev[i] < level) {
+        const depth = Math.min(1, (level - map.elev[i]) / 60);
         ctx.fillStyle = depth > 0.5 ? 'rgba(20, 60, 120, 0.78)' : PALETTE.floodTint;
         ctx.fillRect(tx * TILE_PX, ty * TILE_PX, TILE_PX, TILE_PX);
       }

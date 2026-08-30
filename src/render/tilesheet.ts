@@ -296,6 +296,104 @@ const TILE_PAINTERS: Record<number, Painter> = {
     px(c, 4, 5, 2, 2, '#f07a7a');
   },
 
+  // -- dungeon terrain ------------------------------------------------------
+  [Tile.DungeonFloor]: (c) => {
+    base(c, PALETTE.dungeonFloor);
+    px(c, 0, 0, TILE_PX, 1, '#44404d');
+    px(c, 0, 8, TILE_PX, 1, '#322f3a');
+    px(c, 8, 0, 1, 8, '#322f3a');
+    px(c, 4, 8, 1, 8, '#322f3a');
+  },
+
+  [Tile.DungeonWall]: (c) => {
+    base(c, PALETTE.dungeonWall);
+    px(c, 0, 0, TILE_PX, 4, PALETTE.dungeonWallTop);
+    px(c, 0, 4, TILE_PX, 1, '#15131a');
+    px(c, 5, 5, 2, 11, '#1b1922');
+    px(c, 11, 5, 2, 11, '#1b1922');
+  },
+
+  [Tile.Stairs]: (c) => {
+    base(c, PALETTE.dungeonFloor);
+    c.fillStyle = PALETTE.stairs;
+    for (let i = 0; i < 4; i++) c.fillRect(2 + i, 3 + i * 3, 12 - i * 2, 2);
+    px(c, 2, 14, 12, 2, '#5d5474');
+  },
+
+  [Tile.Bridge]: (c) => {
+    base(c, PALETTE.chasm);
+    c.fillStyle = PALETTE.bridge;
+    for (let y = 1; y < TILE_PX; y += 4) c.fillRect(0, y, TILE_PX, 3);
+    px(c, 1, 0, 2, TILE_PX, '#7a5230');
+    px(c, 13, 0, 2, TILE_PX, '#7a5230');
+  },
+
+  [Tile.Rope]: (c) => {
+    base(c, PALETTE.ledge);
+    c.fillStyle = PALETTE.rope;
+    c.fillRect(0, 6, TILE_PX, 2);
+    c.fillRect(0, 10, TILE_PX, 2);
+    for (let x = 1; x < TILE_PX; x += 4) px(c, x, 5, 2, 8, '#a8875a');
+  },
+
+  [Tile.DoorOpen]: (c) => {
+    base(c, PALETTE.dungeonWall);
+    px(c, 3, 0, 10, TILE_PX, PALETTE.doorOpen);
+    px(c, 3, 0, 2, TILE_PX, '#4a4653');
+    px(c, 11, 0, 2, TILE_PX, '#4a4653');
+  },
+
+  // -- dungeon obstacles ----------------------------------------------------
+  [Tile.Chasm]: (c) => {
+    base(c, PALETTE.chasm);
+    px(c, 0, 0, TILE_PX, 2, '#2a2733');
+    px(c, 0, 14, TILE_PX, 2, '#2a2733');
+    specks(c, '#1a1826', SPARSE);
+  },
+
+  [Tile.Ledge]: (c) => {
+    base(c, PALETTE.ledge);
+    px(c, 0, 0, TILE_PX, 3, '#6d5a46');
+    px(c, 0, 6, TILE_PX, 2, '#3f342a');
+    px(c, 0, 12, TILE_PX, 2, '#3f342a');
+  },
+
+  [Tile.DoorLocked]: (c) => {
+    base(c, PALETTE.dungeonWall);
+    px(c, 2, 0, 12, TILE_PX, PALETTE.doorLocked);
+    px(c, 2, 0, 12, 2, '#8f6f1e');
+    c.fillStyle = '#3a2e0c';
+    c.fillRect(7, 7, 3, 3);
+    c.fillRect(8, 9, 1, 3);
+  },
+
+  [Tile.Pit]: (c) => {
+    base(c, PALETTE.dungeonFloor);
+    c.fillStyle = PALETTE.pit;
+    c.fillRect(3, 4, 10, 9);
+    c.fillRect(2, 6, 12, 5);
+    px(c, 3, 3, 10, 1, '#514c5e');
+  },
+
+  // -- dungeon pickups ------------------------------------------------------
+  [Tile.Key]: (c) => {
+    base(c, PALETTE.dungeonFloor);
+    c.fillStyle = PALETTE.key;
+    c.fillRect(4, 4, 5, 5);
+    c.fillRect(8, 6, 5, 2);
+    c.fillRect(11, 8, 2, 2);
+    px(c, 5, 5, 2, 2, PALETTE.dungeonFloor);
+  },
+
+  [Tile.Chest]: (c) => {
+    base(c, PALETTE.dungeonFloor);
+    c.fillStyle = PALETTE.chest;
+    c.fillRect(2, 5, 12, 9);
+    px(c, 2, 5, 12, 3, '#e0a94a');
+    px(c, 2, 8, 12, 1, '#7a5220');
+    px(c, 7, 8, 2, 4, '#3a2610');
+  },
+
   [Tile.TownDoor]: (c) => {
     base(c, PALETTE.dirt);
     px(c, 1, 4, 14, 11, PALETTE.town);

@@ -12,7 +12,18 @@ import { ARK_RECIPE } from '../core/resources.js';
 import { RESOURCE_COUNT, type Resource } from '../core/tiles.js';
 import { PALETTE } from '../render/palette.js';
 import { getTilesheet, tileSheetX, tileSheetY } from '../render/tilesheet.js';
-import { Dir, type GameState, PLAYER_H, PLAYER_W, arkProgress, currentDay, waterLevel } from './state.js';
+import {
+  Dir,
+  type GameState,
+  PLAYER_H,
+  PLAYER_W,
+  activeMap,
+  arkProgress,
+  currentDay,
+  currentDungeon,
+  obstacleInFront,
+  waterLevel,
+} from './state.js';
 
 export const HUD_H = 40;
 export const SCREEN_W = PANEL_PX_W;
@@ -36,8 +47,42 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
   ctx.restore();
 
   drawHud(ctx, state);
+  drawObstaclePrompt(ctx, state);
   drawMessage(ctx, state);
   if (state.phase !== 'playing') drawEndCard(ctx, state);
+}
+
+/**
+ * The price tag, shown while you are standing in front of the thing it buys.
+ *
+ * Dungeon obstacles are paid for out of the same stock the ark needs, so the
+ * cost and your balance belong on screen at the moment of the decision — not
+ * discovered afterwards in a shrinking inventory.
+ */
+function drawObstaclePrompt(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (state.phase !== 'playing') return;
+  const prompt = obstacleInFront(state);
+  if (!prompt) return;
+
+  ctx.font = '8px ui-monospace, monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const text = prompt.affordable ? `${prompt.label}  [E]` : prompt.label;
+  const w = Math.min(SCREEN_W - 8, ctx.measureText(text).width + 16);
+  const x = (SCREEN_W - w) / 2;
+  const y = HUD_H + 8;
+
+  ctx.fillStyle = PALETTE.hudBack;
+  ctx.fillRect(x, y, w, 15);
+  ctx.strokeStyle = prompt.affordable ? PALETTE.ark : '#6a4a4a';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, 14);
+
+  ctx.fillStyle = prompt.affordable ? '#e6e9ef' : '#e0908a';
+  ctx.fillText(text, SCREEN_W / 2, y + 8);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
 }
 
 /** Camera origin in world pixels, interpolated during a panel transition. */
@@ -52,7 +97,7 @@ export function cameraOrigin(state: GameState): { x: number; y: number } {
 }
 
 function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
-  const { world } = state;
+  const map = activeMap(state);
   const cam = cameraOrigin(state);
   const sheet = getTilesheet();
   const level = waterLevel(state);
@@ -67,18 +112,18 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
       const sx = Math.round(tx * TILE_PX - cam.x);
       const sy = Math.round(ty * TILE_PX - cam.y);
 
-      if (tx < 0 || ty < 0 || tx >= world.w || ty >= world.h) {
-        // Beyond the map edge: the deep, which is where all of this ends up.
-        ctx.fillStyle = PALETTE.waterDeep;
+      if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) {
+        // Beyond the map edge: the deep above ground, bedrock below it.
+        ctx.fillStyle = map.floods ? PALETTE.waterDeep : PALETTE.dungeonWall;
         ctx.fillRect(sx, sy, TILE_PX, TILE_PX);
         continue;
       }
 
-      const i = ty * world.w + tx;
+      const i = ty * map.w + tx;
       ctx.drawImage(
         sheet as CanvasImageSource,
-        tileSheetX(world.tiles[i]),
-        tileSheetY(world.tiles[i]),
+        tileSheetX(map.tiles[i]),
+        tileSheetY(map.tiles[i]),
         TILE_PX,
         TILE_PX,
         sx,
@@ -87,8 +132,8 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
         TILE_PX,
       );
 
-      if (world.elev[i] < level) {
-        const depth = Math.min(1, (level - world.elev[i]) / 60);
+      if (map.floods && map.elev[i] < level) {
+        const depth = Math.min(1, (level - map.elev[i]) / 60);
         ctx.fillStyle = depth > 0.5 ? 'rgba(18, 58, 118, 0.82)' : PALETTE.floodTint;
         ctx.fillRect(sx, sy, TILE_PX, TILE_PX);
       }
@@ -179,6 +224,29 @@ function drawHud(ctx: CanvasRenderingContext2D, state: GameState): void {
   drawDay(ctx, state, 6, 22);
   drawInventory(ctx, state, 96, 5);
   drawArkMeter(ctx, state, 96, 28);
+  drawDungeonBadge(ctx, state);
+}
+
+/**
+ * Underground, the day counter still matters but the ark meter is out of
+ * reach, so the badge says where you are and what you are carrying that the
+ * dungeon might take.
+ */
+function drawDungeonBadge(ctx: CanvasRenderingContext2D, state: GameState): void {
+  const dungeon = currentDungeon(state);
+  if (!dungeon) return;
+
+  ctx.font = '8px ui-monospace, monospace';
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'left';
+
+  ctx.fillStyle = PALETTE.stairs;
+  ctx.fillText('UNDERGROUND', 6, 32);
+
+  if (state.keysHeld > 0) {
+    ctx.fillStyle = PALETTE.key;
+    ctx.fillText(`KEY x${state.keysHeld}`, 66, 32);
+  }
 }
 
 function drawHearts(ctx: CanvasRenderingContext2D, state: GameState, x: number, y: number): void {

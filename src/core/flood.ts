@@ -9,7 +9,7 @@
  */
 
 import { FLOOD_DAYS } from './config.js';
-import { Tile } from './tiles.js';
+import { Tile, isWalkable } from './tiles.js';
 import type { World } from './world.js';
 
 /** Elevation is stored as a byte, so the water has to clear 255 to win. */
@@ -79,13 +79,14 @@ export function drownDayForElev(elev: number): number {
 /**
  * Can the player occupy this tile right now? Combines terrain walkability with
  * the flood, which is the only place the two rules meet.
+ *
+ * Walkability itself is deliberately not re-implemented here: this used to
+ * carry its own copy of the blocking ID ranges, which would have quietly
+ * disagreed with `isWalkable` the moment a new tile group was added.
  */
 export function isPassable(world: World, x: number, y: number, waterLevel: number): boolean {
   if (x < 0 || y < 0 || x >= world.w || y >= world.h) return false;
   const i = y * world.w + x;
   if (world.elev[i] < waterLevel) return false;
-  const tile = world.tiles[i];
-  if (tile >= Tile.Tree && tile <= Tile.Water) return false;
-  if (tile >= Tile.Flax && tile <= Tile.PitchSeep) return false;
-  return true;
+  return isWalkable(world.tiles[i]);
 }

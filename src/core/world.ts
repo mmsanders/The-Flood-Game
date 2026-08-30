@@ -8,6 +8,8 @@
  */
 
 import { PANEL_H, PANEL_W, type WorldParams } from './config.js';
+import type { Dungeon } from './dungeon.js';
+import type { TileMap } from './tilemap.js';
 import { Biome, Tile } from './tiles.js';
 
 export interface Point {
@@ -44,18 +46,14 @@ export interface WorldStats {
   problems: string[];
 }
 
-export interface World {
+export interface World extends TileMap {
   seed: number;
   params: WorldParams;
-  /** Tile-grid dimensions. */
-  w: number;
-  h: number;
-  tiles: Uint8Array;
-  elev: Uint8Array;
-  biome: Uint8Array;
   spawn: Point;
   ark: Point;
   pois: Poi[];
+  /** One per biome. Entrances are linked by index from the matching Poi. */
+  dungeons: Dungeon[];
   stats: WorldStats;
 }
 
@@ -63,23 +61,23 @@ export function idx(world: { w: number }, x: number, y: number): number {
   return y * world.w + x;
 }
 
-export function inBounds(world: World, x: number, y: number): boolean {
-  return x >= 0 && y >= 0 && x < world.w && y < world.h;
+export function inBounds(map: TileMap, x: number, y: number): boolean {
+  return x >= 0 && y >= 0 && x < map.w && y < map.h;
 }
 
-export function tileAt(world: World, x: number, y: number): number {
-  if (!inBounds(world, x, y)) return Tile.Cliff;
-  return world.tiles[y * world.w + x];
+export function tileAt(map: TileMap, x: number, y: number): number {
+  if (!inBounds(map, x, y)) return Tile.Cliff;
+  return map.tiles[y * map.w + x];
 }
 
-export function elevAt(world: World, x: number, y: number): number {
-  if (!inBounds(world, x, y)) return 255;
-  return world.elev[y * world.w + x];
+export function elevAt(map: TileMap, x: number, y: number): number {
+  if (!inBounds(map, x, y)) return 255;
+  return map.elev[y * map.w + x];
 }
 
-export function biomeAt(world: World, x: number, y: number): Biome {
-  if (!inBounds(world, x, y)) return Biome.Mountain;
-  return world.biome[y * world.w + x] as Biome;
+export function biomeAt(map: TileMap, x: number, y: number): Biome {
+  if (!inBounds(map, x, y)) return Biome.Mountain;
+  return map.biome[y * map.w + x] as Biome;
 }
 
 /**
@@ -103,8 +101,13 @@ export function panelCountY(world: World): number {
   return world.params.panelsY;
 }
 
-/** Extract panel (px, py) as its own byte planes. */
-export function getPanel(world: World, px: number, py: number): Panel {
+/**
+ * Extract panel (px, py) as its own byte planes.
+ *
+ * Takes any TileMap, so the inspector renders dungeon rooms through exactly
+ * the same path as overworld panels.
+ */
+export function getPanel(map: TileMap, px: number, py: number): Panel {
   const tiles = new Uint8Array(PANEL_W * PANEL_H);
   const elev = new Uint8Array(PANEL_W * PANEL_H);
   const counts = [0, 0, 0, 0];
@@ -113,11 +116,11 @@ export function getPanel(world: World, px: number, py: number): Panel {
     const wy = py * PANEL_H + ty;
     for (let tx = 0; tx < PANEL_W; tx++) {
       const wx = px * PANEL_W + tx;
-      const src = wy * world.w + wx;
+      const src = wy * map.w + wx;
       const dst = ty * PANEL_W + tx;
-      tiles[dst] = world.tiles[src];
-      elev[dst] = world.elev[src];
-      counts[world.biome[src]]++;
+      tiles[dst] = map.tiles[src];
+      elev[dst] = map.elev[src];
+      counts[map.biome[src]]++;
     }
   }
 
