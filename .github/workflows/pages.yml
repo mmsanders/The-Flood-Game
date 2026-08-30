@@ -1,0 +1,60 @@
+name: Deploy dev tool
+
+# Publishes the game (/) and the world inspector (/dev/) to GitHub Pages, so
+# there is one stable URL that always reflects what's on main.
+#
+# main only, deliberately. The `github-pages` environment restricts deployments
+# to the default branch, so a feature-branch trigger fails at the environment
+# gate before the job even starts — a red X on every PR that deploys nothing.
+# Use workflow_dispatch to publish a branch on purpose (its policy has to allow
+# that branch too).
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deploy finish rather than cancelling it mid-publish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build
+        # Pages serves the site from /<repo>/, so the asset base has to match.
+        run: npx vite build
+        env:
+          VITE_BASE: /${{ github.event.repository.name }}/
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
