@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.vite/
+*.local
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+screenshots/
