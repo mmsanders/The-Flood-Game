@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FLOOD_DAYS, withParams } from '../src/core/config.js';
 import {
+  FLOOD_GRACE_DAYS,
   drownDayForElev,
   isPassable,
   isSubmerged,
@@ -10,6 +11,7 @@ import {
 import { generateWorld } from '../src/core/worldgen/index.js';
 
 const SMALL = withParams({ panelsX: 8, panelsY: 20 });
+const SEEDS = Array.from({ length: 16 }, (_, i) => i * 6151 + 17);
 
 describe('flood', () => {
   it('starts dry and ends fully submerged', () => {
@@ -44,6 +46,32 @@ describe('flood', () => {
   it('clamps outside the forty days', () => {
     expect(waterLevelAtDay(-5)).toBe(0);
     expect(waterLevelAtDay(FLOOD_DAYS + 10)).toBe(waterLevelAtDay(FLOOD_DAYS));
+  });
+
+  it('holds the water back through the grace period', () => {
+    // "After some short initial time, water will start filling the world."
+    expect(waterLevelAtDay(0)).toBe(0);
+    expect(waterLevelAtDay(FLOOD_GRACE_DAYS - 0.01)).toBe(0);
+    expect(waterLevelAtDay(FLOOD_GRACE_DAYS + 0.5)).toBeGreaterThan(0);
+  });
+
+  it('leaves no ground drowning before the grace period ends', () => {
+    const world = generateWorld(4242, SMALL);
+    for (const e of world.elev) {
+      expect(drownDayForElev(e)).toBeGreaterThanOrEqual(FLOOD_GRACE_DAYS);
+    }
+  });
+
+  it('gives the player room to breathe at spawn', () => {
+    // A player who starts on ground that drowns almost immediately has lost
+    // before they understood the rules. Every seed must beat that bar.
+    for (const seed of SEEDS) {
+      const world = generateWorld(seed, SMALL);
+      const spawnDrown = drownDayForElev(
+        world.elev[world.spawn.y * world.w + world.spawn.x],
+      );
+      expect(spawnDrown, `seed ${seed} drowns spawn on day ${spawnDrown}`).toBeGreaterThan(6);
+    }
   });
 
   it('drowns the south before the north', () => {

@@ -106,8 +106,12 @@ function pickArkSite(elev: Uint8Array, w: number, h: number, tiles: Uint8Array):
 }
 
 /**
- * Spawn in the lowlands: bottom fifth of the map, lowest walkable ground we
- * can find there. The player should start where the water starts.
+ * Spawn in the lowlands: bottom fifth of the map, so the player starts where
+ * the water starts and every run is a climb.
+ *
+ * Not at the *lowest* ground available, though — that drowns you within a few
+ * days no matter how well you play. Picking from the middle of the southern
+ * elevation range keeps the pressure without making the opening unfair.
  */
 function pickSpawn(
   rng: () => number,
@@ -127,10 +131,10 @@ function pickSpawn(
   }
   if (candidates.length === 0) return findAnyWalkable(tiles, tiles.length - 1);
 
-  // Prefer the lower half of what's available, then pick randomly among those
-  // so the same seed's spawn isn't pinned to one deterministic corner.
   candidates.sort((a, b) => elev[a] - elev[b]);
-  const pool = candidates.slice(0, Math.max(1, Math.floor(candidates.length / 2)));
+  const lo = Math.floor(candidates.length * 0.45);
+  const hi = Math.max(lo + 1, Math.floor(candidates.length * 0.7));
+  const pool = candidates.slice(lo, hi);
   return pool[Math.floor(rng() * pool.length)];
 }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PARAMS, withParams } from '../src/core/config.js';
+import { drownDayForElev } from '../src/core/flood.js';
 import {
   ARK_RECIPE,
   arrivalTimes,
@@ -144,7 +145,7 @@ describe('resources: time-expanded reachability', () => {
     );
     for (let i = 0; i < arrival.length; i++) {
       if (arrival[i] === Infinity) continue;
-      const drown = (world.elev[i] / 256) * 40;
+      const drown = drownDayForElev(world.elev[i]);
       expect(drown, `tile ${i} reached after it drowned`).toBeGreaterThan(arrival[i]);
     }
   });

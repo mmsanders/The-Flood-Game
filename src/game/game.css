@@ -1,0 +1,54 @@
+/*
+ * The game screen: a fixed pixel back buffer, centred, integer-scaled, and
+ * never smoothed. Everything else gets out of the way.
+ */
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: grid;
+  place-items: center;
+  background: #05070a;
+  color: #e6e9ef;
+  font: 14px ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow: hidden;
+}
+
+.frame {
+  position: relative;
+  line-height: 0;
+}
+
+#screen {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  background: #000;
+  box-shadow: 0 0 0 1px #232a36, 0 18px 60px rgba(0, 0, 0, 0.7);
+}
+
+.overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -26px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #5c6879;
+  pointer-events: none;
+}
+
+.overlay::after {
+  content: "arrows / WASD move · space swings the rod · R restarts · hold shift to fast-forward";
+}
+
+@media (max-height: 560px) {
+  .overlay {
+    display: none;
+  }
+}

@@ -16,16 +16,29 @@ import type { World } from './world.js';
 const MAX_ELEV = 256;
 
 /**
+ * Days of calm before the rain starts.
+ *
+ * Long enough to get your bearings, meet the voice telling you to build, and
+ * gather from the lowlands you're standing in — short enough that it never
+ * feels like a tutorial. The water still finishes the job on day 40; it just
+ * climbs slightly faster once it starts.
+ */
+export const FLOOD_GRACE_DAYS = 2;
+
+/**
  * Water height at a given time, in elevation units.
  *
- * day 0  -> 0   (nothing submerged)
- * day 40 -> 256 (everything submerged)
+ * day 0..2 -> 0   (the calm before)
+ * day 40   -> 256 (everything submerged)
  *
- * Deliberately linear: the player should be able to learn the pace and plan
- * against it. Uneven terrain supplies all the variation the pacing needs.
+ * Deliberately linear after the grace period: the player should be able to
+ * learn the pace and plan against it. Uneven terrain supplies all the
+ * variation the pacing needs.
  */
 export function waterLevelAtDay(day: number): number {
-  const t = Math.max(0, Math.min(1, day / FLOOD_DAYS));
+  const rising = day - FLOOD_GRACE_DAYS;
+  if (rising <= 0) return 0;
+  const t = Math.min(1, rising / (FLOOD_DAYS - FLOOD_GRACE_DAYS));
   return t * MAX_ELEV;
 }
 
@@ -55,11 +68,12 @@ export function isSubmerged(world: World, x: number, y: number, waterLevel: numb
 export function drownDay(world: World, x: number, y: number): number {
   const i = y * world.w + x;
   if (world.tiles[i] === Tile.Water) return 0;
-  return (world.elev[i] / MAX_ELEV) * FLOOD_DAYS;
+  return drownDayForElev(world.elev[i]);
 }
 
+/** Inverse of waterLevelAtDay: the day this elevation goes under. */
 export function drownDayForElev(elev: number): number {
-  return (elev / MAX_ELEV) * FLOOD_DAYS;
+  return FLOOD_GRACE_DAYS + (elev / MAX_ELEV) * (FLOOD_DAYS - FLOOD_GRACE_DAYS);
 }
 
 /**

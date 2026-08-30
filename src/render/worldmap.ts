@@ -121,78 +121,67 @@ export function renderOverviewBitmap(world: World, opts: OverviewOptions): Canva
 }
 
 /**
- * Scale the overview up, draw panel grid lines and POI markers.
- * Cheap: one scaled blit plus a handful of strokes.
+ * Panel grid lines, drawn in world (tile) coordinates. The caller has already
+ * applied the zoom transform, so line width is divided back out to keep hairlines
+ * hairline-thin at every zoom level.
  */
-export function renderOverview(
-  world: World,
-  opts: OverviewOptions,
-  scale: number,
-): Canvas {
-  const bitmap = renderOverviewBitmap(world, opts);
-  const canvas = makeCanvas(world.w * scale, world.h * scale);
-  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
-
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(bitmap as CanvasImageSource, 0, 0, canvas.width, canvas.height);
-
-  drawPanelGrid(ctx, world, scale, canvas.width, canvas.height);
-  if (opts.showPois) drawPoiMarkers(ctx, world, scale);
-
-  return canvas;
-}
-
-function drawPanelGrid(
+export function drawPanelGrid(
   ctx: CanvasRenderingContext2D,
   world: World,
   scale: number,
-  width: number,
-  height: number,
 ): void {
-  if (scale < 2) return;
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.28)';
-  ctx.lineWidth = 1;
+  if (scale < 1.5) return;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+  ctx.lineWidth = 1 / scale;
   ctx.beginPath();
   for (let px = 1; px < world.params.panelsX; px++) {
-    const x = Math.round(px * PANEL_W * scale) + 0.5;
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
+    ctx.moveTo(px * PANEL_W, 0);
+    ctx.lineTo(px * PANEL_W, world.h);
   }
   for (let py = 1; py < world.params.panelsY; py++) {
-    const y = Math.round(py * PANEL_H * scale) + 0.5;
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y);
+    ctx.moveTo(0, py * PANEL_H);
+    ctx.lineTo(world.w, py * PANEL_H);
   }
   ctx.stroke();
+  ctx.restore();
 }
 
-const POI_STYLE = [
-  { color: PALETTE.ark, glyph: 'A' },
-  { color: '#c9a227', glyph: 'D' },
-  { color: PALETTE.heart, glyph: '♥' },
-  { color: PALETTE.town, glyph: 'T' },
-];
+export const POI_STYLE = [
+  { color: PALETTE.ark, glyph: 'A', label: 'Ark site' },
+  { color: '#e0b52e', glyph: 'D', label: 'Dungeon' },
+  { color: PALETTE.heart, glyph: '♥', label: 'Heart container' },
+  { color: PALETTE.town, glyph: 'T', label: 'Town' },
+] as const;
 
-function drawPoiMarkers(ctx: CanvasRenderingContext2D, world: World, scale: number): void {
-  const r = Math.max(4, scale * 3);
+/** POI markers in world coordinates, sized in screen pixels. */
+export function drawPoiMarkers(
+  ctx: CanvasRenderingContext2D,
+  world: World,
+  scale: number,
+): void {
+  // Marker radius is fixed on screen, so pins stay tappable when zoomed out.
+  const r = Math.max(3.5, Math.min(9, 30 / scale)) / 1;
+
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
 
   const marker = (x: number, y: number, color: string, glyph: string): void => {
-    const cx = (x + 0.5) * scale;
-    const cy = (y + 0.5) * scale;
+    const cx = x + 0.5;
+    const cy = y + 0.5;
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
-    ctx.lineWidth = Math.max(1, r * 0.3);
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.lineWidth = Math.max(0.5, r * 0.25);
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
     ctx.stroke();
 
-    if (r >= 6) {
+    if (r * scale >= 9) {
       ctx.fillStyle = '#fff';
-      ctx.font = `bold ${Math.round(r * 1.25)}px system-ui, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(glyph, cx, cy + r * 0.05);
+      ctx.font = `bold ${r * 1.3}px system-ui, sans-serif`;
+      ctx.fillText(glyph, cx, cy + r * 0.08);
     }
   };
 
@@ -203,6 +192,7 @@ function drawPoiMarkers(ctx: CanvasRenderingContext2D, world: World, scale: numb
 
   // Spawn last so it sits on top of anything it overlaps.
   marker(world.spawn.x, world.spawn.y, '#ffffff', 'S');
+  ctx.restore();
 }
 
 /**

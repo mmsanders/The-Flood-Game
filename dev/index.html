@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#12151c" />
+    <title>The Flood — World Inspector</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="bar">
+      <div class="brand">
+        <span class="brand-mark">≋</span>
+        <span class="brand-name">The Flood</span>
+      </div>
+      <form class="seed" id="seed-form">
+        <input
+          id="seed-input"
+          type="text"
+          inputmode="text"
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck="false"
+          aria-label="World seed"
+          placeholder="seed"
+        />
+        <button type="submit" class="btn btn-primary" id="generate">Generate</button>
+        <button type="button" class="btn" id="reroll" aria-label="Random seed">🎲</button>
+      </form>
+    </header>
+
+    <nav class="chips" id="overlay-chips" aria-label="Map overlay">
+      <button class="chip is-active" data-overlay="tiles">Tiles</button>
+      <button class="chip" data-overlay="biome">Biome</button>
+      <button class="chip" data-overlay="elevation">Elevation</button>
+      <button class="chip" data-overlay="walkable">Walkable</button>
+      <span class="chips-gap"></span>
+      <button class="chip is-active" id="toggle-pois" aria-pressed="true">Pins</button>
+      <button class="chip" id="fit">Fit</button>
+    </nav>
+
+    <div class="scrub">
+      <label class="scrub-label" for="day">
+        Day <output id="day-out">0</output><span class="dim">/40</span>
+      </label>
+      <input id="day" type="range" min="0" max="40" step="0.25" value="0" />
+      <output class="scrub-dry" id="dry-out">100% dry</output>
+    </div>
+
+    <main class="stage">
+      <canvas id="map" aria-label="World map"></canvas>
+      <div class="hint" id="hint">Drag to pan · pinch to zoom · tap a panel</div>
+    </main>
+
+    <section class="readout" id="readout" data-open="false">
+      <button class="readout-toggle" id="readout-toggle" aria-expanded="false">
+        <span class="readout-title">World health</span>
+        <span class="badge" id="health-badge">—</span>
+        <span class="caret">▾</span>
+      </button>
+      <div class="readout-body" id="readout-body"></div>
+    </section>
+
+    <div class="sheet" id="panel-sheet" hidden>
+      <div class="sheet-scrim" id="sheet-scrim"></div>
+      <div class="sheet-card" role="dialog" aria-label="Panel inspector">
+        <div class="sheet-head">
+          <h2 id="panel-title">Panel</h2>
+          <button class="btn btn-ghost" id="sheet-close" aria-label="Close">✕</button>
+        </div>
+        <div class="sheet-body" id="panel-body"></div>
+      </div>
+    </div>
+
+    <script type="module" src="../src/devtool/main.ts"></script>
+  </body>
+</html>
