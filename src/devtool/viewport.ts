@@ -66,16 +66,29 @@ export class Viewport {
     if (this.frame) cancelAnimationFrame(this.frame);
   }
 
-  /** Match the backing store to the CSS box and device pixel ratio. */
+  /**
+   * Match the backing store to the CSS box and device pixel ratio, keeping
+   * whatever was in the middle of the view in the middle of the view. Without
+   * that, opening a drawer or rotating the phone crops to a corner.
+   */
   resize(): void {
+    const hadSize = this.canvas.width > 0;
+    const centre = hadSize
+      ? { x: (this.viewW / 2 - this.tx) / this.scale, y: (this.viewH / 2 - this.ty) / this.scale }
+      : null;
+
     const rect = this.canvas.getBoundingClientRect();
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     const w = Math.max(1, Math.round(rect.width * this.dpr));
     const h = Math.max(1, Math.round(rect.height * this.dpr));
-    if (this.canvas.width !== w || this.canvas.height !== h) {
-      this.canvas.width = w;
-      this.canvas.height = h;
+    if (this.canvas.width === w && this.canvas.height === h) {
+      this.requestDraw();
+      return;
     }
+
+    this.canvas.width = w;
+    this.canvas.height = h;
+    if (centre) this.centreOn(centre.x, centre.y);
     this.requestDraw();
   }
 
