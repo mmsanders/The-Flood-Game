@@ -18,6 +18,7 @@ import { checkSolvable } from '../resources.js';
 import { deriveSeed } from '../rng.js';
 import { BIOME_COUNT, RESOURCE_COUNT, isWalkable, resourceOf } from '../tiles.js';
 import { PoiKind, type World, type WorldStats } from '../world.js';
+import { spawnAnimals } from '../animals.js';
 import { ensureConnected } from './connectivity.js';
 import { generateElevation } from './elevation.js';
 import { paintTiles } from './paint.js';
@@ -34,7 +35,14 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
   const tiles = paintTiles({ seed, params, elev, biome });
 
   const connectivity = ensureConnected(tiles, biome, params);
-  const { spawn, ark, pois } = placePois(seed, params, tiles, elev, biome);
+  const { spawn, ark, pois, boatYard } = placePois(seed, params, tiles, elev, biome);
+
+  const reserved = new Set<number>();
+  reserved.add(spawn.y * w + spawn.x);
+  reserved.add(ark.y * w + ark.x);
+  reserved.add(boatYard.y * w + boatYard.x);
+  for (const poi of pois) reserved.add(poi.y * w + poi.x);
+  const animals = spawnAnimals(seed, tiles, biome, w, reserved, spawn);
 
   // One dungeon per entrance placed above. They are separate maps, so nothing
   // here touches the overworld's own connectivity or solvability.
@@ -64,7 +72,9 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
     floods: true,
     spawn,
     ark,
+    boatYard,
     pois,
+    animals,
     dungeons,
     stats,
   };

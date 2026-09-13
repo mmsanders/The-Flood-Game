@@ -9,8 +9,9 @@ import { DEFAULT_PARAMS } from '../core/config.js';
 import { parseSeed, randomSeed } from '../core/rng.js';
 import { generateValidWorld } from '../core/worldgen/index.js';
 import { Input } from './input.js';
+import { considerBestFlock, loadBestFlock, type BestFlock } from './persist.js';
 import { SCREEN_H, SCREEN_W, render } from './render.js';
-import { createGame, type GameState, say, step } from './state.js';
+import { createGame, flockScore, type GameState, say, step } from './state.js';
 
 const STEP = 1 / 60;
 const MAX_FRAME = 0.25;
@@ -31,12 +32,15 @@ const url = new URL(window.location.href);
 const timeScale = Math.max(0.1, Math.min(200, Number(url.searchParams.get('speed') ?? 1)));
 
 const input = new Input();
+let bestiary = false;
+let best: BestFlock = loadBestFlock();
 let state = newRun(parseSeed(url.searchParams.get('seed')));
 
 function newRun(seed: number): GameState {
   const { world } = generateValidWorld(seed, DEFAULT_PARAMS);
   const next = createGame(world);
-  say(next, 'BUILD IT, NOAH. Forty days. Do not disappoint Us.');
+  say(next, 'BUILD IT, NOAH. Forty days. Two of every kind.');
+  bestiary = false;
 
   const params = new URL(window.location.href);
   params.searchParams.set('seed', String(seed));
@@ -72,29 +76,38 @@ function frame(now: number): void {
     accumulator = 0;
   }
 
-  const scale = timeScale * (intents.fastForward ? 8 : 1);
-  accumulator += elapsed * scale;
+  if (intents.bestiaryPressed) bestiary = !bestiary;
 
-  let steps = 0;
-  while (accumulator >= STEP && steps < 240) {
-    step(
-      state,
-      {
-        moveX: intents.moveX,
-        moveY: intents.moveY,
-        // Edge-triggered intents fire on the first substep only, so one key
-        // press cannot swing or pay several times in a single frame.
-        attackPressed: intents.attackPressed && steps === 0,
-        interactPressed: intents.interactPressed && steps === 0,
-      },
-      STEP,
-    );
-    accumulator -= STEP;
-    steps++;
+  if (!bestiary) {
+    const scale = timeScale * (intents.fastForward ? 8 : 1);
+    accumulator += elapsed * scale;
+
+    let steps = 0;
+    while (accumulator >= STEP && steps < 240) {
+      step(
+        state,
+        {
+          moveX: intents.moveX,
+          moveY: intents.moveY,
+          // Edge-triggered intents fire on the first substep only, so one key
+          // press cannot swing or pay several times in a single frame.
+          attackPressed: intents.attackPressed && steps === 0,
+          interactPressed: intents.interactPressed && steps === 0,
+        },
+        STEP,
+      );
+      accumulator -= STEP;
+      steps++;
+    }
+  } else {
+    accumulator = 0;
   }
 
+  const nextBest = considerBestFlock(flockScore(state), best);
+  if (nextBest !== best) best = nextBest;
+
   input.endFrame();
-  render(ctx as CanvasRenderingContext2D, state);
+  render(ctx as CanvasRenderingContext2D, state, { bestiary, best });
   requestAnimationFrame(frame);
 }
 
@@ -106,9 +119,12 @@ Object.assign(window as unknown as Record<string, unknown>, {
     get state() {
       return state;
     },
+    get best() {
+      return best;
+    },
     newRun: (seed: number) => {
       state = newRun(seed);
     },
-    render: () => render(ctx as CanvasRenderingContext2D, state),
+    render: () => render(ctx as CanvasRenderingContext2D, state, { bestiary, best }),
   },
 });

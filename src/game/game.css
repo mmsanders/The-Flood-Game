@@ -44,7 +44,7 @@ body {
 }
 
 .overlay::after {
-  content: "arrows / WASD move · space swings the rod · R restarts · hold shift to fast-forward";
+  content: "arrows / WASD move · space the Rod · E use · B flock · R restarts · hold shift to fast-forward";
 }
 
 @media (max-height: 560px) {

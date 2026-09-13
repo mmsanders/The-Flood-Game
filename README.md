@@ -8,14 +8,15 @@ material for an ark. Forty days. Permadeath. One seed, one world, one run.
 ```
 npm install
 npm run dev          # game at /, world inspector at /dev/
-npm test             # 137 unit tests over the simulation
+npm test             # unit tests over the simulation
 npm run test:e2e     # screenshots into ./screenshots
 npx tsx scripts/survey.ts 12   # worldgen tuning report
 ```
 
 ## The two things to look at
 
-**The game** (`/`) — arrows or WASD to move, space swings the Rod of Aaron, `R` restarts,
+**The game** (`/`) — arrows or WASD to move, space swings the Rod of Aaron, `E` uses
+(enter a dungeon, frame the skiff, launch), `B` opens the flock, `R` restarts,
 hold shift to fast-forward the clock. `?seed=12345` replays an exact world; `?speed=60`
 compresses the hour-long run into a minute for testing.
 
@@ -66,7 +67,15 @@ that fail are regenerated. This is what separates a roguelike from a random numb
 generator.
 
 **The Rod of Aaron is weapon and tool.** The same swing that will fight things later is what
-harvests a resource node now.
+harvests a resource node now. From the deck of the skiff it dredges nodes the flood has
+already covered — there is no fishing pole.
+
+**Two of every kind.** Ten biblical kinds, two of each, wander their home biomes. Walking
+into one takes it aboard. A complete flock is a high score, not a win condition: the ark
+still launches on timber and pitch. Best flock is kept in localStorage.
+
+**The skiff is not the ark.** Frame it at the valley slipway from 8 gopher wood and 6 fiber,
+then walk into water from any shore. It lets you occupy the flood instead of drowning in it.
 
 **Dungeons cost you the ark.** One per biome, 4x4 rooms where each room is exactly one panel
 — so they share the overworld's format, renderer and inspector for free. Chasms are bridged
@@ -90,6 +99,7 @@ the flood. Biome bands and resource densities were both set this way.
 
 ## Status
 
-Playable end to end: worldgen, the flood, resource gathering, the ark, win/lose, and
-dungeons with the resource trade. Enemies, towns and money, the voice of God as a recurring
-character, and the ocean stage are designed for but not yet built — see `docs/DESIGN.md`.
+Playable end to end: worldgen, the flood, resource gathering, the ark, the flock, the
+skiff, win/lose, and dungeons with the resource trade. Enemies, towns and money, the voice
+of God as a recurring character, and the ocean stage are designed for but not yet built —
+see `docs/DESIGN.md`.

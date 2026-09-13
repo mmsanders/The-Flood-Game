@@ -402,4 +402,17 @@ const TILE_PAINTERS: Record<number, Painter> = {
     px(c, 3, 6, 3, 3, '#e8d9a0');
     px(c, 10, 6, 3, 3, '#e8d9a0');
   },
+
+  [Tile.BoatYard]: (c) => {
+    base(c, PALETTE.dirt);
+    px(c, 0, 10, TILE_PX, 6, PALETTE.water);
+    px(c, 0, 10, TILE_PX, 1, PALETTE.waterShallow);
+    c.fillStyle = PALETTE.dock;
+    c.fillRect(1, 4, 14, 8);
+    px(c, 1, 4, 14, 2, '#c48a48');
+    px(c, 2, 6, 12, 1, '#5a3a18');
+    px(c, 2, 9, 12, 1, '#5a3a18');
+    px(c, 7, 2, 2, 4, '#7a4a1e');
+    px(c, 5, 1, 6, 2, '#d2a05a');
+  },
 };

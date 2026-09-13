@@ -11,6 +11,7 @@ import { PANEL_H, PANEL_W, type WorldParams } from './config.js';
 import type { Dungeon } from './dungeon.js';
 import type { TileMap } from './tilemap.js';
 import { Biome, Tile } from './tiles.js';
+import type { Animal } from './animals.js';
 
 export interface Point {
   x: number;
@@ -22,6 +23,7 @@ export const enum PoiKind {
   Dungeon = 1,
   Heart = 2,
   Town = 3,
+  BoatYard = 4,
 }
 
 export interface Poi extends Point {
@@ -51,7 +53,10 @@ export interface World extends TileMap {
   params: WorldParams;
   spawn: Point;
   ark: Point;
+  boatYard: Point;
   pois: Poi[];
+  /** Two of each biblical kind, wandering their home biomes. */
+  animals: Animal[];
   /** One per biome. Entrances are linked by index from the matching Poi. */
   dungeons: Dungeon[];
   stats: WorldStats;

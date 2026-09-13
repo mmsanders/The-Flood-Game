@@ -14,6 +14,7 @@ import { type Point, type Poi, PoiKind } from '../world.js';
 export interface PoiPlacement {
   spawn: Point;
   ark: Point;
+  boatYard: Point;
   pois: Poi[];
 }
 
@@ -75,7 +76,24 @@ export function placePois(
     pois.push({ ...toPoint(spot, w), kind: PoiKind.Heart, biome: b as Biome });
   }
 
-  return { spawn: toPoint(spawn, w), ark: toPoint(ark, w), pois };
+  // -- The slipway: a valley dock where a skiff can be framed ----------------
+  // Prefer a bank next to natural water so the first launch has somewhere to
+  // go before the flood arrives. Any reachable valley tile will do otherwise.
+  const boatYardIndex = pickBoatYard(rng, tiles, walkableByBiome[Biome.Valley], taken, w, spawn);
+  taken.add(boatYardIndex);
+  tiles[boatYardIndex] = Tile.BoatYard;
+  pois.push({
+    ...toPoint(boatYardIndex, w),
+    kind: PoiKind.BoatYard,
+    biome: biome[boatYardIndex] as Biome,
+  });
+
+  return {
+    spawn: toPoint(spawn, w),
+    ark: toPoint(ark, w),
+    boatYard: toPoint(boatYardIndex, w),
+    pois,
+  };
 }
 
 /**
@@ -136,6 +154,55 @@ function pickSpawn(
   const hi = Math.max(lo + 1, Math.floor(candidates.length * 0.7));
   const pool = candidates.slice(lo, hi);
   return pool[Math.floor(rng() * pool.length)];
+}
+
+/**
+ * A valley bank next to a pond if one exists, otherwise any valley tile that
+ * isn't already a shrine. The slipway has to be reachable — this runs after
+ * connectivity repair — so the player can actually walk to it.
+ */
+function pickBoatYard(
+  rng: () => number,
+  tiles: Uint8Array,
+  valleyWalkable: readonly number[],
+  taken: Set<number>,
+  w: number,
+  spawnIndex: number,
+): number {
+  const shores: number[] = [];
+  const closeShores: number[] = [];
+  const inland: number[] = [];
+  for (const i of valleyWalkable) {
+    if (taken.has(i) || i === spawnIndex) continue;
+    const shore = touchesWater(tiles, i, w);
+    const far = farFrom(i, taken, w, 6);
+    if (shore && far) shores.push(i);
+    else if (shore) closeShores.push(i);
+    else if (far) inland.push(i);
+  }
+  const pool = shores.length > 0 ? shores : closeShores.length > 0 ? closeShores : inland;
+  if (pool.length > 0) return pool[Math.floor(rng() * pool.length)];
+  for (const i of valleyWalkable) {
+    if (!taken.has(i)) return i;
+  }
+  return spawnIndex;
+}
+
+function touchesWater(tiles: Uint8Array, i: number, w: number): boolean {
+  const h = (tiles.length / w) | 0;
+  const x = i % w;
+  const y = (i / w) | 0;
+  const n = [
+    [x - 1, y],
+    [x + 1, y],
+    [x, y - 1],
+    [x, y + 1],
+  ];
+  for (const [nx, ny] of n) {
+    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+    if (tiles[ny * w + nx] === Tile.Water) return true;
+  }
+  return false;
 }
 
 function findAnyWalkable(tiles: Uint8Array, near: number): number {
