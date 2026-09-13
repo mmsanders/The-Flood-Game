@@ -8,7 +8,8 @@
  * special-casing anywhere.
  */
 
-import { FLOOD_DAYS } from './config.js';
+import { FLOOD_DAYS, PANEL_H, PANEL_W } from './config.js';
+import type { TileMap } from './tilemap.js';
 import { Tile, isWalkable } from './tiles.js';
 import type { World } from './world.js';
 
@@ -84,6 +85,39 @@ export function drownDayForElev(elev: number): number {
  * carry its own copy of the blocking ID ranges, which would have quietly
  * disagreed with `isWalkable` the moment a new tile group was added.
  */
+/**
+ * How much of a panel is underwater, 0..1.
+ *
+ * Same predicate the renderer uses per tile (`elev < waterLevel`), averaged
+ * over the 16x11 screen. Dungeons set `floods: false` and stay dry. The HUD
+ * map reads this every frame so explored land goes blue as the water rises.
+ */
+export function panelFloodFraction(
+  map: Pick<TileMap, 'w' | 'h' | 'elev' | 'floods'>,
+  panelX: number,
+  panelY: number,
+  waterLevel: number,
+): number {
+  if (!map.floods) return 0;
+
+  const x0 = panelX * PANEL_W;
+  const y0 = panelY * PANEL_H;
+  if (x0 < 0 || y0 < 0 || x0 >= map.w || y0 >= map.h) return 0;
+
+  const x1 = Math.min(map.w, x0 + PANEL_W);
+  const y1 = Math.min(map.h, y0 + PANEL_H);
+  let wet = 0;
+  let total = 0;
+  for (let y = y0; y < y1; y++) {
+    const row = y * map.w;
+    for (let x = x0; x < x1; x++) {
+      total++;
+      if (map.elev[row + x] < waterLevel) wet++;
+    }
+  }
+  return total === 0 ? 0 : wet / total;
+}
+
 export function isPassable(world: World, x: number, y: number, waterLevel: number): boolean {
   if (x < 0 || y < 0 || x >= world.w || y >= world.h) return false;
   const i = y * world.w + x;

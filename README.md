@@ -24,6 +24,17 @@ runs. Pan and pinch the whole map, drag the day slider to watch the world drown,
 panel for its sprites and its raw bytes, and switch overlays for biome, elevation and
 walkability. The seed lives in the URL, so a link is a world.
 
+## Play-and-hotfix
+
+`npm run dev` is a live session, not a build. Leave the game open. Edits to rules,
+rendering, controls, or the palette land through Vite HMR without restarting the run —
+you keep walking, the next frame uses the new code. A `LIVE` badge means the loop is
+connected; a toast flashes when a patch lands.
+
+Worldgen and most of `DEFAULT_PARAMS` only run when a world is created, so those edits
+apply the next time you press `R`. `secondsPerDay` is the exception: it is read every
+step, so the flood clock updates on the live run.
+
 ## How it fits together
 
 One Vite + TypeScript project, no game engine, two HTML entry points over one source tree.

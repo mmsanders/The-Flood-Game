@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { FLOOD_DAYS, withParams } from '../src/core/config.js';
+import { FLOOD_DAYS, PANEL_H, PANEL_W, withParams } from '../src/core/config.js';
 import {
   FLOOD_GRACE_DAYS,
   drownDayForElev,
   isPassable,
   isSubmerged,
+  panelFloodFraction,
   waterLevelAtDay,
   waterLevelAtSeconds,
 } from '../src/core/flood.js';
@@ -113,6 +114,35 @@ describe('flood', () => {
     const world = generateWorld(31, SMALL);
     expect(isPassable(world, -1, 0, 0)).toBe(false);
     expect(isPassable(world, 0, world.h, 0)).toBe(false);
+  });
+
+  it('reports a panel as dry at day 0 and gone by day 40', () => {
+    const world = generateWorld(4242, SMALL);
+    const px = Math.floor(world.spawn.x / PANEL_W);
+    const py = Math.floor(world.spawn.y / PANEL_H);
+    expect(panelFloodFraction(world, px, py, waterLevelAtDay(0))).toBe(0);
+    expect(panelFloodFraction(world, px, py, waterLevelAtDay(FLOOD_DAYS))).toBe(1);
+  });
+
+  it('drowns a southern panel before a northern one', () => {
+    const world = generateWorld(1234, SMALL);
+    const midX = Math.floor(world.params.panelsX / 2);
+    const south = panelFloodFraction(
+      world,
+      midX,
+      world.params.panelsY - 1,
+      waterLevelAtDay(12),
+    );
+    const north = panelFloodFraction(world, midX, 0, waterLevelAtDay(12));
+    expect(south).toBeGreaterThan(north);
+    expect(south).toBeGreaterThan(0.2);
+  });
+
+  it('keeps dungeon interiors dry', () => {
+    const world = generateWorld(4242, SMALL);
+    const dungeon = world.dungeons[0];
+    expect(dungeon.floods).toBe(false);
+    expect(panelFloodFraction(dungeon, 0, 0, waterLevelAtDay(FLOOD_DAYS))).toBe(0);
   });
 
   it('drowns the spawn before the ark site', () => {

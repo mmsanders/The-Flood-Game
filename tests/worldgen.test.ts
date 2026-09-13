@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PARAMS, PANEL_H, PANEL_W, withParams } from '../src/core/config.js';
-import { BIOME_COUNT, Biome, Tile, isWalkable } from '../src/core/tiles.js';
+import { BIOME_COUNT, Biome, Tile, isResourceNode, isWalkable } from '../src/core/tiles.js';
 import { generateWorld } from '../src/core/worldgen/index.js';
 import { labelRegions } from '../src/core/worldgen/connectivity.js';
+import { isSeamBlocker, onPanelEdge } from '../src/core/worldgen/seams.js';
 import { getPanel } from '../src/core/world.js';
 
 /** A smaller map keeps the broad sweeps fast without changing the algorithms. */
@@ -176,5 +177,67 @@ describe('worldgen: panels', () => {
 
   it('covers the default map in the expected number of panels', () => {
     expect(DEFAULT_PARAMS.panelsX * DEFAULT_PARAMS.panelsY).toBe(480);
+  });
+});
+
+describe('worldgen: panel seams', () => {
+  it.each(SEEDS)('seed %i keeps resource nodes off panel edges', (seed) => {
+    const world = generateWorld(seed, SMALL);
+    let nodes = 0;
+    for (let y = 0; y < world.h; y++) {
+      for (let x = 0; x < world.w; x++) {
+        const tile = world.tiles[y * world.w + x];
+        if (!isResourceNode(tile)) continue;
+        nodes++;
+        expect(onPanelEdge(x, y), `node ${tile} on edge ${x},${y} seed ${seed}`).toBe(false);
+      }
+    }
+    expect(nodes, `seed ${seed} placed no resources at all`).toBeGreaterThan(0);
+  });
+
+  it.each(SEEDS)('seed %i mirrors scenery blockers across every panel seam', (seed) => {
+    const world = generateWorld(seed, SMALL);
+    const { w, h, params, tiles } = world;
+
+    for (let px = 1; px < params.panelsX; px++) {
+      const xR = px * PANEL_W;
+      const xL = xR - 1;
+      for (let y = 0; y < h; y++) {
+        const a = tiles[y * w + xL];
+        const b = tiles[y * w + xR];
+        expect(isSeamBlocker(a), `v-seam ${xL}|${xR},${y} seed ${seed}`).toBe(isSeamBlocker(b));
+      }
+    }
+
+    for (let py = 1; py < params.panelsY; py++) {
+      const yB = py * PANEL_H;
+      const yT = yB - 1;
+      for (let x = 0; x < w; x++) {
+        const a = tiles[yT * w + x];
+        const b = tiles[yB * w + x];
+        expect(isSeamBlocker(a), `h-seam ${x},${yT}|${yB} seed ${seed}`).toBe(isSeamBlocker(b));
+      }
+    }
+  });
+
+  it.each(SEEDS)('seed %i walls the world rim so the map edge is visible', (seed) => {
+    const world = generateWorld(seed, SMALL);
+    const { w, h, tiles, spawn, ark } = world;
+
+    for (let x = 0; x < w; x++) {
+      expect(isWalkable(tiles[x]), `north rim ${x} seed ${seed}`).toBe(false);
+      expect(isWalkable(tiles[(h - 1) * w + x]), `south rim ${x} seed ${seed}`).toBe(false);
+    }
+    for (let y = 0; y < h; y++) {
+      expect(isWalkable(tiles[y * w]), `west rim ${y} seed ${seed}`).toBe(false);
+      expect(isWalkable(tiles[y * w + w - 1]), `east rim ${y} seed ${seed}`).toBe(false);
+    }
+
+    expect(spawn.x).toBeGreaterThan(0);
+    expect(spawn.x).toBeLessThan(w - 1);
+    expect(spawn.y).toBeGreaterThan(0);
+    expect(spawn.y).toBeLessThan(h - 1);
+    expect(isWalkable(tiles[spawn.y * w + spawn.x])).toBe(true);
+    expect(isWalkable(tiles[ark.y * w + ark.x])).toBe(true);
   });
 });
