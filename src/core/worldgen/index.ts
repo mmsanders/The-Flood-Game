@@ -1,7 +1,7 @@
 /**
  * World generation pipeline.
  *
- *   elevation -> biomes -> paint -> connectivity repair -> POIs -> validation
+ *   elevation -> biomes -> paint (seams + world rim) -> connectivity repair -> POIs -> validation
  *
  * Each stage draws from its own derived sub-seed, so re-tuning one stage does
  * not reshuffle the others.
@@ -23,6 +23,7 @@ import { ensureConnected } from './connectivity.js';
 import { generateElevation } from './elevation.js';
 import { paintTiles } from './paint.js';
 import { placePois } from './pois.js';
+import { wallWorldRim } from './seams.js';
 
 export { ensureConnected, labelRegions } from './connectivity.js';
 export { generateElevation } from './elevation.js';
@@ -35,6 +36,8 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
   const tiles = paintTiles({ seed, params, elev, biome });
 
   const connectivity = ensureConnected(tiles, biome, params);
+  // Re-stamp the frame in case a seam carve nicked a rim tile.
+  wallWorldRim(tiles, biome, elev, w, h);
   const { spawn, ark, pois, boatYard } = placePois(seed, params, tiles, elev, biome);
 
   const reserved = new Set<number>();

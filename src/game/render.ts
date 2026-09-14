@@ -7,12 +7,30 @@
  * inspector cannot drift apart.
  */
 
-import { PANEL_PX_H, PANEL_PX_W, TILE_PX } from '../core/config.js';
+import { PANEL_H, PANEL_PX_H, PANEL_PX_W, PANEL_W, TILE_PX } from '../core/config.js';
 import { ANIMAL_DEFS, ANIMAL_H, ANIMAL_W, AnimalDir, AnimalStatus, FLOCK_TOTAL } from '../core/animals.js';
-import { ARK_RECIPE } from '../core/resources.js';
-import { RESOURCE_COUNT, type Resource } from '../core/tiles.js';
+import { panelFloodFraction } from '../core/flood.js';
+import { panelsHigh, panelsWide } from '../core/tilemap.js';
+import { RESOURCE_COUNT, Tile } from '../core/tiles.js';
 import { PALETTE } from '../render/palette.js';
 import { getTilesheet, tileSheetX, tileSheetY } from '../render/tilesheet.js';
+import {
+  MINIMAP_H,
+  MINI_POI_COLOR,
+  MINIMAP_W,
+  MINIMAP_X,
+  MINIMAP_Y,
+  MiniPoi,
+  cellRect,
+  dominantBiome,
+  followMinimapView,
+  layoutMiniMap,
+  minimapFlatColor,
+  panelHasTile,
+  panelPoi,
+  sampleMinimapPixel,
+  visitedCells,
+} from './minimap.js';
 import {
   Dir,
   type GameState,
@@ -321,47 +339,188 @@ function drawRod(ctx: CanvasRenderingContext2D, state: GameState, x: number, y: 
 function drawHud(ctx: CanvasRenderingContext2D, state: GameState): void {
   ctx.fillStyle = '#10131a';
   ctx.fillRect(0, 0, SCREEN_W, HUD_H);
-  ctx.fillStyle = '#2a3140';
-  ctx.fillRect(0, HUD_H - 1, SCREEN_W, 1);
 
-  drawHearts(ctx, state, 6, 4);
-  drawDay(ctx, state, 6, 16);
-  drawFlock(ctx, state, 6, 36);
-  drawInventory(ctx, state, 96, 4);
-  drawArkMeter(ctx, state, 96, 26);
-  drawBoatBadge(ctx, state);
-  drawDungeonBadge(ctx, state);
+  drawMiniMap(ctx, state);
+
+  ctx.fillStyle = '#2a3140';
+  ctx.fillRect(MINIMAP_W, 0, 1, HUD_H);
+  ctx.fillRect(MINIMAP_W, HUD_H - 1, SCREEN_W - MINIMAP_W, 1);
+
+  const col = MINIMAP_W + 4;
+  drawHearts(ctx, state, col, 3);
+  let badgeX = col + state.player.maxHearts * 10 + 2;
+  badgeX = drawBoatBadge(ctx, state, badgeX, 4);
+  drawKeys(ctx, state, badgeX, 4);
+  drawDay(ctx, state, col, 14);
+  drawFlock(ctx, state, col, 26);
+  drawArkMeter(ctx, state, col, 38);
+  drawInventory(ctx, state, SCREEN_W - 32, 2);
 }
 
 /**
- * Underground, the day counter still matters but the ark meter is out of
- * reach, so the badge says where you are and what you are carrying that the
- * dungeon might take.
+ * Explored panels only, recentred in the well. Zelda 1's language (tiny
+ * rectangles, current room lit) without Zelda 1's full-grid spoiler.
+ *
+ * Flood is the same scalar the world uses: each cell tints, and when there
+ * is room for it the water rises from the bottom of the square.
  */
-function drawDungeonBadge(ctx: CanvasRenderingContext2D, state: GameState): void {
+function drawMiniMap(ctx: CanvasRenderingContext2D, state: GameState): void {
+  ctx.fillStyle = '#080a0e';
+  ctx.fillRect(MINIMAP_X, MINIMAP_Y, MINIMAP_W, MINIMAP_H);
+
+  const map = activeMap(state);
+  const width = panelsWide(map);
+  const grid =
+    state.location.kind === 'dungeon'
+      ? state.exploredDungeons[state.location.dungeonId]
+      : state.exploredOverworld;
+  if (!grid) return;
+
+  const cells = visitedCells(grid, width);
+  const layout = layoutMiniMap(
+    cells,
+    MINIMAP_X,
+    MINIMAP_Y,
+    MINIMAP_W,
+    MINIMAP_H,
+    width,
+    panelsHigh(map),
+  );
+  if (!layout) return;
+
+  const height = panelsHigh(map);
+  state.minimapViewY = followMinimapView(
+    state.minimapViewY,
+    state.camera.panelY,
+    layout.cell,
+    layout.wellH,
+    height,
+    layout.scrolls,
+  );
+
+  const level = waterLevel(state);
+  const flash = Math.floor(state.elapsed * 6) % 2 === 0;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(layout.wellX, layout.wellY, layout.wellW, layout.wellH);
+  ctx.clip();
+  for (const c of cells) {
+    const r = cellRect(layout, c.x, c.y, state.minimapViewY);
+    if (r.y + r.h <= layout.wellY || r.y >= layout.wellY + layout.wellH) continue;
+    if (r.x + r.w <= layout.wellX || r.x >= layout.wellX + layout.wellW) continue;
+    const here = c.x === state.camera.panelX && c.y === state.camera.panelY;
+    const depth = panelFloodFraction(map, c.x, c.y, level);
+    const poi = landmarkOnPanel(state, c.x, c.y);
+    drawMiniMapCell(ctx, map, c.x, c.y, r, level, depth, poi, here && flash);
+    if (here && Math.min(r.w, r.h) >= 3) {
+      ctx.strokeStyle = '#fff6c8';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+    }
+  }
+  ctx.restore();
+}
+
+function landmarkOnPanel(state: GameState, panelX: number, panelY: number): MiniPoi {
   const dungeon = currentDungeon(state);
-  if (!dungeon) return;
+  if (dungeon) {
+    const inPanel = (p: { x: number; y: number }): boolean =>
+      ((p.x / PANEL_W) | 0) === panelX && ((p.y / PANEL_H) | 0) === panelY;
+    if (inPanel(dungeon.stairs) || inPanel(dungeon.chest) || inPanel(dungeon.key)) {
+      return MiniPoi.Dungeon;
+    }
+    return MiniPoi.None;
+  }
 
-  ctx.font = '8px ui-monospace, monospace';
-  ctx.textBaseline = 'top';
-  ctx.textAlign = 'left';
+  let poi = panelPoi(state.world.pois, panelX, panelY);
+  if (poi === MiniPoi.None && panelHasTile(state.world, panelX, panelY, Tile.TownDoor)) {
+    poi = MiniPoi.Town;
+  }
+  return poi;
+}
 
-  ctx.fillStyle = PALETTE.stairs;
-  ctx.fillText('UNDERGROUND', 6, 38);
+function drawMiniMapCell(
+  ctx: CanvasRenderingContext2D,
+  map: ReturnType<typeof activeMap>,
+  panelX: number,
+  panelY: number,
+  r: { x: number; y: number; w: number; h: number },
+  level: number,
+  depth: number,
+  poi: MiniPoi,
+  highlight: boolean,
+): void {
+  if (r.w <= 2 || r.h <= 2) {
+    const biome = dominantBiome(map, panelX, panelY);
+    ctx.fillStyle =
+      poi !== MiniPoi.None ? MINI_POI_COLOR[poi] : minimapFlatColor(biome, depth);
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    return;
+  }
 
-  if (state.keysHeld > 0) {
-    ctx.fillStyle = PALETTE.key;
-    ctx.fillText(`KEY x${state.keysHeld}`, 66, 38);
+  for (let py = 0; py < r.h; py++) {
+    for (let px = 0; px < r.w; px++) {
+      ctx.fillStyle = sampleMinimapPixel(
+        map,
+        panelX,
+        panelY,
+        (px + 0.5) / r.w,
+        (py + 0.5) / r.h,
+        level,
+      );
+      ctx.fillRect(r.x + px, r.y + py, 1, 1);
+    }
+  }
+
+  if (poi !== MiniPoi.None) drawMiniPoi(ctx, r, poi);
+  if (highlight) {
+    ctx.fillStyle = 'rgba(240, 224, 160, 0.35)';
+    ctx.fillRect(r.x, r.y, r.w, r.h);
   }
 }
 
-function drawBoatBadge(ctx: CanvasRenderingContext2D, state: GameState): void {
-  if (!state.hasBoat || currentDungeon(state)) return;
-  const hx = 6 + state.player.maxHearts * 10 + 4;
+function drawMiniPoi(
+  ctx: CanvasRenderingContext2D,
+  r: { x: number; y: number; w: number; h: number },
+  poi: MiniPoi,
+): void {
+  const color = MINI_POI_COLOR[poi];
+  const cx = r.x + (r.w >> 1);
+  const cy = r.y + (r.h >> 1);
+  ctx.fillStyle = '#0a0c10';
+  ctx.fillRect(cx - 1, cy - 1, 3, 3);
+  ctx.fillStyle = color;
+  ctx.fillRect(cx, cy - 1, 1, 3);
+  ctx.fillRect(cx - 1, cy, 3, 1);
+}
+
+/** Keys sit next to the hearts, the way Zelda 1 parked them on the status bar. */
+function drawKeys(ctx: CanvasRenderingContext2D, state: GameState, x: number, y: number): void {
+  if (!currentDungeon(state) || state.keysHeld <= 0) return;
+
+  ctx.fillStyle = PALETTE.key;
+  ctx.fillRect(x, y + 1, 5, 5);
+  ctx.fillStyle = PALETTE.dungeonFloor;
+  ctx.fillRect(x + 1, y + 2, 2, 2);
+  ctx.font = '8px ui-monospace, monospace';
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = PALETTE.key;
+  ctx.fillText(`x${state.keysHeld}`, x + 7, y);
+}
+
+function drawBoatBadge(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  x: number,
+  y: number,
+): number {
+  if (!state.hasBoat || currentDungeon(state)) return x;
   ctx.font = '8px ui-monospace, monospace';
   ctx.textBaseline = 'top';
   ctx.fillStyle = state.inBoat ? PALETTE.waterShallow : PALETTE.dock;
-  ctx.fillText(state.inBoat ? 'SKIFF' : 'BOAT', hx, 5);
+  ctx.fillText(state.inBoat ? 'SKIFF' : 'BOAT', x, y);
+  return x + 28;
 }
 
 function drawFlock(ctx: CanvasRenderingContext2D, state: GameState, x: number, y: number): void {
@@ -425,21 +584,13 @@ function drawInventory(
   ctx.textAlign = 'left';
 
   for (let r = 0; r < RESOURCE_COUNT; r++) {
-    const cx = x + r * 40;
+    const cy = y + r * 9;
     ctx.fillStyle = RESOURCE_COLOR[r];
-    ctx.fillRect(cx, y + 1, 5, 5);
-    ctx.fillStyle = '#8d98ab';
-    ctx.fillText(RESOURCE_INITIAL[r], cx + 7, y);
-    ctx.fillStyle = '#e6e9ef';
-    ctx.fillText(String(state.carried[r]), cx + 14, y);
-
-    // Delivered / required, the number that actually ends the run.
-    ctx.fillStyle = '#5c6879';
-    ctx.fillText(
-      `${state.delivered[r]}/${ARK_RECIPE[r as Resource]}`,
-      cx + 7,
-      y + 9,
-    );
+    ctx.fillRect(x, cy + 2, 3, 3);
+    ctx.fillStyle = RESOURCE_COLOR[r];
+    ctx.fillText(RESOURCE_INITIAL[r], x + 5, cy);
+    ctx.fillStyle = '#c8d0dd';
+    ctx.fillText(String(state.carried[r]), x + 13, cy);
   }
 }
 
@@ -449,7 +600,7 @@ function drawArkMeter(
   x: number,
   y: number,
 ): void {
-  const w = SCREEN_W - x - 6;
+  const w = SCREEN_W - x - 40;
   const progress = arkProgress(state);
 
   ctx.font = '8px ui-monospace, monospace';
@@ -463,7 +614,7 @@ function drawArkMeter(
   ctx.fillRect(x + 20, y + 1, Math.round((w - 20) * progress), 6);
   ctx.fillStyle = '#e6e9ef';
   ctx.textAlign = 'right';
-  ctx.fillText(`${Math.round(progress * 100)}%`, SCREEN_W - 8, y);
+  ctx.fillText(`${Math.round(progress * 100)}%`, x + w, y);
   ctx.textAlign = 'left';
 }
 

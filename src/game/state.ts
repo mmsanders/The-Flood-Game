@@ -15,7 +15,7 @@ import {
 } from '../core/dungeon.js';
 import { waterLevelAtSeconds } from '../core/flood.js';
 import { ARK_RECIPE, NODE_YIELD, PLAYER_TILES_PER_SEC } from '../core/resources.js';
-import type { TileMap } from '../core/tilemap.js';
+import { panelsHigh, panelsWide, type TileMap } from '../core/tilemap.js';
 import {
   RESOURCE_COUNT,
   Resource,
@@ -129,10 +129,23 @@ export interface GameState {
   hasBoat: boolean;
   /** Currently sailing. Blocks drowning and lets you occupy floodwater. */
   inBoat: boolean;
+  /**
+   * Overworld panels the player has stood on, row-major 0/1, length
+   * `panelsX * panelsY`. The HUD map draws only these, recentred, so an
+   * unvisited world never leaks its shape.
+   */
+  exploredOverworld: Uint8Array;
+  /** Same packing, one grid per dungeon, sized `roomsX * roomsY`. */
+  exploredDungeons: Uint8Array[];
+  /**
+   * Panel-row at the top of the HUD map when the square-tile strip is
+   * taller than the well. Follows the player with a north/south dead zone.
+   */
+  minimapViewY: number;
 }
 
 export function createGame(world: World): GameState {
-  return {
+  const state: GameState = {
     world,
     location: { kind: 'overworld', dungeonId: -1, returnTo: null },
     player: {
@@ -170,7 +183,82 @@ export function createGame(world: World): GameState {
     dungeonsCleared: world.dungeons.map(() => false),
     hasBoat: false,
     inBoat: false,
+    exploredOverworld: new Uint8Array(world.params.panelsX * world.params.panelsY),
+    exploredDungeons: world.dungeons.map((d) => new Uint8Array(d.roomsX * d.roomsY)),
+    minimapViewY: 0,
   };
+  markExplored(state);
+  return state;
+}
+
+/** Record the panel the camera is on as visited. Cheap and idempotent. */
+export function markExplored(state: GameState): void {
+  const map = activeMap(state);
+  const w = panelsWide(map);
+  const h = panelsHigh(map);
+  const x = state.camera.panelX;
+  const y = state.camera.panelY;
+  if (x < 0 || y < 0 || x >= w || y >= h) return;
+
+  const i = y * w + x;
+  if (state.location.kind === 'dungeon') {
+    const grid = state.exploredDungeons[state.location.dungeonId];
+    if (grid && i < grid.length) grid[i] = 1;
+    return;
+  }
+  if (i < state.exploredOverworld.length) state.exploredOverworld[i] = 1;
+}
+
+/**
+ * Rebind a live run onto a freshly loaded rules module.
+ *
+ * HMR re-executes this file, which would otherwise drop the player. Copy the
+ * running state onto a newly created shape so fields added since the run
+ * started get their defaults, then write back anything the run already had.
+ */
+export function adoptHotState(running: GameState): GameState {
+  const next = createGame(running.world);
+  const merged: GameState = {
+    ...next,
+    ...running,
+    world: running.world,
+    player: { ...next.player, ...running.player },
+    camera: { ...next.camera, ...running.camera },
+    location: { ...next.location, ...running.location },
+    carried: padCounts(running.carried, RESOURCE_COUNT),
+    delivered: padCounts(running.delivered, RESOURCE_COUNT),
+    dungeonsCleared: padFlags(running.dungeonsCleared, running.world.dungeons.length),
+    exploredOverworld: adoptGrid(running.exploredOverworld, next.exploredOverworld),
+    exploredDungeons: adoptDungeonGrids(running.exploredDungeons, next.exploredDungeons),
+  };
+  markExplored(merged);
+  return merged;
+}
+
+function adoptGrid(running: Uint8Array | undefined, fallback: Uint8Array): Uint8Array {
+  return running && running.length === fallback.length ? running : fallback;
+}
+
+function adoptDungeonGrids(
+  running: Uint8Array[] | undefined,
+  fallback: Uint8Array[],
+): Uint8Array[] {
+  if (!running || running.length !== fallback.length) return fallback;
+  return fallback.map((grid, i) => adoptGrid(running[i], grid));
+}
+
+function padCounts(values: number[] | undefined, len: number): number[] {
+  const out = new Array<number>(len).fill(0);
+  if (!values) return out;
+  for (let i = 0; i < Math.min(len, values.length); i++) out[i] = values[i];
+  return out;
+}
+
+function padFlags(values: boolean[] | undefined, len: number): boolean[] {
+  const out = new Array<boolean>(len).fill(false);
+  if (!values) return out;
+  for (let i = 0; i < Math.min(len, values.length); i++) out[i] = values[i];
+  return out;
 }
 
 /**
@@ -273,7 +361,7 @@ function movePlayer(state: GameState, input: StepInput, dt: number): void {
     else if (input.moveY < 0) p.dir = Dir.Up;
   }
 
-  const wading = !state.inBoat && isSubmergedAt(state, p.x + PLAYER_W / 2, p.y + PLAYER_H / 2);
+  const wading = !state.inBoat && hitboxInWater(state, p.x, p.y);
   const speed =
     SPEED_PX * (state.inBoat ? BOAT_SPEED_SCALE : wading ? WADE_SPEED_SCALE : 1) * dt;
 
@@ -313,17 +401,15 @@ function moveAxis(state: GameState, dx: number, dy: number): void {
 /**
  * Can the hitbox sit here? Checks the four corners against terrain.
  *
- * Floodwater blocks movement *into* it, but a player already wading (because
- * the water rose under them) can keep moving through water — otherwise a
- * rising tide would freeze you in place instead of chasing you uphill.
+ * Floodwater blocks movement *into* it, but a player already in the water
+ * (because it rose under them, or they are still straddling the shoreline)
+ * can keep moving — including onto dry ground. Checking only the centre
+ * used to freeze you at the waterline: one step put the centre on land
+ * while a corner was still wet, and then neither direction was legal.
  */
 function canOccupy(state: GameState, x: number, y: number): boolean {
   const map = activeMap(state);
-  const alreadyWading = isSubmergedAt(
-    state,
-    state.player.x + PLAYER_W / 2,
-    state.player.y + PLAYER_H / 2,
-  );
+  const alreadyWading = hitboxInWater(state, state.player.x, state.player.y);
   const level = waterLevel(state);
   const sailing = state.inBoat && state.location.kind === 'overworld';
 
@@ -393,6 +479,17 @@ function maybeBeach(state: GameState): void {
   if (!isWalkable(map.tiles[i])) return;
   state.inBoat = false;
   say(state, 'You beach the skiff.');
+}
+
+/** True if any part of the hitbox is standing in floodwater. */
+function hitboxInWater(state: GameState, x: number, y: number): boolean {
+  return (
+    isSubmergedAt(state, x + PLAYER_W / 2, y + PLAYER_H / 2) ||
+    isSubmergedAt(state, x, y) ||
+    isSubmergedAt(state, x + PLAYER_W - 1, y) ||
+    isSubmergedAt(state, x, y + PLAYER_H - 1) ||
+    isSubmergedAt(state, x + PLAYER_W - 1, y + PLAYER_H - 1)
+  );
 }
 
 function isSubmergedAt(state: GameState, pxX: number, pxY: number): boolean {
@@ -779,6 +876,7 @@ export function snapCamera(state: GameState): void {
   state.camera.fromX = panelX;
   state.camera.fromY = panelY;
   state.camera.scroll = 0;
+  markExplored(state);
 }
 
 /**
@@ -909,6 +1007,7 @@ function updateCamera(state: GameState): void {
     state.camera.panelY = panelY;
     state.camera.scroll = 1;
   }
+  markExplored(state);
 }
 
 // ---------------------------------------------------------------- endings

@@ -31,6 +31,42 @@ body {
   box-shadow: 0 0 0 1px #232a36, 0 18px 60px rgba(0, 0, 0, 0.7);
 }
 
+.live-badge {
+  position: absolute;
+  top: auto;
+  left: 0;
+  bottom: -26px;
+  padding: 2px 6px;
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  color: #8fe06a;
+  background: rgba(12, 18, 12, 0.86);
+  border: 1px solid #3a6a34;
+  pointer-events: none;
+}
+
+.hotfix {
+  position: absolute;
+  left: 50%;
+  bottom: 36px;
+  transform: translateX(-50%) translateY(6px);
+  padding: 4px 10px;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  color: #e6e9ef;
+  background: rgba(12, 18, 12, 0.92);
+  border: 1px solid #3a6a34;
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.hotfix.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 .overlay {
   position: absolute;
   left: 0;
