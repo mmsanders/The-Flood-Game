@@ -10,6 +10,7 @@
 
 import { PANEL_H, PANEL_W, type WorldParams, tileHeight, tileWidth } from '../config.js';
 import { Biome, Tile, carveTo, isResourceNode, isWalkable } from '../tiles.js';
+import { isWorldRim, openSeamMismatches, seamPartnerIndices } from './seams.js';
 
 /** Cost to cut a path through a tile. 0 means it is already walkable. */
 const MAX_COST = 5;
@@ -47,7 +48,7 @@ export function ensureConnected(
   const w = tileWidth(params);
   const h = tileHeight(params);
 
-  let tilesCarved = openBlockedPanels(tiles, biome, params, w);
+  let tilesCarved = openBlockedPanels(tiles, biome, params, w, h);
 
   const { labels, sizes } = labelRegions(tiles, w, h);
   const regionsBefore = sizes.length;
@@ -83,16 +84,38 @@ export function ensureConnected(
     let cur = bestTile[r];
     let guard = w * h;
     while (cur >= 0 && labels[cur] !== main && guard-- > 0) {
-      if (!isWalkable(tiles[cur])) {
-        tiles[cur] = carveTo(biome[cur] as Biome);
-        tilesCarved++;
-      }
+      tilesCarved += carveWithSeams(tiles, biome, cur, w, h);
       cur = prev[cur];
     }
   }
 
+  tilesCarved += openSeamMismatches(tiles, biome, params);
+
   const after = labelRegions(tiles, w, h);
   return { regionsBefore, tilesCarved, connected: after.sizes.length <= 1 };
+}
+
+/**
+ * Carve a tile and any panel-seam partners. A path that crosses a boundary
+ * has to be open on the screen you are leaving *and* the one you are entering.
+ */
+function carveWithSeams(
+  tiles: Uint8Array,
+  biome: Uint8Array,
+  i: number,
+  w: number,
+  h: number,
+): number {
+  let carved = 0;
+  const nodes = [i, ...seamPartnerIndices(i, w, h)];
+  for (const j of nodes) {
+    if (isWorldRim(j % w, (j / w) | 0, w, h)) continue;
+    if (!isWalkable(tiles[j])) {
+      tiles[j] = carveTo(biome[j] as Biome);
+      carved++;
+    }
+  }
+  return carved;
 }
 
 /** Guarantee every panel has ground to stand on before we join regions up. */
@@ -101,6 +124,7 @@ function openBlockedPanels(
   biome: Uint8Array,
   params: WorldParams,
   w: number,
+  h: number,
 ): number {
   let carved = 0;
 
@@ -122,8 +146,7 @@ function openBlockedPanels(
           const i = (cy + dy) * w + (cx + dx);
           if (i < 0 || i >= tiles.length) continue;
           if (!isWalkable(tiles[i])) {
-            tiles[i] = carveTo(biome[i] as Biome);
-            carved++;
+            carved += carveWithSeams(tiles, biome, i, w, h);
           }
         }
       }
@@ -245,6 +268,8 @@ function dijkstraFromRegion(
 
   function relax(from: number, to: number, d: number): void {
     if (done[to]) return;
+    // The world rim is a visible wall, not a corridor. Never route through it.
+    if (isWorldRim(to % w, (to / w) | 0, w, h)) return;
     const nd = d + enterCost(tiles[to]);
     if (nd < dist[to]) {
       dist[to] = nd;

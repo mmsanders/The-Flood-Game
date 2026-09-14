@@ -10,6 +10,7 @@ import { type WorldParams, tileHeight, tileWidth } from '../config.js';
 import { fbm2d, valueNoise2d } from '../noise.js';
 import { deriveSeed, mulberry32 } from '../rng.js';
 import { BIOME_RESOURCE_TILE, Biome, Tile } from '../tiles.js';
+import { onPanelEdge, sealPanelSeams, wallWorldRim } from './seams.js';
 
 export interface PaintInput {
   seed: number;
@@ -80,12 +81,15 @@ export function paintTiles(input: PaintInput): Uint8Array {
       });
       const inPatch = cluster > 0.58;
       const p = params.resourceDensity[b] * (inPatch ? 4.5 : 0.12);
-      if (rng() < p) {
+      // A node on the screen edge is an invisible wall from the next panel.
+      if (rng() < p && !onPanelEdge(x, y)) {
         tiles[i] = BIOME_RESOURCE_TILE[b];
       }
     }
   }
 
+  sealPanelSeams(tiles, biome, elev, params);
+  wallWorldRim(tiles, biome, elev, w, h);
   return tiles;
 }
 

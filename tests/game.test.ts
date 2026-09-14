@@ -11,6 +11,7 @@ import {
   PLAYER_H,
   PLAYER_W,
   activeMap,
+  adoptHotState,
   arkProgress,
   createGame,
   currentDay,
@@ -18,6 +19,7 @@ import {
   snapCamera,
   step,
 } from '../src/game/state.js';
+import { visitedCells } from '../src/game/minimap.js';
 
 const SMALL = withParams({ panelsX: 8, panelsY: 20 });
 
@@ -80,6 +82,11 @@ describe('game: setup', () => {
     expect(state.camera.panelX).toBe(Math.floor(state.world.spawn.x / PANEL_W));
     expect(state.camera.panelY).toBe(Math.floor(state.world.spawn.y / PANEL_H));
   });
+
+  it('has only the spawn panel on the map', () => {
+    const seen = visitedCells(state.exploredOverworld, state.world.params.panelsX);
+    expect(seen).toEqual([{ x: state.camera.panelX, y: state.camera.panelY }]);
+  });
 });
 
 describe('game: movement', () => {
@@ -139,6 +146,15 @@ describe('game: movement', () => {
 
     expect(state.camera.panelX).toBe(before + 1);
     expect(state.camera.fromX).toBe(before);
+
+    const seen = visitedCells(state.exploredOverworld, state.world.params.panelsX);
+    expect(seen).toEqual(
+      expect.arrayContaining([
+        { x: before, y: state.camera.panelY },
+        { x: before + 1, y: state.camera.panelY },
+      ]),
+    );
+    expect(seen).toHaveLength(2);
   });
 });
 
@@ -270,6 +286,43 @@ describe('game: drowning', () => {
     expect(state.player.hearts).toBe(3);
     expect(state.phase).toBe('playing');
   });
+
+  it('can walk out of floodwater onto higher ground', () => {
+    const { world } = state;
+    const x = world.spawn.x;
+    const y = world.spawn.y;
+    clearArea(world, x, y, 4);
+    for (let dy = -2; dy <= 2; dy++) {
+      world.elev[(y + dy) * world.w + x] = 0;
+      world.elev[(y + dy) * world.w + x + 1] = 250;
+    }
+    placeAt(state, x, y);
+    state.elapsed = world.params.secondsPerDay * 20;
+
+    run(state, 1.2, { moveX: 1, moveY: 0, attackPressed: false });
+
+    const tx = Math.floor((state.player.x + PLAYER_W / 2) / TILE_PX);
+    expect(tx).toBeGreaterThanOrEqual(x + 1);
+    expect(world.elev[y * world.w + tx]).toBe(250);
+  });
+
+  it('cannot walk into floodwater from dry land', () => {
+    const { world } = state;
+    const x = world.spawn.x;
+    const y = world.spawn.y;
+    clearArea(world, x, y, 4);
+    for (let dy = -2; dy <= 2; dy++) {
+      world.elev[(y + dy) * world.w + x] = 250;
+      world.elev[(y + dy) * world.w + x + 1] = 0;
+    }
+    placeAt(state, x, y);
+    state.elapsed = world.params.secondsPerDay * 20;
+
+    run(state, 1.2, { moveX: 1, moveY: 0, attackPressed: false });
+
+    const tx = Math.floor((state.player.x + PLAYER_W / 2) / TILE_PX);
+    expect(tx).toBe(x);
+  });
 });
 
 describe('game: the clock', () => {
@@ -302,6 +355,14 @@ describe('game: entering and leaving dungeons', () => {
     const tx = Math.floor((state.player.x + PLAYER_W / 2) / TILE_PX);
     const ty = Math.floor((state.player.y + PLAYER_H / 2) / TILE_PX);
     expect({ x: tx, y: ty }).toEqual(state.world.dungeons[0].stairs);
+
+    const d = state.world.dungeons[0];
+    const seen = visitedCells(state.exploredDungeons[0], d.roomsX);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toEqual({
+      x: Math.floor(d.stairs.x / PANEL_W),
+      y: Math.floor(d.stairs.y / PANEL_H),
+    });
   });
 
   it('surfaces where it went down, with the clock still running', () => {
@@ -547,5 +608,47 @@ describe('game: dungeon rewards and hazards', () => {
     step(state, IDLE, 1 / 60);
 
     expect(state.rodReach).toBe(2);
+  });
+});
+
+describe('game: hot adopt', () => {
+  it('keeps the player, inventory, and clock across a rules reload', () => {
+    clearArea(state.world, state.world.spawn.x, state.world.spawn.y, 4);
+    placeAt(state, state.world.spawn.x + 2, state.world.spawn.y);
+    state.carried[Resource.Wood] = 7;
+    state.delivered[Resource.Fiber] = 3;
+    state.elapsed = 12.5;
+    state.harvestYield = 2;
+    state.player.hearts = 2;
+    state.player.dir = Dir.Left;
+
+    const next = adoptHotState(state);
+
+    expect(next.world).toBe(state.world);
+    expect(next.player.x).toBe(state.player.x);
+    expect(next.player.y).toBe(state.player.y);
+    expect(next.player.dir).toBe(Dir.Left);
+    expect(next.player.hearts).toBe(2);
+    expect(next.carried[Resource.Wood]).toBe(7);
+    expect(next.delivered[Resource.Fiber]).toBe(3);
+    expect(next.elapsed).toBe(12.5);
+    expect(next.harvestYield).toBe(2);
+    expect(next.exploredOverworld).toBe(state.exploredOverworld);
+  });
+
+  it('fills fields added since the run started, and pads short resource arrays', () => {
+    const running = {
+      ...state,
+      carried: [4],
+      delivered: [1, 2],
+    } as GameState;
+    delete (running as { rodReach?: number }).rodReach;
+
+    const next = adoptHotState(running);
+
+    expect(next.rodReach).toBe(1);
+    expect(next.carried).toEqual([4, 0, 0, 0]);
+    expect(next.delivered).toEqual([1, 2, 0, 0]);
+    expect(next.dungeonsCleared).toHaveLength(state.world.dungeons.length);
   });
 });

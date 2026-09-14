@@ -31,22 +31,41 @@ const KEYS = {
 export class Input {
   private down = new Set<string>();
   private pressed = new Set<string>();
+  private readonly target: EventTarget;
+  private readonly onKeyDown: (e: Event) => void;
+  private readonly onKeyUp: (e: Event) => void;
+  private readonly onBlur: () => void;
 
   constructor(target: EventTarget = window) {
-    target.addEventListener('keydown', (e) => {
+    this.target = target;
+
+    this.onKeyDown = (e) => {
       const ev = e as KeyboardEvent;
       if (ev.repeat) return;
       if (isGameKey(ev.code)) ev.preventDefault();
       if (!this.down.has(ev.code)) this.pressed.add(ev.code);
       this.down.add(ev.code);
-    });
+    };
 
-    target.addEventListener('keyup', (e) => {
+    this.onKeyUp = (e) => {
       this.down.delete((e as KeyboardEvent).code);
-    });
+    };
 
     // Releasing focus mid-hold would otherwise leave the player walking.
-    window.addEventListener('blur', () => this.down.clear());
+    this.onBlur = () => this.down.clear();
+
+    target.addEventListener('keydown', this.onKeyDown);
+    target.addEventListener('keyup', this.onKeyUp);
+    if (typeof window !== 'undefined') window.addEventListener('blur', this.onBlur);
+  }
+
+  /** Drop listeners so an HMR swap cannot leave a ghost Input walking the player. */
+  dispose(): void {
+    this.target.removeEventListener('keydown', this.onKeyDown);
+    this.target.removeEventListener('keyup', this.onKeyUp);
+    if (typeof window !== 'undefined') window.removeEventListener('blur', this.onBlur);
+    this.down.clear();
+    this.pressed.clear();
   }
 
   read(): Intents {

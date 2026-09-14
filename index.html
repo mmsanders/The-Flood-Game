@@ -11,6 +11,8 @@
   <body>
     <div class="frame">
       <canvas id="screen" width="256" height="176" aria-label="Game screen"></canvas>
+      <div class="live-badge" id="live-badge" hidden>LIVE</div>
+      <div class="hotfix" id="hotfix" aria-live="polite"></div>
       <div class="overlay" id="overlay"></div>
     </div>
     <script type="module" src="./src/game/main.ts"></script>
