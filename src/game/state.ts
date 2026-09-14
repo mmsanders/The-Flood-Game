@@ -18,13 +18,29 @@ import { ARK_RECIPE, NODE_YIELD, PLAYER_TILES_PER_SEC } from '../core/resources.
 import { panelsHigh, panelsWide, type TileMap } from '../core/tilemap.js';
 import {
   RESOURCE_COUNT,
-  type Resource,
+  Resource,
   Tile,
   carveTo,
   isWalkable,
   resourceOf,
 } from '../core/tiles.js';
 import type { Point, World } from '../core/world.js';
+import {
+  ANIMAL_DEFS,
+  AnimalStatus,
+  animalDef,
+  animalOverlaps,
+  flockScoreOf,
+  stepAnimals,
+  type FlockScore,
+} from '../core/animals.js';
+import {
+  BOAT_COST_FIBER,
+  BOAT_COST_WOOD,
+  BOAT_SPEED_SCALE,
+  canAffordBoat,
+  payForBoat,
+} from '../core/boat.js';
 
 export const enum Dir {
   Down = 0,
@@ -109,6 +125,10 @@ export interface GameState {
   /** Swing reach in tiles. The Serpent Rod extends it. */
   rodReach: number;
   dungeonsCleared: boolean[];
+  /** Crafted at the valley slipway. Once you have it, any shore will do. */
+  hasBoat: boolean;
+  /** Currently sailing. Blocks drowning and lets you occupy floodwater. */
+  inBoat: boolean;
   /**
    * Overworld panels the player has stood on, row-major 0/1, length
    * `panelsX * panelsY`. The HUD map draws only these, recentred, so an
@@ -161,6 +181,8 @@ export function createGame(world: World): GameState {
     harvestYield: NODE_YIELD,
     rodReach: 1,
     dungeonsCleared: world.dungeons.map(() => false),
+    hasBoat: false,
+    inBoat: false,
     exploredOverworld: new Uint8Array(world.params.panelsX * world.params.panelsY),
     exploredDungeons: world.dungeons.map((d) => new Uint8Array(d.roomsX * d.roomsY)),
     minimapViewY: 0,
@@ -291,6 +313,7 @@ export function step(state: GameState, input: StepInput, dt: number): void {
   // Panel transitions lock input, Zelda-style: the screen slides, you wait.
   if (state.camera.scroll > 0) {
     state.camera.scroll = Math.max(0, state.camera.scroll - dt / SCROLL_TIME);
+    tickFlock(state, dt);
     applyFlood(state, dt);
     return;
   }
@@ -306,6 +329,7 @@ export function step(state: GameState, input: StepInput, dt: number): void {
   if (input.interactPressed) handleInteract(state);
 
   rememberSafeSpot(state);
+  tickFlock(state, dt);
   stepTileEffects(state);
   applyFlood(state, dt);
   updateCamera(state);
@@ -337,8 +361,9 @@ function movePlayer(state: GameState, input: StepInput, dt: number): void {
     else if (input.moveY < 0) p.dir = Dir.Up;
   }
 
-  const wading = hitboxInWater(state, p.x, p.y);
-  const speed = SPEED_PX * (wading ? WADE_SPEED_SCALE : 1) * dt;
+  const wading = !state.inBoat && hitboxInWater(state, p.x, p.y);
+  const speed =
+    SPEED_PX * (state.inBoat ? BOAT_SPEED_SCALE : wading ? WADE_SPEED_SCALE : 1) * dt;
 
   // Resolve axes separately so sliding along a wall works.
   moveAxis(state, dx * speed, 0);
@@ -354,8 +379,11 @@ function moveAxis(state: GameState, dx: number, dy: number): void {
   if (canOccupy(state, nx, ny)) {
     p.x = nx;
     p.y = ny;
+    maybeBeach(state);
     return;
   }
+
+  if (tryShoveOff(state, nx, ny)) return;
 
   // Blocked: step up to the obstruction rather than stopping short of it.
   const steps = 4;
@@ -383,6 +411,7 @@ function canOccupy(state: GameState, x: number, y: number): boolean {
   const map = activeMap(state);
   const alreadyWading = hitboxInWater(state, state.player.x, state.player.y);
   const level = waterLevel(state);
+  const sailing = state.inBoat && state.location.kind === 'overworld';
 
   const corners: [number, number][] = [
     [x, y],
@@ -396,11 +425,60 @@ function canOccupy(state: GameState, x: number, y: number): boolean {
     const ty = Math.floor(cy / TILE_PX);
     if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return false;
     const i = ty * map.w + tx;
-    if (!isWalkable(map.tiles[i])) return false;
-    if (map.floods && !alreadyWading && map.elev[i] < level) return false;
+    const tile = map.tiles[i];
+    const flooded = map.floods && map.elev[i] < level;
+
+    if (sailing && tile === Tile.Water) continue;
+    if (!isWalkable(tile)) return false;
+    if (flooded && !sailing && !alreadyWading) return false;
   }
 
   return true;
+}
+
+function isBoatableTile(state: GameState, tx: number, ty: number): boolean {
+  const map = activeMap(state);
+  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return false;
+  const i = ty * map.w + tx;
+  if (map.tiles[i] === Tile.Water) return true;
+  return isWalkable(map.tiles[i]) && map.floods && map.elev[i] < waterLevel(state);
+}
+
+/** Step from shore onto water/flood and become the skiff. */
+function tryShoveOff(state: GameState, x: number, y: number): boolean {
+  if (!state.hasBoat || state.inBoat || state.location.kind !== 'overworld') return false;
+
+  const corners: [number, number][] = [
+    [x, y],
+    [x + PLAYER_W - 1, y],
+    [x, y + PLAYER_H - 1],
+    [x + PLAYER_W - 1, y + PLAYER_H - 1],
+  ];
+  for (const [cx, cy] of corners) {
+    const tx = Math.floor(cx / TILE_PX);
+    const ty = Math.floor(cy / TILE_PX);
+    if (!isBoatableTile(state, tx, ty)) continue;
+    state.player.x = tx * TILE_PX + (TILE_PX - PLAYER_W) / 2;
+    state.player.y = ty * TILE_PX + (TILE_PX - PLAYER_H) / 2;
+    state.inBoat = true;
+    say(state, 'You shove off.');
+    return true;
+  }
+  return false;
+}
+
+function maybeBeach(state: GameState): void {
+  if (!state.inBoat) return;
+  const map = activeMap(state);
+  const tx = Math.floor((state.player.x + PLAYER_W / 2) / TILE_PX);
+  const ty = Math.floor((state.player.y + PLAYER_H / 2) / TILE_PX);
+  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return;
+  const i = ty * map.w + tx;
+  if (map.tiles[i] === Tile.Water) return;
+  if (map.floods && map.elev[i] < waterLevel(state)) return;
+  if (!isWalkable(map.tiles[i])) return;
+  state.inBoat = false;
+  say(state, 'You beach the skiff.');
 }
 
 /** True if any part of the hitbox is standing in floodwater. */
@@ -449,10 +527,20 @@ function harvestAt(state: GameState, tx: number, ty: number): void {
   const res = resourceOf(map.tiles[i]);
   if (res === null) return;
 
+  const submerged = map.floods && map.elev[i] < waterLevel(state);
+  if (submerged && !state.inBoat) {
+    say(state, 'The waters cover it. You would need a boat.');
+    return;
+  }
+
   map.tiles[i] = carveTo(map.biome[i]);
   state.carried[res] += state.harvestYield;
   state.harvested += state.harvestYield;
-  say(state, `+${state.harvestYield} ${RESOURCE_LABEL[res]}`);
+  if (submerged) {
+    say(state, `Dredged +${state.harvestYield} ${RESOURCE_LABEL[res]} from the deep.`);
+  } else {
+    say(state, `+${state.harvestYield} ${RESOURCE_LABEL[res]}`);
+  }
 }
 
 const RESOURCE_LABEL = ['fiber', 'gopher wood', 'stone', 'pitch'];
@@ -609,6 +697,58 @@ export function obstacleInFront(state: GameState): ObstaclePrompt | null {
   };
 }
 
+/**
+ * Craft / launch / dredge prompts, then the dungeon trade. The HUD renders
+ * this verbatim so the price is visible at the moment of the decision.
+ */
+export function actionPrompt(state: GameState): ObstaclePrompt | null {
+  if (state.phase !== 'playing') return null;
+
+  if (state.location.kind === 'overworld') {
+    const { map, i } = tileUnder(state);
+    if (map.tiles[i] === Tile.BoatYard && !state.hasBoat) {
+      const wood = state.carried[Resource.Wood];
+      const fiber = state.carried[Resource.Fiber];
+      return {
+        tile: Tile.BoatYard,
+        label: `Frame a skiff — ${BOAT_COST_WOOD} wood, ${BOAT_COST_FIBER} fiber (you have ${wood}, ${fiber})`,
+        affordable: canAffordBoat(state.carried),
+      };
+    }
+    if (state.hasBoat && !state.inBoat && hasAdjacentBoatable(state)) {
+      return {
+        tile: Tile.Water,
+        label: 'Walk into the water to launch the skiff  [E]',
+        affordable: true,
+      };
+    }
+    if (state.inBoat) {
+      const facing = facingTile(state);
+      if (
+        facing.tx >= 0 &&
+        facing.ty >= 0 &&
+        facing.tx < facing.map.w &&
+        facing.ty < facing.map.h
+      ) {
+        const fi = facing.ty * facing.map.w + facing.tx;
+        if (
+          resourceOf(facing.map.tiles[fi]) !== null &&
+          facing.map.floods &&
+          facing.map.elev[fi] < waterLevel(state)
+        ) {
+          return {
+            tile: facing.map.tiles[fi] as Tile,
+            label: 'Dredge the deep — swing the Rod',
+            affordable: true,
+          };
+        }
+      }
+    }
+  }
+
+  return obstacleInFront(state);
+}
+
 function handleInteract(state: GameState): void {
   const { map, i } = tileUnder(state);
   const standing = map.tiles[i];
@@ -621,9 +761,58 @@ function handleInteract(state: GameState): void {
     exitDungeon(state);
     return;
   }
+  if (standing === Tile.BoatYard && !state.hasBoat) {
+    tryCraftBoat(state);
+    return;
+  }
+  if (tryLaunchBoat(state)) return;
 
   const { tx, ty } = facingTile(state);
   tryClear(state, tx, ty);
+}
+
+function tryCraftBoat(state: GameState): void {
+  if (state.hasBoat) return;
+  if (!canAffordBoat(state.carried)) {
+    say(
+      state,
+      `The slipway wants ${BOAT_COST_WOOD} gopher wood and ${BOAT_COST_FIBER} fiber.`,
+    );
+    return;
+  }
+  payForBoat(state.carried);
+  state.hasBoat = true;
+  say(state, 'A skiff of gopher wood. Take it onto the waters.');
+}
+
+function tryLaunchBoat(state: GameState): boolean {
+  if (!state.hasBoat || state.inBoat || state.location.kind !== 'overworld') return false;
+  const dest = firstAdjacentBoatable(state);
+  if (!dest) return false;
+  state.player.x = dest.x * TILE_PX + (TILE_PX - PLAYER_W) / 2;
+  state.player.y = dest.y * TILE_PX + (TILE_PX - PLAYER_H) / 2;
+  state.inBoat = true;
+  say(state, 'The skiff takes the water.');
+  return true;
+}
+
+function hasAdjacentBoatable(state: GameState): boolean {
+  return firstAdjacentBoatable(state) !== null;
+}
+
+function firstAdjacentBoatable(state: GameState): Point | null {
+  const tx = Math.floor((state.player.x + PLAYER_W / 2) / TILE_PX);
+  const ty = Math.floor((state.player.y + PLAYER_H / 2) / TILE_PX);
+  const n = [
+    [tx, ty - 1],
+    [tx, ty + 1],
+    [tx - 1, ty],
+    [tx + 1, ty],
+  ];
+  for (const [x, y] of n) {
+    if (isBoatableTile(state, x, y)) return { x, y };
+  }
+  return null;
 }
 
 function enterDungeon(state: GameState): void {
@@ -650,6 +839,7 @@ function enterDungeon(state: GameState): void {
   // Keys never travel between dungeons: each lock is opened by its own key.
   state.keysHeld = 0;
   state.safeSpot = null;
+  state.inBoat = false;
   placeOn(state, dungeon.stairs);
   say(state, 'Down into the dark. The water does not wait.');
 }
@@ -778,6 +968,10 @@ function deliverToArk(state: GameState): void {
 
 function applyFlood(state: GameState, dt: number): void {
   const p = state.player;
+  if (state.inBoat) {
+    p.drownTimer = 0;
+    return;
+  }
   const submerged = isSubmergedAt(state, p.x + PLAYER_W / 2, p.y + PLAYER_H / 2);
 
   if (!submerged) {
@@ -844,6 +1038,44 @@ export function arkProgress(state: GameState): number {
     need += req;
   }
   return need > 0 ? have / need : 0;
+}
+
+export function flockScore(state: GameState): FlockScore {
+  return flockScoreOf(state.world.animals);
+}
+
+function tickFlock(state: GameState, dt: number): void {
+  const map = state.world;
+  const player =
+    state.location.kind === 'overworld'
+      ? { x: state.player.x + PLAYER_W / 2, y: state.player.y + PLAYER_H / 2 }
+      : null;
+
+  const { drowned } = stepAnimals(map.animals, map, waterLevel(state), dt, player);
+  if (state.messageTimer <= 0) {
+    if (drowned.length === 1) {
+      const def = animalDef(drowned[0].kind);
+      say(state, `The waters took a ${def.name}.`);
+    } else if (drowned.length > 1) {
+      say(state, `The waters took ${drowned.length} of the flock.`);
+    }
+  }
+
+  if (state.location.kind !== 'overworld') return;
+  const p = state.player;
+  for (const a of map.animals) {
+    if (!animalOverlaps(a, p.x, p.y, PLAYER_W, PLAYER_H)) continue;
+    a.status = AnimalStatus.Boarded;
+    const score = flockScoreOf(map.animals);
+    const def = ANIMAL_DEFS[a.kind];
+    const have = score.boarded[a.kind];
+    if (have >= 2) {
+      say(state, `A pair of ${def.plural}. Two of every kind.`);
+    } else {
+      say(state, `A ${def.name} comes aboard. (${have}/2)`);
+    }
+    break;
+  }
 }
 
 export function say(state: GameState, text: string): void {

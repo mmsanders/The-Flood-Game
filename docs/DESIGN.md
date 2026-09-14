@@ -96,9 +96,29 @@ remembering and worth returning to before it goes under.
 to drown) and it is deposited automatically. The recipe is 40 fiber, 60 gopher wood,
 30 stone, 10 pitch.
 
-**End:** the ark completes and floats, or your hearts run out.
+**End:** the ark completes and floats, or your hearts run out. The flock is a high
+score on the same run, never a second win condition.
 
 **Heart containers** are scattered across all four biomes; each permanently adds one.
+
+**The flock.** Ten biblical kinds, two of each, spawn in the biome that reads as their
+home and wander until they drown or come aboard:
+
+| Kind | Home |
+|---|---|
+| sheep, oxen, doves | valley |
+| donkeys, bears | forest |
+| lions, serpents, camels | scrub |
+| goats, ravens | mountain |
+
+Walking into a wild creature boards it. Completing a pair is a moment, not a victory.
+Best flock (pairs first, then bodies) is stored per-browser.
+
+**The skiff.** Not the ark. A valley slipway (a wooden dock, preferably on a pond bank)
+frames a small boat from 8 gopher wood and 6 fiber. Once crafted, any shore will do:
+walk into water or flood to shove off, walk onto dry ground to beach. Sailing occupies
+floodwater without drowning. The Rod, swung from the deck, dredges a submerged node.
+A fishing-rod blessing is a later Rod of Aaron upgrade, not this system.
 
 ---
 
@@ -176,7 +196,8 @@ and a portrait.
 
 ### The ocean stage
 After the ark launches: exploration or survival on open water — did you store enough to
-outlast the flood? Deliberately out of scope until the land game is good.
+outlast the flood? Deliberately out of scope until the land game is good. The skiff is
+the land-game boat, not this.
 
 ### Presentation
 Sprite variety beyond one repeating tile per type; animation; sound. The current look is

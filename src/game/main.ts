@@ -15,8 +15,9 @@ import { parseSeed, randomSeed } from '../core/rng.js';
 import { generateValidWorld } from '../core/worldgen/index.js';
 import { flashHotfix, markLive } from './hot.js';
 import { Input } from './input.js';
+import { considerBestFlock, loadBestFlock, type BestFlock } from './persist.js';
 import { SCREEN_H, SCREEN_W, render } from './render.js';
-import { adoptHotState, createGame, type GameState, say, step } from './state.js';
+import { adoptHotState, createGame, flockScore, type GameState, say, step } from './state.js';
 
 const STEP = 1 / 60;
 const MAX_FRAME = 0.25;
@@ -50,6 +51,8 @@ const live = {
   say,
   step,
   adoptHotState,
+  flockScore,
+  considerBestFlock,
 };
 
 function applyCanvasSize(): void {
@@ -60,6 +63,8 @@ function applyCanvasSize(): void {
 applyCanvasSize();
 
 let input = new live.Input();
+let bestiary = Boolean(import.meta.hot?.data.bestiary);
+let best: BestFlock = loadBestFlock();
 let state = bootState();
 
 function bootState(): GameState {
@@ -71,7 +76,8 @@ function bootState(): GameState {
 function newRun(seed: number): GameState {
   const { world } = live.generateValidWorld(seed, live.params);
   const next = live.createGame(world);
-  live.say(next, 'BUILD IT, NOAH. Forty days. Do not disappoint Us.');
+  live.say(next, 'BUILD IT, NOAH. Forty days. Two of every kind.');
+  bestiary = false;
 
   const params = new URL(window.location.href);
   params.searchParams.set('seed', String(seed));
@@ -108,29 +114,38 @@ function frame(now: number): void {
     accumulator = 0;
   }
 
-  const scale = timeScale * (intents.fastForward ? 8 : 1);
-  accumulator += elapsed * scale;
+  if (intents.bestiaryPressed) bestiary = !bestiary;
 
-  let steps = 0;
-  while (accumulator >= STEP && steps < 240) {
-    live.step(
-      state,
-      {
-        moveX: intents.moveX,
-        moveY: intents.moveY,
-        // Edge-triggered intents fire on the first substep only, so one key
-        // press cannot swing or pay several times in a single frame.
-        attackPressed: intents.attackPressed && steps === 0,
-        interactPressed: intents.interactPressed && steps === 0,
-      },
-      STEP,
-    );
-    accumulator -= STEP;
-    steps++;
+  if (!bestiary) {
+    const scale = timeScale * (intents.fastForward ? 8 : 1);
+    accumulator += elapsed * scale;
+
+    let steps = 0;
+    while (accumulator >= STEP && steps < 240) {
+      live.step(
+        state,
+        {
+          moveX: intents.moveX,
+          moveY: intents.moveY,
+          // Edge-triggered intents fire on the first substep only, so one key
+          // press cannot swing or pay several times in a single frame.
+          attackPressed: intents.attackPressed && steps === 0,
+          interactPressed: intents.interactPressed && steps === 0,
+        },
+        STEP,
+      );
+      accumulator -= STEP;
+      steps++;
+    }
+  } else {
+    accumulator = 0;
   }
 
+  const nextBest = live.considerBestFlock(live.flockScore(state), best);
+  if (nextBest !== best) best = nextBest;
+
   input.endFrame();
-  live.render(ctx as CanvasRenderingContext2D, state);
+  live.render(ctx as CanvasRenderingContext2D, state, { bestiary, best });
   raf = requestAnimationFrame(frame);
 }
 
@@ -142,10 +157,13 @@ Object.assign(window as unknown as Record<string, unknown>, {
     get state() {
       return state;
     },
+    get best() {
+      return best;
+    },
     newRun: (seed: number) => {
       state = newRun(seed);
     },
-    render: () => live.render(ctx as CanvasRenderingContext2D, state),
+    render: () => live.render(ctx as CanvasRenderingContext2D, state, { bestiary, best }),
   },
 });
 
@@ -168,6 +186,7 @@ if (import.meta.hot) {
     live.createGame = mod.createGame;
     live.say = mod.say;
     live.adoptHotState = mod.adoptHotState;
+    live.flockScore = mod.flockScore;
     state = live.adoptHotState(state);
     flashHotfix('rules');
   });
@@ -188,6 +207,11 @@ if (import.meta.hot) {
     input.dispose();
     input = new live.Input();
     flashHotfix('controls');
+  });
+
+  import.meta.hot.accept('./persist.js', (mod) => {
+    if (!mod) return;
+    live.considerBestFlock = mod.considerBestFlock;
   });
 
   import.meta.hot.accept('./hot.js', (mod) => {
@@ -216,6 +240,7 @@ if (import.meta.hot) {
   import.meta.hot.dispose((data) => {
     data.state = state;
     data.accumulator = accumulator;
+    data.bestiary = bestiary;
     cancelAnimationFrame(raf);
     input.dispose();
     window.removeEventListener('resize', fitCanvas);

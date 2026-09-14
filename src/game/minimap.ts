@@ -142,9 +142,10 @@ export function followMinimapView(
 export const enum MiniPoi {
   None = 0,
   Heart = 1,
-  Town = 2,
-  Ark = 3,
-  Dungeon = 4,
+  Slipway = 2,
+  Town = 3,
+  Ark = 4,
+  Dungeon = 5,
 }
 
 type Rgb = readonly [number, number, number];
@@ -226,9 +227,11 @@ export function panelPoi(pois: readonly Poi[], panelX: number, panelY: number): 
           ? MiniPoi.Ark
           : p.kind === PoiKind.Town
             ? MiniPoi.Town
-            : p.kind === PoiKind.Heart
-              ? MiniPoi.Heart
-              : MiniPoi.None;
+            : p.kind === PoiKind.BoatYard
+              ? MiniPoi.Slipway
+              : p.kind === PoiKind.Heart
+                ? MiniPoi.Heart
+                : MiniPoi.None;
     if (kind > best) best = kind;
   }
   return best;
@@ -250,6 +253,7 @@ export function panelHasTile(
 export const MINI_POI_COLOR: Record<MiniPoi, string> = {
   [MiniPoi.None]: '#000000',
   [MiniPoi.Heart]: PALETTE.heart,
+  [MiniPoi.Slipway]: PALETTE.dock,
   [MiniPoi.Town]: PALETTE.town,
   [MiniPoi.Ark]: PALETTE.ark,
   [MiniPoi.Dungeon]: '#c8b8e8',

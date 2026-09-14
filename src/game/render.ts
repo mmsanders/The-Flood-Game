@@ -1,13 +1,14 @@
 /**
  * Game rendering.
  *
- * Fixed 256x216 back buffer — a 256x176 Zelda 1 screen with a 40px status bar
+ * Fixed 256x224 back buffer — a 256x176 Zelda 1 screen with a 48px status bar
  * above it — scaled up by whole numbers with smoothing off. Everything is
  * drawn from the shared tilesheet, so the game and the dev tool's panel
  * inspector cannot drift apart.
  */
 
 import { PANEL_H, PANEL_PX_H, PANEL_PX_W, PANEL_W, TILE_PX } from '../core/config.js';
+import { ANIMAL_DEFS, ANIMAL_H, ANIMAL_W, AnimalDir, AnimalStatus, FLOCK_TOTAL } from '../core/animals.js';
 import { panelFloodFraction } from '../core/flood.js';
 import { panelsHigh, panelsWide } from '../core/tilemap.js';
 import { RESOURCE_COUNT, Tile } from '../core/tiles.js';
@@ -35,22 +36,29 @@ import {
   type GameState,
   PLAYER_H,
   PLAYER_W,
+  actionPrompt,
   activeMap,
   arkProgress,
   currentDay,
   currentDungeon,
-  obstacleInFront,
+  flockScore,
   waterLevel,
 } from './state.js';
+import type { BestFlock } from './persist.js';
 
-export const HUD_H = 40;
+export const HUD_H = 48;
 export const SCREEN_W = PANEL_PX_W;
 export const SCREEN_H = PANEL_PX_H + HUD_H;
 
 const RESOURCE_COLOR = [PALETTE.flax, PALETTE.gopher, PALETTE.stoneNode, '#6a625c'];
 const RESOURCE_INITIAL = ['F', 'W', 'S', 'P'];
 
-export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
+export interface RenderUi {
+  bestiary?: boolean;
+  best?: BestFlock;
+}
+
+export function render(ctx: CanvasRenderingContext2D, state: GameState, ui?: RenderUi): void {
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
@@ -61,6 +69,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
   ctx.clip();
   ctx.translate(0, HUD_H);
   drawWorld(ctx, state);
+  drawAnimals(ctx, state);
   drawPlayer(ctx, state);
   ctx.restore();
 
@@ -68,6 +77,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
   drawObstaclePrompt(ctx, state);
   drawMessage(ctx, state);
   if (state.phase !== 'playing') drawEndCard(ctx, state);
+  if (ui?.bestiary) drawBestiary(ctx, state, ui.best ?? { pairs: 0, rescued: 0 });
 }
 
 /**
@@ -79,7 +89,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
  */
 function drawObstaclePrompt(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (state.phase !== 'playing') return;
-  const prompt = obstacleInFront(state);
+  const prompt = actionPrompt(state);
   if (!prompt) return;
 
   ctx.font = '8px ui-monospace, monospace';
@@ -159,6 +169,91 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
   }
 }
 
+function drawAnimals(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (state.location.kind !== 'overworld') return;
+  const cam = cameraOrigin(state);
+  for (const a of state.world.animals) {
+    if (a.status !== AnimalStatus.Wild) continue;
+    const x = Math.round(a.x - cam.x);
+    const y = Math.round(a.y - cam.y);
+    if (x < -16 || y < -16 || x > SCREEN_W + 16 || y > PANEL_PX_H + 16) continue;
+    const bob = Math.round(Math.sin(a.anim * 8 + a.id) * 0.8);
+    drawCreature(ctx, a.kind, x, y + bob, a.dir, a.anim);
+  }
+}
+
+function drawCreature(
+  ctx: CanvasRenderingContext2D,
+  kind: number,
+  x: number,
+  y: number,
+  dir: AnimalDir,
+  anim: number,
+): void {
+  const def = ANIMAL_DEFS[kind];
+  const step = Math.floor(anim * 6) % 2;
+  ctx.fillStyle = def.fill;
+  ctx.fillRect(x + 1, y + 2, ANIMAL_W - 2, ANIMAL_H - 3);
+  ctx.fillStyle = def.shade;
+  ctx.fillRect(x + 1, y + ANIMAL_H - 2, ANIMAL_W - 2, 1);
+
+  // Facing pip + a per-kind silhouette mark, all 16-bit-flat.
+  ctx.fillStyle = def.accent;
+  switch (kind) {
+    case 0: // sheep — black face
+      ctx.fillRect(faceX(x, dir), y + 3, 3, 3);
+      break;
+    case 1: // goat — horns
+      ctx.fillRect(x + 2, y, 2, 2);
+      ctx.fillRect(x + ANIMAL_W - 4, y, 2, 2);
+      ctx.fillRect(faceX(x, dir), y + 3, 2, 2);
+      break;
+    case 2: // lion — mane
+      ctx.fillRect(x, y + 1, ANIMAL_W, 3);
+      ctx.fillRect(faceX(x, dir), y + 4, 2, 2);
+      break;
+    case 3: // bear — bulk
+      ctx.fillRect(x, y + 2, ANIMAL_W, ANIMAL_H - 3);
+      ctx.fillStyle = def.fill;
+      ctx.fillRect(x + 2, y + 3, 3, 2);
+      break;
+    case 4: // serpent — long
+      ctx.fillStyle = def.fill;
+      ctx.fillRect(x, y + 4, ANIMAL_W, 2);
+      ctx.fillRect(x + (step ? 1 : 2), y + 5, 6, 2);
+      ctx.fillStyle = def.accent;
+      ctx.fillRect(faceX(x, dir), y + 3, 2, 2);
+      break;
+    case 5: // dove — wing
+      ctx.fillRect(x + 1, y + 1 + step, ANIMAL_W - 2, 3);
+      ctx.fillStyle = def.accent;
+      ctx.fillRect(faceX(x, dir), y + 4, 2, 1);
+      break;
+    case 6: // donkey — ears
+      ctx.fillRect(x + 2, y, 2, 3);
+      ctx.fillRect(x + 5, y, 2, 3);
+      break;
+    case 7: // camel — hump
+      ctx.fillRect(x + 3, y, 4, 3);
+      ctx.fillRect(faceX(x, dir), y + 4, 2, 2);
+      break;
+    case 8: // ox — horns
+      ctx.fillRect(x + 1, y + 1, 3, 1);
+      ctx.fillRect(x + ANIMAL_W - 4, y + 1, 3, 1);
+      ctx.fillRect(faceX(x, dir), y + 3, 2, 2);
+      break;
+    default: // raven
+      ctx.fillRect(x + 1, y + step, ANIMAL_W - 2, 3);
+      ctx.fillStyle = '#c8c0a8';
+      ctx.fillRect(faceX(x, dir), y + 4, 3, 1);
+      break;
+  }
+}
+
+function faceX(x: number, dir: AnimalDir): number {
+  return dir === AnimalDir.Left ? x : x + ANIMAL_W - 3;
+}
+
 function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState): void {
   const p = state.player;
   const cam = cameraOrigin(state);
@@ -167,6 +262,15 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState): void {
 
   // Blink through invulnerability frames.
   if (p.invuln > 0 && Math.floor(p.invuln * 12) % 2 === 0) return;
+
+  if (state.inBoat) {
+    ctx.fillStyle = '#6a3e18';
+    ctx.fillRect(x - 3, y + 6, PLAYER_W + 6, 7);
+    ctx.fillStyle = '#c48a48';
+    ctx.fillRect(x - 2, y + 6, PLAYER_W + 4, 2);
+    ctx.fillStyle = '#3a220c';
+    ctx.fillRect(x - 3, y + 12, PLAYER_W + 6, 1);
+  }
 
   // Body
   ctx.fillStyle = '#e8dcc0';
@@ -244,9 +348,12 @@ function drawHud(ctx: CanvasRenderingContext2D, state: GameState): void {
 
   const col = MINIMAP_W + 4;
   drawHearts(ctx, state, col, 3);
-  drawKeys(ctx, state, col + state.player.maxHearts * 10 + 2, 4);
+  let badgeX = col + state.player.maxHearts * 10 + 2;
+  badgeX = drawBoatBadge(ctx, state, badgeX, 4);
+  drawKeys(ctx, state, badgeX, 4);
   drawDay(ctx, state, col, 14);
-  drawArkMeter(ctx, state, col, 30);
+  drawFlock(ctx, state, col, 26);
+  drawArkMeter(ctx, state, col, 38);
   drawInventory(ctx, state, SCREEN_W - 32, 2);
 }
 
@@ -402,6 +509,34 @@ function drawKeys(ctx: CanvasRenderingContext2D, state: GameState, x: number, y:
   ctx.fillText(`x${state.keysHeld}`, x + 7, y);
 }
 
+function drawBoatBadge(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  x: number,
+  y: number,
+): number {
+  if (!state.hasBoat || currentDungeon(state)) return x;
+  ctx.font = '8px ui-monospace, monospace';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = state.inBoat ? PALETTE.waterShallow : PALETTE.dock;
+  ctx.fillText(state.inBoat ? 'SKIFF' : 'BOAT', x, y);
+  return x + 28;
+}
+
+function drawFlock(ctx: CanvasRenderingContext2D, state: GameState, x: number, y: number): void {
+  if (currentDungeon(state)) return;
+  const score = flockScore(state);
+  ctx.font = '8px ui-monospace, monospace';
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#8d98ab';
+  ctx.fillText('FLOCK', x, y);
+  ctx.fillStyle = '#e6e9ef';
+  ctx.fillText(`${String(score.rescued).padStart(2, '0')}/20`, x + 28, y);
+  ctx.fillStyle = PALETTE.ark;
+  ctx.fillText(`${score.pairs}p`, x + 58, y);
+}
+
 function drawHearts(ctx: CanvasRenderingContext2D, state: GameState, x: number, y: number): void {
   const p = state.player;
   for (let i = 0; i < p.maxHearts; i++) {
@@ -530,9 +665,62 @@ function drawEndCard(ctx: CanvasRenderingContext2D, state: GameState): void {
     SCREEN_W / 2,
     midY + 4,
   );
+
+  const flock = flockScore(state);
+  ctx.fillStyle = '#e6d9b0';
+  ctx.fillText(
+    `Flock ${flock.rescued}/20 · ${flock.pairs} pair${flock.pairs === 1 ? '' : 's'}`,
+    SCREEN_W / 2,
+    midY + 16,
+  );
+
   ctx.fillStyle = '#8d98ab';
-  ctx.fillText('press R to begin again', SCREEN_W / 2, midY + 22);
+  ctx.fillText('press R to begin again', SCREEN_W / 2, midY + 30);
 
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
+}
+
+function drawBestiary(ctx: CanvasRenderingContext2D, state: GameState, best: BestFlock): void {
+  ctx.fillStyle = 'rgba(5, 7, 10, 0.9)';
+  ctx.fillRect(8, HUD_H + 10, SCREEN_W - 16, PANEL_PX_H - 20);
+  ctx.strokeStyle = '#2a3140';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(8.5, HUD_H + 10.5, SCREEN_W - 17, PANEL_PX_H - 21);
+
+  const score = flockScore(state);
+  ctx.font = '8px ui-monospace, monospace';
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#efe6d2';
+  ctx.fillText('THE FLOCK', 16, HUD_H + 16);
+  ctx.fillStyle = '#8d98ab';
+  ctx.textAlign = 'right';
+  ctx.fillText(`${score.rescued}/${FLOCK_TOTAL} · ${score.pairs} pairs`, SCREEN_W - 16, HUD_H + 16);
+  ctx.textAlign = 'left';
+
+  const colW = 112;
+  const rowH = 11;
+  const originY = HUD_H + 32;
+  for (let i = 0; i < ANIMAL_DEFS.length; i++) {
+    const def = ANIMAL_DEFS[i];
+    const col = i < 5 ? 0 : 1;
+    const row = i % 5;
+    const x = 16 + col * colW;
+    const y = originY + row * rowH;
+    const have = score.boarded[def.kind] ?? 0;
+    ctx.fillStyle = def.fill;
+    ctx.fillRect(x, y + 1, 6, 6);
+    ctx.fillStyle = have ? '#e6e9ef' : '#5c6879';
+    ctx.fillText(def.name, x + 10, y);
+    ctx.fillStyle = have >= 2 ? PALETTE.ark : '#8d98ab';
+    ctx.fillText(`${have}/2`, x + 78, y);
+  }
+
+  ctx.fillStyle = '#5c6879';
+  ctx.fillText(
+    `Best ${best.rescued}/20 · ${best.pairs} pairs · B to return`,
+    16,
+    HUD_H + PANEL_PX_H - 24,
+  );
 }

@@ -38,6 +38,8 @@ export const enum Tile {
   DungeonEntrance = 0x31,
   HeartContainer = 0x32,
   TownDoor = 0x33,
+  /** Valley slipway. Craft the skiff here from wood and fiber. */
+  BoatYard = 0x34,
 
   // -- 0x40 dungeon terrain -------------------------------------------------
   DungeonFloor = 0x40,
@@ -219,6 +221,7 @@ export const TILE_NAMES: Record<number, string> = {
   [Tile.DungeonEntrance]: 'Dungeon',
   [Tile.HeartContainer]: 'Heart Container',
   [Tile.TownDoor]: 'Town',
+  [Tile.BoatYard]: 'Slipway',
   [Tile.DungeonFloor]: 'Dungeon Floor',
   [Tile.DungeonWall]: 'Dungeon Wall',
   [Tile.Stairs]: 'Stairs',

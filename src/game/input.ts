@@ -14,6 +14,7 @@ export interface Intents {
   attackPressed: boolean;
   interactPressed: boolean;
   restartPressed: boolean;
+  bestiaryPressed: boolean;
   fastForward: boolean;
 }
 
@@ -25,6 +26,7 @@ const KEYS = {
   attack: ['Space', 'KeyZ', 'KeyJ'],
   interact: ['KeyE', 'KeyX', 'Enter'],
   restart: ['KeyR'],
+  bestiary: ['KeyB'],
   fast: ['ShiftLeft', 'ShiftRight'],
 } as const;
 
@@ -79,6 +81,7 @@ export class Input {
       attackPressed: hit(KEYS.attack),
       interactPressed: hit(KEYS.interact),
       restartPressed: hit(KEYS.restart),
+      bestiaryPressed: hit(KEYS.bestiary),
       fastForward: held(KEYS.fast),
     };
   }
