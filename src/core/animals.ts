@@ -462,7 +462,7 @@ function animalCanOccupy(map: TileMap, x: number, y: number, level: number): boo
     const i = ty * map.w + tx;
     if (!isWalkable(map.tiles[i])) return false;
     if (map.tiles[i] === Tile.ArkSite || map.tiles[i] === Tile.DungeonEntrance) return false;
-    if (map.tiles[i] === Tile.BoatYard) return false;
+    if (map.tiles[i] === Tile.BoatYard || map.tiles[i] === Tile.Shrine) return false;
     if (map.floods && map.elev[i] < level) return false;
   }
   return true;

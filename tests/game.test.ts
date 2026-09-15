@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PANEL_H, PANEL_W, TILE_PX, withParams } from '../src/core/config.js';
 import { FLOOD_DAYS } from '../src/core/config.js';
-import { ARK_RECIPE } from '../src/core/resources.js';
+import { ARK_RECIPE, SHRINE_COST } from '../src/core/resources.js';
 import { Biome, RESOURCE_COUNT, Resource, Tile } from '../src/core/tiles.js';
 import type { World } from '../src/core/world.js';
 import { generateWorld } from '../src/core/worldgen/index.js';
@@ -10,6 +10,7 @@ import {
   type GameState,
   PLAYER_H,
   PLAYER_W,
+  actionPrompt,
   activeMap,
   adoptHotState,
   arkProgress,
@@ -137,10 +138,12 @@ describe('game: movement', () => {
   });
 
   it('scrolls the camera when crossing a panel edge', () => {
-    const edgeX = (state.camera.panelX + 1) * PANEL_W;
+    const before = Math.min(state.camera.panelX, state.world.params.panelsX - 2);
+    const edgeX = (before + 1) * PANEL_W;
     clearArea(state.world, edgeX, state.world.spawn.y, 4);
     placeAt(state, edgeX - 1, state.world.spawn.y);
-    const before = state.camera.panelX;
+    state.camera.panelX = before;
+    state.camera.fromX = before;
 
     run(state, 1.2, { moveX: 1, moveY: 0, attackPressed: false });
 
@@ -164,15 +167,24 @@ describe('game: the Rod of Aaron', () => {
     placeAt(state, state.world.spawn.x, state.world.spawn.y);
   });
 
-  it('harvests the resource node it is swung at', () => {
+  it('harvests flax without an upgrade', () => {
     const { spawn } = state.world;
-    setTile(state.world, spawn.x + 1, spawn.y, Tile.GopherTree);
+    setTile(state.world, spawn.x + 1, spawn.y, Tile.Flax);
     state.player.dir = Dir.Right;
 
     step(state, { moveX: 0, moveY: 0, attackPressed: true }, 1 / 60);
 
-    expect(state.carried[Resource.Wood]).toBe(1);
-    expect(state.world.tiles[spawn.y * state.world.w + spawn.x + 1]).not.toBe(Tile.GopherTree);
+    expect(state.carried[Resource.Fiber]).toBe(1);
+    expect(state.world.tiles[spawn.y * state.world.w + spawn.x + 1]).not.toBe(Tile.Flax);
+  });
+
+  it('will not take gopher wood until the Rod is imbued', () => {
+    const { spawn } = state.world;
+    setTile(state.world, spawn.x + 1, spawn.y, Tile.GopherTree);
+    state.player.dir = Dir.Right;
+    step(state, { moveX: 0, moveY: 0, attackPressed: true }, 1 / 60);
+    expect(state.carried[Resource.Wood]).toBe(0);
+    expect(state.world.tiles[spawn.y * state.world.w + spawn.x + 1]).toBe(Tile.GopherTree);
   });
 
   it('harvests nothing when swung at empty ground', () => {
@@ -198,8 +210,29 @@ describe('game: the Rod of Aaron', () => {
     const { spawn } = state.world;
     setTile(state.world, spawn.x, spawn.y - 1, Tile.StoneNode);
     state.player.dir = Dir.Up;
+    state.rodTier = 2;
     step(state, { moveX: 0, moveY: 0, attackPressed: true }, 1 / 60);
     expect(state.carried[Resource.Stone]).toBe(1);
+  });
+
+  it('imbues the Rod at a shrine, then takes the next resource', () => {
+    const { spawn } = state.world;
+    state.world.tiles[spawn.y * state.world.w + spawn.x] = Tile.Shrine;
+    state.world.biome[spawn.y * state.world.w + spawn.x] = Biome.Valley;
+    state.carried[Resource.Fiber] = SHRINE_COST[Biome.Valley];
+    placeAt(state, spawn.x, spawn.y);
+
+    const prompt = actionPrompt(state);
+    expect(prompt?.affordable).toBe(true);
+
+    step(state, INTERACT, 1 / 60);
+    expect(state.rodTier).toBe(1);
+    expect(state.carried[Resource.Fiber]).toBe(0);
+
+    setTile(state.world, spawn.x + 1, spawn.y, Tile.GopherTree);
+    state.player.dir = Dir.Right;
+    step(state, { moveX: 0, moveY: 0, attackPressed: true }, 1 / 60);
+    expect(state.carried[Resource.Wood]).toBe(1);
   });
 });
 
@@ -215,6 +248,33 @@ describe('game: pickups and the ark', () => {
     expect(state.player.maxHearts).toBe(4);
     expect(state.player.hearts).toBe(4);
     expect(state.heartsFound).toBe(1);
+    expect(state.world.tiles[state.world.spawn.y * state.world.w + state.world.spawn.x]).toBe(
+      Tile.Pedestal,
+    );
+
+    run(state, 0.5, { moveX: 1, moveY: 0, attackPressed: false });
+    expect(Math.floor((state.player.x + PLAYER_W / 2) / TILE_PX)).toBeGreaterThan(
+      state.world.spawn.x,
+    );
+  });
+
+  it('can step off a pedestal that straddles a panel seam, but not back on', () => {
+    const y = state.world.spawn.y;
+    const x = PANEL_W;
+    clearArea(state.world, x, y, 3);
+    setTile(state.world, x, y, Tile.Pedestal);
+
+    state.player.x = x * TILE_PX - 4;
+    state.player.y = y * TILE_PX + (TILE_PX - PLAYER_H) / 2;
+    const startX = state.player.x;
+    run(state, 0.6, { moveX: -1, moveY: 0, attackPressed: false });
+    expect(state.player.x).toBeLessThan(startX);
+
+    placeAt(state, x - 1, y);
+    const west = state.player.x;
+    run(state, 0.6, { moveX: 1, moveY: 0, attackPressed: false });
+    expect(Math.floor((state.player.x + PLAYER_W / 2) / TILE_PX)).toBe(x - 1);
+    expect(state.player.x).toBeLessThanOrEqual(west + TILE_PX);
   });
 
   it('delivers carried resources when standing on the ark site', () => {
@@ -332,7 +392,7 @@ describe('game: the clock', () => {
   });
 
   it('runs forty days over the configured run length', () => {
-    expect(FLOOD_DAYS * state.world.params.secondsPerDay).toBe(3600);
+    expect(FLOOD_DAYS * state.world.params.secondsPerDay).toBe(7200);
   });
 });
 
@@ -344,7 +404,7 @@ describe('game: entering and leaving dungeons', () => {
     placeAt(s, d.overworldEntrance.x, d.overworldEntrance.y);
   }
 
-  it('descends from an entrance and lands on the stairs', () => {
+  it('descends from an entrance and lands just inside the stairs', () => {
     standOnEntrance(state);
     step(state, INTERACT, 1 / 60);
 
@@ -354,9 +414,10 @@ describe('game: entering and leaving dungeons', () => {
 
     const tx = Math.floor((state.player.x + PLAYER_W / 2) / TILE_PX);
     const ty = Math.floor((state.player.y + PLAYER_H / 2) / TILE_PX);
-    expect({ x: tx, y: ty }).toEqual(state.world.dungeons[0].stairs);
-
     const d = state.world.dungeons[0];
+    expect(tx).toBe(d.stairs.x);
+    expect(ty).toBe(d.stairs.y - 1);
+
     const seen = visitedCells(state.exploredDungeons[0], d.roomsX);
     expect(seen).toHaveLength(1);
     expect(seen[0]).toEqual({
@@ -365,19 +426,22 @@ describe('game: entering and leaving dungeons', () => {
     });
   });
 
-  it('surfaces where it went down, with the clock still running', () => {
+  it('surfaces south of the mouth, with the clock still running', () => {
     standOnEntrance(state);
     const entrance = { ...state.world.dungeons[0].overworldEntrance };
     step(state, INTERACT, 1 / 60);
 
     const before = state.elapsed;
     run(state, 3);
-    step(state, INTERACT, 1 / 60); // standing on the stairs
+    const stairs = state.world.dungeons[0].stairs;
+    placeAt(state, stairs.x, stairs.y);
+    step(state, IDLE, 1 / 60);
 
     expect(state.location.kind).toBe('overworld');
     const tx = Math.floor((state.player.x + PLAYER_W / 2) / TILE_PX);
     const ty = Math.floor((state.player.y + PLAYER_H / 2) / TILE_PX);
-    expect({ x: tx, y: ty }).toEqual(entrance);
+    expect(tx).toBe(entrance.x);
+    expect(ty).toBeGreaterThan(entrance.y);
     // The flood does not pause for spelunking.
     expect(state.elapsed).toBeGreaterThan(before + 2.5);
   });
@@ -391,7 +455,6 @@ describe('game: entering and leaving dungeons', () => {
     step(state, INTERACT, 1 / 60);
 
     expect(state.location.kind).toBe('overworld');
-    expect(state.message).toMatch(/underwater/i);
   });
 
   it('never drowns the player underground', () => {
@@ -409,8 +472,46 @@ describe('game: entering and leaving dungeons', () => {
     standOnEntrance(state);
     step(state, INTERACT, 1 / 60);
     state.keysHeld = 3;
-    step(state, INTERACT, 1 / 60); // back out via the stairs
+    const stairs = state.world.dungeons[0].stairs;
+    placeAt(state, stairs.x, stairs.y);
+    step(state, IDLE, 1 / 60);
     expect(state.keysHeld).toBe(0);
+  });
+
+  it('blocks the mouth from the west, north and east, and lets you in from the south', () => {
+    const d = state.world.dungeons[0];
+    const { x, y } = d.overworldEntrance;
+    clearArea(state.world, x, y, 3);
+    state.world.tiles[y * state.world.w + x] = Tile.DungeonEntrance;
+
+    placeAt(state, x - 1, y);
+    run(state, 0.8, { moveX: 1, moveY: 0, attackPressed: false });
+    expect(state.location.kind).toBe('overworld');
+    expect(Math.floor((state.player.x + PLAYER_W / 2) / TILE_PX)).toBeLessThan(x);
+
+    placeAt(state, x, y - 1);
+    run(state, 0.8, { moveX: 0, moveY: 1, attackPressed: false });
+    expect(state.location.kind).toBe('overworld');
+    expect(Math.floor((state.player.y + PLAYER_H / 2) / TILE_PX)).toBeLessThan(y);
+
+    placeAt(state, x, y + 1);
+    run(state, 0.8, { moveX: 0, moveY: -1, attackPressed: false });
+    expect(state.location.kind).toBe('dungeon');
+  });
+
+  it('will not let the player step onto a flooded dungeon mouth', () => {
+    const d = state.world.dungeons[0];
+    const { x, y } = d.overworldEntrance;
+    clearArea(state.world, x, y, 3);
+    state.world.tiles[y * state.world.w + x] = Tile.DungeonEntrance;
+    state.world.elev[y * state.world.w + x] = 0;
+    state.elapsed = state.world.params.secondsPerDay * 30;
+
+    placeAt(state, x, y + 1);
+    run(state, 0.8, { moveX: 0, moveY: -1, attackPressed: false });
+
+    expect(state.location.kind).toBe('overworld');
+    expect(Math.floor((state.player.y + PLAYER_H / 2) / TILE_PX)).toBeGreaterThan(y);
   });
 });
 
@@ -593,6 +694,7 @@ describe('game: dungeon rewards and hazards', () => {
     placeAt(state, state.world.spawn.x, state.world.spawn.y);
     setTile(state.world, state.world.spawn.x + 1, state.world.spawn.y, Tile.GopherTree);
     state.player.dir = Dir.Right;
+    state.rodTier = 1;
     step(state, { moveX: 0, moveY: 0, attackPressed: true }, 1 / 60);
 
     expect(state.carried[Resource.Wood]).toBe(2);
@@ -608,6 +710,28 @@ describe('game: dungeon rewards and hazards', () => {
     step(state, IDLE, 1 / 60);
 
     expect(state.rodReach).toBe(2);
+
+    state.location = { kind: 'overworld', dungeonId: -1, returnTo: null };
+    clearArea(state.world, state.world.spawn.x, state.world.spawn.y, 4);
+    placeAt(state, state.world.spawn.x, state.world.spawn.y);
+    state.player.dir = Dir.Right;
+
+    // Adjacent harvest still works — extra reach must not skip the near tile.
+    setTile(state.world, state.world.spawn.x + 1, state.world.spawn.y, Tile.Flax);
+    step(state, { moveX: 0, moveY: 0, attackPressed: true }, 1 / 60);
+    expect(state.carried[Resource.Fiber]).toBe(1);
+    expect(state.world.tiles[state.world.spawn.y * state.world.w + state.world.spawn.x + 1]).not.toBe(
+      Tile.Flax,
+    );
+
+    // And the extra tile of reach actually lands two tiles out.
+    state.player.cooldown = 0;
+    setTile(state.world, state.world.spawn.x + 2, state.world.spawn.y, Tile.Flax);
+    step(state, { moveX: 0, moveY: 0, attackPressed: true }, 1 / 60);
+    expect(state.carried[Resource.Fiber]).toBe(2);
+    expect(state.world.tiles[state.world.spawn.y * state.world.w + state.world.spawn.x + 2]).not.toBe(
+      Tile.Flax,
+    );
   });
 });
 

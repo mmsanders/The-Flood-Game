@@ -57,6 +57,27 @@ export function isSubmergedElev(elev: number, waterLevel: number): boolean {
   return elev < waterLevel;
 }
 
+/** Elevation the water climbs in one day after the grace period. */
+export const FLOOD_RISE_PER_DAY = MAX_ELEV / (FLOOD_DAYS - FLOOD_GRACE_DAYS);
+
+/**
+ * How many days of water sit on this elevation. 0 is dry. 1 is just under
+ * (still readable). 4 or more is the deep — opaque water.
+ */
+export function floodDepth(elev: number, waterLevel: number): number {
+  if (waterLevel <= elev) return 0;
+  return Math.max(1, Math.ceil((waterLevel - elev) / FLOOD_RISE_PER_DAY));
+}
+
+/** Overlay fill for a flooded tile, or null if dry. */
+export function floodOverlayFill(depth: number): string | null {
+  if (depth <= 0) return null;
+  if (depth === 1) return 'rgba(43, 108, 176, 0.24)';
+  if (depth === 2) return 'rgba(43, 108, 176, 0.50)';
+  if (depth === 3) return 'rgba(28, 74, 128, 0.76)';
+  return '#1c4a80';
+}
+
 export function isSubmerged(world: World, x: number, y: number, waterLevel: number): boolean {
   const i = y * world.w + x;
   return world.elev[i] < waterLevel;

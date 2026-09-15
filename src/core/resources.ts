@@ -22,6 +22,20 @@ export const ARK_RECIPE: Record<Resource, number> = {
 /** Units yielded per harvested node. */
 export const NODE_YIELD = 1;
 
+/**
+ * The Rod starts knowing only fiber. Each biome shrine spends that biome's
+ * resource to unlock the next: flax → wood → stone → pitch. The mountain
+ * shrine spends pitch to crown it (tier 4), which also buds the harvest.
+ *
+ * Indexed by the shrine's biome / the current `rodTier`.
+ */
+export const SHRINE_COST: readonly number[] = [6, 8, 5, 3];
+
+/** True if this Rod tier can take this resource. Fiber is always free. */
+export function canRodHarvest(rodTier: number, res: Resource): boolean {
+  return res <= Math.min(rodTier, Resource.Pitch);
+}
+
 /** Tiles per second on foot. Zelda-ish. */
 export const PLAYER_TILES_PER_SEC = 4;
 

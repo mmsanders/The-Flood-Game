@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { FLOOD_DAYS, PANEL_H, PANEL_W, withParams } from '../src/core/config.js';
 import {
   FLOOD_GRACE_DAYS,
+  FLOOD_RISE_PER_DAY,
   drownDayForElev,
+  floodDepth,
+  floodOverlayFill,
   isPassable,
   isSubmerged,
   panelFloodFraction,
@@ -42,6 +45,17 @@ describe('flood', () => {
       expect(count).toBeGreaterThanOrEqual(prevCount);
       prevCount = count;
     }
+  });
+
+  it('counts flood depth in days of water, 1 through 4+', () => {
+    const level = waterLevelAtDay(10);
+    expect(floodDepth(level + 1, level)).toBe(0);
+    expect(floodDepth(level - 1, level)).toBe(1);
+    expect(floodDepth(level - FLOOD_RISE_PER_DAY * 2.1, level)).toBe(3);
+    expect(floodDepth(0, waterLevelAtDay(FLOOD_DAYS))).toBeGreaterThanOrEqual(4);
+    expect(floodOverlayFill(0)).toBeNull();
+    expect(floodOverlayFill(1)).toMatch(/0\.24/);
+    expect(floodOverlayFill(4)).toBe('#1c4a80');
   });
 
   it('clamps outside the forty days', () => {

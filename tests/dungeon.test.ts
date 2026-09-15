@@ -7,6 +7,7 @@ import {
   RewardKind,
   type RoomMeta,
   generateDungeon,
+  generateDungeonRoom,
 } from '../src/core/dungeon.js';
 import { BIOME_COUNT, Biome, Tile, isWalkable } from '../src/core/tiles.js';
 import { PoiKind } from '../src/core/world.js';
@@ -193,6 +194,19 @@ describe('dungeon: rewards', () => {
     expect(make(1, Biome.Forest).reward).toBe(RewardKind.BuddingRod);
     expect(make(1, Biome.Scrub).reward).toBe(RewardKind.HeartContainer);
     expect(make(1, Biome.Mountain).reward).toBe(RewardKind.SerpentRod);
+  });
+});
+
+describe('dungeon: single room', () => {
+  it('is one panel with stairs and a chest', () => {
+    const d = generateDungeonRoom(1, 0, Biome.Valley, { x: 4, y: 4 });
+    expect(d.w).toBe(PANEL_W);
+    expect(d.h).toBe(PANEL_H);
+    expect(d.roomsX).toBe(1);
+    expect(d.roomsY).toBe(1);
+    expect(d.tiles[d.stairs.y * d.w + d.stairs.x]).toBe(Tile.Stairs);
+    expect(d.tiles[d.chest.y * d.w + d.chest.x]).toBe(Tile.Chest);
+    expect(d.stairs.y).toBeGreaterThan(d.chest.y);
   });
 });
 

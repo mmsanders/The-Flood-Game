@@ -13,11 +13,13 @@ import {
   REWARD_NAMES,
   RewardKind,
 } from '../core/dungeon.js';
-import { waterLevelAtSeconds } from '../core/flood.js';
-import { ARK_RECIPE, NODE_YIELD, PLAYER_TILES_PER_SEC } from '../core/resources.js';
+import { floodDepth, waterLevelAtSeconds } from '../core/flood.js';
+import { ARK_RECIPE, NODE_YIELD, PLAYER_TILES_PER_SEC, SHRINE_COST, canRodHarvest } from '../core/resources.js';
 import { panelsHigh, panelsWide, type TileMap } from '../core/tilemap.js';
 import {
+  Biome,
   RESOURCE_COUNT,
+  RESOURCE_NAMES,
   Resource,
   Tile,
   carveTo,
@@ -122,8 +124,13 @@ export interface GameState {
   safeSpot: Point | null;
   /** Units gathered per swing. The Budding Rod doubles it. */
   harvestYield: number;
-  /** Swing reach in tiles. The Serpent Rod extends it. */
+  /** Swing reach in tiles, and how many floods deep the Rod can dredge. */
   rodReach: number;
+  /**
+   * How far the Rod has been imbued. 0 = fiber only; 1 = wood; 2 = stone;
+   * 3 = pitch; 4 = crowned at the mountain shrine.
+   */
+  rodTier: number;
   dungeonsCleared: boolean[];
   /** Crafted at the valley slipway. Once you have it, any shore will do. */
   hasBoat: boolean;
@@ -142,6 +149,11 @@ export interface GameState {
    * taller than the well. Follows the player with a north/south dead zone.
    */
   minimapViewY: number;
+  /**
+   * Once the player has stood on the world's south row, the HUD map stays
+   * filled top-to-bottom instead of opening the black buffer again.
+   */
+  minimapFilledSouth: boolean;
 }
 
 export function createGame(world: World): GameState {
@@ -180,12 +192,14 @@ export function createGame(world: World): GameState {
     safeSpot: null,
     harvestYield: NODE_YIELD,
     rodReach: 1,
+    rodTier: 0,
     dungeonsCleared: world.dungeons.map(() => false),
     hasBoat: false,
     inBoat: false,
     exploredOverworld: new Uint8Array(world.params.panelsX * world.params.panelsY),
     exploredDungeons: world.dungeons.map((d) => new Uint8Array(d.roomsX * d.roomsY)),
     minimapViewY: 0,
+    minimapFilledSouth: false,
   };
   markExplored(state);
   return state;
@@ -319,6 +333,7 @@ export function step(state: GameState, input: StepInput, dt: number): void {
   }
 
   movePlayer(state, input, dt);
+  maybeDungeonWarp(state);
 
   if (input.attackPressed && p.cooldown <= 0) {
     p.swing = SWING_TIME;
@@ -401,17 +416,18 @@ function moveAxis(state: GameState, dx: number, dy: number): void {
 /**
  * Can the hitbox sit here? Checks the four corners against terrain.
  *
- * Floodwater blocks movement *into* it, but a player already in the water
- * (because it rose under them, or they are still straddling the shoreline)
- * can keep moving — including onto dry ground. Checking only the centre
- * used to freeze you at the waterline: one step put the centre on land
- * while a corner was still wet, and then neither direction was legal.
+ * Impassable tiles cannot be stepped *onto*, but if you already overlap one
+ * (heart pickup, a seam, a refused warp) you can still occupy that same tile
+ * so you can walk *off*. Floodwater is the same idea: you cannot enter it,
+ * but a hitbox already in the water can leave onto dry ground.
  */
 function canOccupy(state: GameState, x: number, y: number): boolean {
   const map = activeMap(state);
   const alreadyWading = hitboxInWater(state, state.player.x, state.player.y);
   const level = waterLevel(state);
   const sailing = state.inBoat && state.location.kind === 'overworld';
+  const px = state.player.x;
+  const py = state.player.y;
 
   const corners: [number, number][] = [
     [x, y],
@@ -427,13 +443,36 @@ function canOccupy(state: GameState, x: number, y: number): boolean {
     const i = ty * map.w + tx;
     const tile = map.tiles[i];
     const flooded = map.floods && map.elev[i] < level;
+    const alreadyOn = hitboxOverlapsTile(px, py, tx, ty);
 
     if (sailing && tile === Tile.Water) continue;
-    if (!isWalkable(tile)) return false;
+    if (tile === Tile.DungeonEntrance) {
+      if (flooded && !sailing) {
+        if (alreadyOn) continue;
+        return false;
+      }
+      if (canStepOnEntrance(state, tx, ty) || alreadyOn) continue;
+      return false;
+    }
+    if (!isWalkable(tile)) {
+      if (alreadyOn) continue;
+      return false;
+    }
     if (flooded && !sailing && !alreadyWading) return false;
   }
 
   return true;
+}
+
+/** True if the hitbox at (px, py) covers any pixel of tile (tx, ty). */
+function hitboxOverlapsTile(px: number, py: number, tx: number, ty: number): boolean {
+  const x1 = px + PLAYER_W - 1;
+  const y1 = py + PLAYER_H - 1;
+  const tx0 = tx * TILE_PX;
+  const ty0 = ty * TILE_PX;
+  const tx1 = tx0 + TILE_PX - 1;
+  const ty1 = ty0 + TILE_PX - 1;
+  return x1 >= tx0 && px <= tx1 && y1 >= ty0 && py <= ty1;
 }
 
 function isBoatableTile(state: GameState, tx: number, ty: number): boolean {
@@ -512,35 +551,48 @@ function swingRod(state: GameState): void {
   const cx = p.x + PLAYER_W / 2;
   const cy = p.y + PLAYER_H / 2;
 
-  const reach = TILE_PX * state.rodReach;
-  const tx = Math.floor((cx + dirX(p.dir) * reach) / TILE_PX);
-  const ty = Math.floor((cy + dirY(p.dir) * reach) / TILE_PX);
-
-  harvestAt(state, tx, ty);
+  // Closest node first so extra reach never skips the tile you are standing
+  // next to (the Serpent Rod used to harvest *only* the far tile).
+  for (let d = 1; d <= state.rodReach; d++) {
+    const tx = Math.floor((cx + dirX(p.dir) * TILE_PX * d) / TILE_PX);
+    const ty = Math.floor((cy + dirY(p.dir) * TILE_PX * d) / TILE_PX);
+    if (harvestAt(state, tx, ty)) return;
+  }
 }
 
-function harvestAt(state: GameState, tx: number, ty: number): void {
+/** True if a resource node was targeted, harvested or not. */
+function harvestAt(state: GameState, tx: number, ty: number): boolean {
   const map = activeMap(state);
-  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return;
+  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return false;
 
   const i = ty * map.w + tx;
   const res = resourceOf(map.tiles[i]);
-  if (res === null) return;
+  if (res === null) return false;
+
+  if (!canRodHarvest(state.rodTier, res)) {
+    say(state, `The Rod does not yet know ${RESOURCE_LABEL[res]}. Seek a shrine.`);
+    return true;
+  }
 
   const submerged = map.floods && map.elev[i] < waterLevel(state);
   if (submerged && !state.inBoat) {
     say(state, 'The waters cover it. You would need a boat.');
-    return;
+    return true;
+  }
+  if (submerged && floodDepth(map.elev[i], waterLevel(state)) > state.rodReach) {
+    say(state, 'Too deep for the Rod. You would need to fish.');
+    return true;
   }
 
   map.tiles[i] = carveTo(map.biome[i]);
   state.carried[res] += state.harvestYield;
   state.harvested += state.harvestYield;
   if (submerged) {
-    say(state, `Dredged +${state.harvestYield} ${RESOURCE_LABEL[res]} from the deep.`);
+    say(state, `Dredged +${state.harvestYield} ${RESOURCE_LABEL[res]}.`);
   } else {
     say(state, `+${state.harvestYield} ${RESOURCE_LABEL[res]}`);
   }
+  return true;
 }
 
 const RESOURCE_LABEL = ['fiber', 'gopher wood', 'stone', 'pitch'];
@@ -566,7 +618,7 @@ function stepTileEffects(state: GameState): void {
 
   switch (map.tiles[i]) {
     case Tile.HeartContainer: {
-      map.tiles[i] = carveTo(map.biome[i]);
+      map.tiles[i] = Tile.Pedestal;
       player.maxHearts++;
       player.hearts = player.maxHearts;
       state.heartsFound++;
@@ -706,6 +758,9 @@ export function actionPrompt(state: GameState): ObstaclePrompt | null {
 
   if (state.location.kind === 'overworld') {
     const { map, i } = tileUnder(state);
+    if (map.tiles[i] === Tile.Shrine) {
+      return shrinePrompt(state, map.biome[i] as Biome);
+    }
     if (map.tiles[i] === Tile.BoatYard && !state.hasBoat) {
       const wood = state.carried[Resource.Wood];
       const fiber = state.carried[Resource.Fiber];
@@ -753,12 +808,8 @@ function handleInteract(state: GameState): void {
   const { map, i } = tileUnder(state);
   const standing = map.tiles[i];
 
-  if (standing === Tile.DungeonEntrance) {
-    enterDungeon(state);
-    return;
-  }
-  if (standing === Tile.Stairs) {
-    exitDungeon(state);
+  if (standing === Tile.Shrine) {
+    tryImbueRod(state, map.biome[i] as Biome);
     return;
   }
   if (standing === Tile.BoatYard && !state.hasBoat) {
@@ -769,6 +820,54 @@ function handleInteract(state: GameState): void {
 
   const { tx, ty } = facingTile(state);
   tryClear(state, tx, ty);
+}
+
+function shrinePrompt(state: GameState, biome: Biome): ObstaclePrompt {
+  const cost = SHRINE_COST[biome] ?? 0;
+  const res = biome as unknown as Resource;
+  const held = state.carried[res] ?? 0;
+  if (state.rodTier > biome) {
+    return { tile: Tile.Shrine, label: 'The Rod already bears this gift.', affordable: false };
+  }
+  if (state.rodTier < biome) {
+    return {
+      tile: Tile.Shrine,
+      label: 'This shrine is silent. Seek the lower biome first.',
+      affordable: false,
+    };
+  }
+  const next = biome < Biome.Mountain ? RESOURCE_NAMES[(biome + 1) as Resource] : 'a budding harvest';
+  return {
+    tile: Tile.Shrine,
+    label: `Imbue the Rod — ${cost} ${RESOURCE_LABEL[res]} → ${next} (you have ${held})`,
+    affordable: held >= cost,
+  };
+}
+
+function tryImbueRod(state: GameState, biome: Biome): void {
+  if (state.rodTier > biome) {
+    say(state, 'The Rod already bears this gift.');
+    return;
+  }
+  if (state.rodTier < biome) {
+    say(state, 'This shrine is silent. Seek the lower biome first.');
+    return;
+  }
+  const cost = SHRINE_COST[biome] ?? 0;
+  const res = biome as unknown as Resource;
+  if (state.carried[res] < cost) {
+    say(state, `The shrine wants ${cost} ${RESOURCE_LABEL[res]}.`);
+    return;
+  }
+  state.carried[res] -= cost;
+  state.rodTier++;
+  if (state.rodTier >= 4) {
+    state.harvestYield = Math.max(state.harvestYield, 2);
+    say(state, 'Pitch crowns the Rod. It buds twice.');
+    return;
+  }
+  const unlocked = RESOURCE_LABEL[state.rodTier];
+  say(state, `The Rod drinks. It will take ${unlocked}.`);
 }
 
 function tryCraftBoat(state: GameState): void {
@@ -815,10 +914,69 @@ function firstAdjacentBoatable(state: GameState): Point | null {
   return null;
 }
 
-function enterDungeon(state: GameState): void {
+/**
+ * Cave mouths are solid from the west, north and east. You step in from the
+ * south, the way a Zelda cave reads as a hole in a cliff face.
+ */
+function canStepOnEntrance(state: GameState, tx: number, ty: number): boolean {
+  const cx = Math.floor((state.player.x + PLAYER_W / 2) / TILE_PX);
+  const cy = Math.floor((state.player.y + PLAYER_H / 2) / TILE_PX);
+  if (cx === tx && cy === ty) return true;
+  return cy > ty;
+}
+
+/** Tiles the hitbox actually covers — the whole overworld cave sprite, not just the feet. */
+function hitboxTiles(state: GameState): { tx: number; ty: number }[] {
+  const p = state.player;
+  const pts: [number, number][] = [
+    [p.x, p.y],
+    [p.x + PLAYER_W - 1, p.y],
+    [p.x, p.y + PLAYER_H - 1],
+    [p.x + PLAYER_W - 1, p.y + PLAYER_H - 1],
+    [p.x + PLAYER_W / 2, p.y],
+    [p.x + PLAYER_W / 2, p.y + PLAYER_H / 2],
+  ];
+  const out: { tx: number; ty: number }[] = [];
+  const seen = new Set<number>();
+  const map = activeMap(state);
+  for (const [px, py] of pts) {
+    const tx = Math.floor(px / TILE_PX);
+    const ty = Math.floor(py / TILE_PX);
+    if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) continue;
+    const k = ty * map.w + tx;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({ tx, ty });
+  }
+  return out;
+}
+
+/** Touching the cave sprite from the south goes in; touching the stairs comes out. */
+function maybeDungeonWarp(state: GameState): void {
+  if (state.phase !== 'playing') return;
+  const map = activeMap(state);
+
+  if (state.location.kind === 'overworld') {
+    for (const { tx, ty } of hitboxTiles(state)) {
+      if (map.tiles[ty * map.w + tx] !== Tile.DungeonEntrance) continue;
+      if (!canStepOnEntrance(state, tx, ty)) continue;
+      enterDungeonAt(state, tx, ty);
+      return;
+    }
+    return;
+  }
+
+  for (const { tx, ty } of hitboxTiles(state)) {
+    if (map.tiles[ty * map.w + tx] === Tile.Stairs) {
+      exitDungeon(state);
+      return;
+    }
+  }
+}
+
+function enterDungeonAt(state: GameState, tx: number, ty: number): void {
   if (state.location.kind === 'dungeon') return;
 
-  const { tx, ty } = tileUnder(state);
   const dungeon = state.world.dungeons.find(
     (d) => d.overworldEntrance.x === tx && d.overworldEntrance.y === ty,
   );
@@ -827,7 +985,6 @@ function enterDungeon(state: GameState): void {
   // Once the water reaches the mouth, that dungeon is gone for the run. This
   // is what makes a low-lying dungeon a decision about when, not whether.
   if (state.world.elev[ty * state.world.w + tx] < waterLevel(state)) {
-    say(state, 'The way down is underwater. Too late for this one.');
     return;
   }
 
@@ -840,7 +997,9 @@ function enterDungeon(state: GameState): void {
   state.keysHeld = 0;
   state.safeSpot = null;
   state.inBoat = false;
-  placeOn(state, dungeon.stairs);
+  // Stand just inside, north of the stairs, so we do not immediately walk out.
+  placeOn(state, { x: dungeon.stairs.x, y: Math.max(1, dungeon.stairs.y - 1) });
+  state.player.dir = Dir.Up;
   say(state, 'Down into the dark. The water does not wait.');
 }
 
@@ -851,8 +1010,28 @@ function exitDungeon(state: GameState): void {
   state.location = { kind: 'overworld', dungeonId: -1, returnTo: null };
   state.keysHeld = 0;
   state.safeSpot = null;
-  placeOn(state, back);
+  placeOn(state, exitSpot(state, back));
+  state.player.dir = Dir.Down;
   say(state, 'Daylight. Or what is left of it.');
+}
+
+/** South of the mouth, so the next step does not fall back in. */
+function exitSpot(state: GameState, entrance: Point): Point {
+  const map = state.world;
+  const spots = [
+    { x: entrance.x, y: entrance.y + 1 },
+    { x: entrance.x - 1, y: entrance.y + 1 },
+    { x: entrance.x + 1, y: entrance.y + 1 },
+    { x: entrance.x - 1, y: entrance.y },
+    { x: entrance.x + 1, y: entrance.y },
+  ];
+  for (const p of spots) {
+    if (p.x < 0 || p.y < 0 || p.x >= map.w || p.y >= map.h) continue;
+    const tile = map.tiles[p.y * map.w + p.x];
+    if (tile === Tile.DungeonEntrance) continue;
+    if (isWalkable(tile)) return p;
+  }
+  return { x: entrance.x, y: entrance.y + 1 };
 }
 
 /** Move the player onto a tile and snap the camera to its panel. */

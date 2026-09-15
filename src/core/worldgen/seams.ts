@@ -92,7 +92,8 @@ export function sealPanelSeams(
  * map stops is a wall you can see, not an invisible bounce.
  *
  * Biome picks the tile: trees in forest, rock in the lowlands and scrub,
- * cliff in the mountains. Connectivity is told not to carve these.
+ * cliff in the mountains. The south is sea with a sand beach. Connectivity
+ * is told not to carve the frame.
  */
 export function wallWorldRim(
   tiles: Uint8Array,
@@ -101,18 +102,25 @@ export function wallWorldRim(
   w: number,
   h: number,
 ): void {
-  const paint = (x: number, y: number): void => {
+  const paint = (x: number, y: number, tile?: Tile): void => {
     const i = y * w + x;
-    tiles[i] = rimTile(biome[i] as Biome, elev[i]);
+    tiles[i] = tile ?? rimTile(biome[i] as Biome, elev[i]);
   };
   for (let x = 0; x < w; x++) {
     paint(x, 0);
-    paint(x, h - 1);
+    paint(x, h - 1, Tile.Water);
   }
   for (let y = 1; y < h - 1; y++) {
     paint(0, y);
     paint(w - 1, y);
   }
+  paintSouthBeach(tiles, w, h);
+}
+
+/** Walkable sand just north of the sea, between the east and west walls. */
+export function paintSouthBeach(tiles: Uint8Array, w: number, h: number): void {
+  if (h < 3) return;
+  for (let x = 1; x < w - 1; x++) tiles[(h - 2) * w + x] = Tile.Sand;
 }
 
 function rimTile(biome: Biome, elev: number): Tile {
