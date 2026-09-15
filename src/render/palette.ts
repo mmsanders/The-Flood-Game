@@ -146,3 +146,23 @@ export function elevationColor(elev: number): string {
   const i = Math.min(ELEVATION_RAMP.length - 1, Math.floor(t * ELEVATION_RAMP.length));
   return ELEVATION_RAMP[i];
 }
+
+/**
+ * `TILE_COLOR` as packed bytes, built once at module load.
+ *
+ * The HUD map samples a colour per pixel per rebuild. Doing that through
+ * `tileColor` meant a string slice and a `parseInt` per pixel to recompute a
+ * constant; this is the same table with the parsing done up front.
+ * Layout is `[r, g, b]` at `tile * 3`, magenta for unmapped IDs.
+ */
+export const TILE_RGB = (() => {
+  const table = new Uint8Array(256 * 3);
+  for (let tile = 0; tile < 256; tile++) {
+    const hex = TILE_COLOR[tile];
+    const v = hex === undefined ? 0xff00ff : parseInt(hex.slice(1), 16);
+    table[tile * 3] = (v >> 16) & 255;
+    table[tile * 3 + 1] = (v >> 8) & 255;
+    table[tile * 3 + 2] = v & 255;
+  }
+  return table;
+})();

@@ -72,6 +72,13 @@ export interface Player {
   /** Top-left of the hitbox, in world pixels. */
   x: number;
   y: number;
+  /**
+   * Position at the start of the current simulation step, so the renderer can
+   * draw between the last two states instead of snapping to the newest one.
+   * A teleport calls `syncInterpolation` so nothing smears across the map.
+   */
+  prevX: number;
+  prevY: number;
   dir: Dir;
   hearts: number;
   maxHearts: number;
@@ -90,6 +97,8 @@ export interface Camera {
   panelY: number;
   /** Scroll progress 0..1 while transitioning between panels. */
   scroll: number;
+  /** Scroll at the start of the current step, for render interpolation. */
+  prevScroll: number;
   fromX: number;
   fromY: number;
 }
@@ -154,6 +163,12 @@ export interface GameState {
    * filled top-to-bottom instead of opening the black buffer again.
    */
   minimapFilledSouth: boolean;
+  /**
+   * Bumped whenever a tile changes under play — a harvested node, a taken
+   * heart, a bridged chasm. The HUD map caches its raster and watches this
+   * to know when the terrain it painted is stale.
+   */
+  mapRevision: number;
 }
 
 export function createGame(world: World): GameState {
@@ -163,6 +178,8 @@ export function createGame(world: World): GameState {
     player: {
       x: world.spawn.x * TILE_PX + (TILE_PX - PLAYER_W) / 2,
       y: world.spawn.y * TILE_PX + (TILE_PX - PLAYER_H) / 2,
+      prevX: world.spawn.x * TILE_PX + (TILE_PX - PLAYER_W) / 2,
+      prevY: world.spawn.y * TILE_PX + (TILE_PX - PLAYER_H) / 2,
       dir: Dir.Down,
       hearts: 3,
       maxHearts: 3,
@@ -181,6 +198,7 @@ export function createGame(world: World): GameState {
       panelX: Math.floor(world.spawn.x / PANEL_W),
       panelY: Math.floor(world.spawn.y / PANEL_H),
       scroll: 0,
+      prevScroll: 0,
       fromX: Math.floor(world.spawn.x / PANEL_W),
       fromY: Math.floor(world.spawn.y / PANEL_H),
     },
@@ -200,6 +218,7 @@ export function createGame(world: World): GameState {
     exploredDungeons: world.dungeons.map((d) => new Uint8Array(d.roomsX * d.roomsY)),
     minimapViewY: 0,
     minimapFilledSouth: false,
+    mapRevision: 0,
   };
   markExplored(state);
   return state;
@@ -246,6 +265,11 @@ export function adoptHotState(running: GameState): GameState {
     exploredDungeons: adoptDungeonGrids(running.exploredDungeons, next.exploredDungeons),
   };
   markExplored(merged);
+  for (const a of merged.world.animals) {
+    if (typeof a.prevX !== 'number') a.prevX = a.x;
+    if (typeof a.prevY !== 'number') a.prevY = a.y;
+  }
+  syncInterpolation(merged);
   return merged;
 }
 
@@ -312,6 +336,12 @@ export interface StepInput {
 
 export function step(state: GameState, input: StepInput, dt: number): void {
   if (state.phase !== 'playing') return;
+
+  // Everything the renderer interpolates is snapshotted here, before the step
+  // moves it. Animals snapshot themselves inside `stepAnimals`.
+  state.player.prevX = state.player.x;
+  state.player.prevY = state.player.y;
+  state.camera.prevScroll = state.camera.scroll;
 
   state.elapsed += dt;
 
@@ -422,45 +452,44 @@ function moveAxis(state: GameState, dx: number, dy: number): void {
  * but a hitbox already in the water can leave onto dry ground.
  */
 function canOccupy(state: GameState, x: number, y: number): boolean {
-  const map = activeMap(state);
   const alreadyWading = hitboxInWater(state, state.player.x, state.player.y);
-  const level = waterLevel(state);
   const sailing = state.inBoat && state.location.kind === 'overworld';
-  const px = state.player.x;
-  const py = state.player.y;
 
-  const corners: [number, number][] = [
-    [x, y],
-    [x + PLAYER_W - 1, y],
-    [x, y + PLAYER_H - 1],
-    [x + PLAYER_W - 1, y + PLAYER_H - 1],
-  ];
+  // The four corners, walked without building an array for them. This runs
+  // twice per simulation step, so it is on the hottest path in the game.
+  return (
+    cornerClear(state, x, y, sailing, alreadyWading) &&
+    cornerClear(state, x + PLAYER_W - 1, y, sailing, alreadyWading) &&
+    cornerClear(state, x, y + PLAYER_H - 1, sailing, alreadyWading) &&
+    cornerClear(state, x + PLAYER_W - 1, y + PLAYER_H - 1, sailing, alreadyWading)
+  );
+}
 
-  for (const [cx, cy] of corners) {
-    const tx = Math.floor(cx / TILE_PX);
-    const ty = Math.floor(cy / TILE_PX);
-    if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return false;
-    const i = ty * map.w + tx;
-    const tile = map.tiles[i];
-    const flooded = map.floods && map.elev[i] < level;
-    const alreadyOn = hitboxOverlapsTile(px, py, tx, ty);
+/** One corner of the hitbox against terrain and floodwater. */
+function cornerClear(
+  state: GameState,
+  cx: number,
+  cy: number,
+  sailing: boolean,
+  alreadyWading: boolean,
+): boolean {
+  const map = activeMap(state);
+  const tx = Math.floor(cx / TILE_PX);
+  const ty = Math.floor(cy / TILE_PX);
+  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return false;
 
-    if (sailing && tile === Tile.Water) continue;
-    if (tile === Tile.DungeonEntrance) {
-      if (flooded && !sailing) {
-        if (alreadyOn) continue;
-        return false;
-      }
-      if (canStepOnEntrance(state, tx, ty) || alreadyOn) continue;
-      return false;
-    }
-    if (!isWalkable(tile)) {
-      if (alreadyOn) continue;
-      return false;
-    }
-    if (flooded && !sailing && !alreadyWading) return false;
+  const i = ty * map.w + tx;
+  const tile = map.tiles[i];
+  const flooded = map.floods && map.elev[i] < waterLevel(state);
+  const alreadyOn = hitboxOverlapsTile(state.player.x, state.player.y, tx, ty);
+
+  if (sailing && tile === Tile.Water) return true;
+  if (tile === Tile.DungeonEntrance) {
+    if (flooded && !sailing) return alreadyOn;
+    return canStepOnEntrance(state, tx, ty) || alreadyOn;
   }
-
+  if (!isWalkable(tile)) return alreadyOn;
+  if (flooded && !sailing && !alreadyWading) return false;
   return true;
 }
 
@@ -487,18 +516,15 @@ function isBoatableTile(state: GameState, tx: number, ty: number): boolean {
 function tryShoveOff(state: GameState, x: number, y: number): boolean {
   if (!state.hasBoat || state.inBoat || state.location.kind !== 'overworld') return false;
 
-  const corners: [number, number][] = [
-    [x, y],
-    [x + PLAYER_W - 1, y],
-    [x, y + PLAYER_H - 1],
-    [x + PLAYER_W - 1, y + PLAYER_H - 1],
-  ];
-  for (const [cx, cy] of corners) {
+  for (let c = 0; c < 4; c++) {
+    const cx = c & 1 ? x + PLAYER_W - 1 : x;
+    const cy = c & 2 ? y + PLAYER_H - 1 : y;
     const tx = Math.floor(cx / TILE_PX);
     const ty = Math.floor(cy / TILE_PX);
     if (!isBoatableTile(state, tx, ty)) continue;
     state.player.x = tx * TILE_PX + (TILE_PX - PLAYER_W) / 2;
     state.player.y = ty * TILE_PX + (TILE_PX - PLAYER_H) / 2;
+    syncInterpolation(state);
     state.inBoat = true;
     say(state, 'You shove off.');
     return true;
@@ -585,6 +611,7 @@ function harvestAt(state: GameState, tx: number, ty: number): boolean {
   }
 
   map.tiles[i] = carveTo(map.biome[i]);
+  state.mapRevision++;
   state.carried[res] += state.harvestYield;
   state.harvested += state.harvestYield;
   if (submerged) {
@@ -619,6 +646,7 @@ function stepTileEffects(state: GameState): void {
   switch (map.tiles[i]) {
     case Tile.HeartContainer: {
       map.tiles[i] = Tile.Pedestal;
+      state.mapRevision++;
       player.maxHearts++;
       player.hearts = player.maxHearts;
       state.heartsFound++;
@@ -631,12 +659,14 @@ function stepTileEffects(state: GameState): void {
     }
     case Tile.Key: {
       map.tiles[i] = Tile.DungeonFloor;
+      state.mapRevision++;
       state.keysHeld++;
       say(state, 'A key. Something here is locked.');
       break;
     }
     case Tile.Chest: {
       map.tiles[i] = Tile.DungeonFloor;
+      state.mapRevision++;
       openChest(state);
       break;
     }
@@ -662,6 +692,7 @@ function fallInPit(state: GameState): void {
   if (state.safeSpot) {
     p.x = state.safeSpot.x;
     p.y = state.safeSpot.y;
+    syncInterpolation(state);
   }
   say(state, 'You fall. The dark is deeper than it looked.');
 }
@@ -890,6 +921,7 @@ function tryLaunchBoat(state: GameState): boolean {
   if (!dest) return false;
   state.player.x = dest.x * TILE_PX + (TILE_PX - PLAYER_W) / 2;
   state.player.y = dest.y * TILE_PX + (TILE_PX - PLAYER_H) / 2;
+  syncInterpolation(state);
   state.inBoat = true;
   say(state, 'The skiff takes the water.');
   return true;
@@ -899,17 +931,21 @@ function hasAdjacentBoatable(state: GameState): boolean {
   return firstAdjacentBoatable(state) !== null;
 }
 
+/** Reused so the every-frame launch prompt does not allocate a point. */
+const boatSpot: Point = { x: 0, y: 0 };
+const NEIGHBOUR_DX = [0, 0, -1, 1];
+const NEIGHBOUR_DY = [-1, 1, 0, 0];
+
 function firstAdjacentBoatable(state: GameState): Point | null {
   const tx = Math.floor((state.player.x + PLAYER_W / 2) / TILE_PX);
   const ty = Math.floor((state.player.y + PLAYER_H / 2) / TILE_PX);
-  const n = [
-    [tx, ty - 1],
-    [tx, ty + 1],
-    [tx - 1, ty],
-    [tx + 1, ty],
-  ];
-  for (const [x, y] of n) {
-    if (isBoatableTile(state, x, y)) return { x, y };
+  for (let n = 0; n < 4; n++) {
+    const x = tx + NEIGHBOUR_DX[n];
+    const y = ty + NEIGHBOUR_DY[n];
+    if (!isBoatableTile(state, x, y)) continue;
+    boatSpot.x = x;
+    boatSpot.y = y;
+    return boatSpot;
   }
   return null;
 }
@@ -925,40 +961,58 @@ function canStepOnEntrance(state: GameState, tx: number, ty: number): boolean {
   return cy > ty;
 }
 
-/** Tiles the hitbox actually covers — the whole overworld cave sprite, not just the feet. */
-function hitboxTiles(state: GameState): { tx: number; ty: number }[] {
+/**
+ * Tiles the hitbox actually covers — the whole overworld cave sprite, not just
+ * the feet.
+ *
+ * Fills a shared buffer with distinct tile indices and returns how many it
+ * wrote. This runs every simulation step; the array-of-objects-plus-a-Set
+ * version it replaces allocated eight times a step for six small integers.
+ */
+const HITBOX_SAMPLES = 6;
+const hitboxScratch = new Int32Array(HITBOX_SAMPLES);
+
+function hitboxTiles(state: GameState): number {
   const p = state.player;
-  const pts: [number, number][] = [
-    [p.x, p.y],
-    [p.x + PLAYER_W - 1, p.y],
-    [p.x, p.y + PLAYER_H - 1],
-    [p.x + PLAYER_W - 1, p.y + PLAYER_H - 1],
-    [p.x + PLAYER_W / 2, p.y],
-    [p.x + PLAYER_W / 2, p.y + PLAYER_H / 2],
-  ];
-  const out: { tx: number; ty: number }[] = [];
-  const seen = new Set<number>();
   const map = activeMap(state);
-  for (const [px, py] of pts) {
+  let n = 0;
+
+  for (let s = 0; s < HITBOX_SAMPLES; s++) {
+    const px =
+      s === 4 || s === 5 ? p.x + PLAYER_W / 2 : s & 1 ? p.x + PLAYER_W - 1 : p.x;
+    const py =
+      s === 5 ? p.y + PLAYER_H / 2 : s === 4 ? p.y : s & 2 ? p.y + PLAYER_H - 1 : p.y;
+
     const tx = Math.floor(px / TILE_PX);
     const ty = Math.floor(py / TILE_PX);
     if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) continue;
+
     const k = ty * map.w + tx;
-    if (seen.has(k)) continue;
-    seen.add(k);
-    out.push({ tx, ty });
+    let seen = false;
+    for (let j = 0; j < n; j++) {
+      if (hitboxScratch[j] === k) {
+        seen = true;
+        break;
+      }
+    }
+    if (!seen) hitboxScratch[n++] = k;
   }
-  return out;
+
+  return n;
 }
 
 /** Touching the cave sprite from the south goes in; touching the stairs comes out. */
 function maybeDungeonWarp(state: GameState): void {
   if (state.phase !== 'playing') return;
   const map = activeMap(state);
+  const n = hitboxTiles(state);
 
   if (state.location.kind === 'overworld') {
-    for (const { tx, ty } of hitboxTiles(state)) {
-      if (map.tiles[ty * map.w + tx] !== Tile.DungeonEntrance) continue;
+    for (let j = 0; j < n; j++) {
+      const i = hitboxScratch[j];
+      if (map.tiles[i] !== Tile.DungeonEntrance) continue;
+      const tx = i % map.w;
+      const ty = (i / map.w) | 0;
       if (!canStepOnEntrance(state, tx, ty)) continue;
       enterDungeonAt(state, tx, ty);
       return;
@@ -966,8 +1020,8 @@ function maybeDungeonWarp(state: GameState): void {
     return;
   }
 
-  for (const { tx, ty } of hitboxTiles(state)) {
-    if (map.tiles[ty * map.w + tx] === Tile.Stairs) {
+  for (let j = 0; j < n; j++) {
+    if (map.tiles[hitboxScratch[j]] === Tile.Stairs) {
       exitDungeon(state);
       return;
     }
@@ -1034,11 +1088,24 @@ function exitSpot(state: GameState, entrance: Point): Point {
   return { x: entrance.x, y: entrance.y + 1 };
 }
 
+/**
+ * Collapse the interpolation window onto the current state.
+ *
+ * Anything that moves the player discontinuously has to call this, or the
+ * renderer will draw a frame of them sliding across the map to get there.
+ */
+export function syncInterpolation(state: GameState): void {
+  state.player.prevX = state.player.x;
+  state.player.prevY = state.player.y;
+  state.camera.prevScroll = state.camera.scroll;
+}
+
 /** Move the player onto a tile and snap the camera to its panel. */
 function placeOn(state: GameState, tile: Point): void {
   state.player.x = tile.x * TILE_PX + (TILE_PX - PLAYER_W) / 2;
   state.player.y = tile.y * TILE_PX + (TILE_PX - PLAYER_H) / 2;
   snapCamera(state);
+  syncInterpolation(state);
 }
 
 /**
@@ -1076,6 +1143,7 @@ function tryClear(state: GameState, tx: number, ty: number): void {
     }
     state.keysHeld--;
     convertConnected(map, tx, ty, tile, Tile.DoorOpen);
+    state.mapRevision++;
     say(state, 'The key turns.');
     return;
   }
@@ -1092,6 +1160,7 @@ function tryClear(state: GameState, tx: number, ty: number): void {
 
   state.carried[cost.resource] -= cost.amount;
   convertConnected(map, tx, ty, tile, OBSTACLE_CLEARS_TO[tile]);
+  state.mapRevision++;
   say(state, `${cost.amount} ${name} spent. The ark will notice.`);
 }
 

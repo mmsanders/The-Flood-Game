@@ -183,6 +183,14 @@ export interface Animal {
   /** Top-left of the sprite, in world pixels. */
   x: number;
   y: number;
+  /**
+   * Position at the start of the current simulation step.
+   *
+   * The renderer draws between this and `x`/`y` so motion is smooth on a
+   * display refreshing faster than the fixed 60Hz simulation.
+   */
+  prevX: number;
+  prevY: number;
   dir: AnimalDir;
   status: AnimalStatus;
   /** Seconds until the next heading choice. */
@@ -284,6 +292,8 @@ export function spawnAnimals(
         kind: def.kind,
         x: tx * TILE_PX + (TILE_PX - ANIMAL_W) / 2,
         y: ty * TILE_PX + (TILE_PX - ANIMAL_H) / 2,
+        prevX: tx * TILE_PX + (TILE_PX - ANIMAL_W) / 2,
+        prevY: ty * TILE_PX + (TILE_PX - ANIMAL_H) / 2,
         dir: (Math.floor(rng() * 4) as AnimalDir) || AnimalDir.Down,
         status: AnimalStatus.Wild,
         cooldown: 0.4 + rng() * 1.2,
@@ -372,6 +382,9 @@ export function stepAnimals(
 
   for (const a of animals) {
     if (a.status !== AnimalStatus.Wild) continue;
+
+    a.prevX = a.x;
+    a.prevY = a.y;
 
     const cx = a.x + ANIMAL_W / 2;
     const cy = a.y + ANIMAL_H / 2;

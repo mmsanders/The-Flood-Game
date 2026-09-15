@@ -38,7 +38,21 @@ export function dayFraction(day: number): number {
   return t < 0 ? t + 1 : t;
 }
 
+/**
+ * Memoised on the argument, so the two callers in a frame share one result.
+ * A different day recomputes, which keeps the function pure from the outside.
+ */
+let todDay = Number.NaN;
+let todCache: Tod = { mulR: 255, mulG: 255, mulB: 255, shadowDx: 0, shadowAlpha: 0 };
+
 export function todAt(day: number): Tod {
+  if (day === todDay) return todCache;
+  todDay = day;
+  todCache = computeTod(day);
+  return todCache;
+}
+
+function computeTod(day: number): Tod {
   const t = dayFraction(day);
   const { dx, alpha } = shadowAt(t);
   if (t < DAWN_PEAK) return mixColor(NIGHT_MUL, MORNING_MUL, t / DAWN_PEAK, dx, alpha);

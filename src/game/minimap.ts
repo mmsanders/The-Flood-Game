@@ -10,10 +10,10 @@
 
 import { PANEL_H, PANEL_W } from '../core/config.js';
 import { floodDepth } from '../core/flood.js';
-import type { TileMap } from '../core/tilemap.js';
-import { Biome } from '../core/tiles.js';
-import { PoiKind, type Poi } from '../core/world.js';
-import { BIOME_COLORS, PALETTE, tileColor } from '../render/palette.js';
+import { panelsHigh, panelsWide, type TileMap } from '../core/tilemap.js';
+import { Biome, Tile } from '../core/tiles.js';
+import { PoiKind, type Poi, type World } from '../core/world.js';
+import { BIOME_COLORS, PALETTE, TILE_RGB, tileColor } from '../render/palette.js';
 
 export const MINIMAP_X = 0;
 export const MINIMAP_Y = 0;
@@ -54,6 +54,19 @@ export function visitedCells(grid: Uint8Array, width: number): MiniMapCell[] {
     if (grid[i]) cells.push({ x: i % width, y: (i / width) | 0 });
   }
   return cells;
+}
+
+/**
+ * How many panels have been stood on.
+ *
+ * The HUD map caches its raster, and this is the cheap half of the cache key:
+ * a scan of one byte per panel, versus rebuilding the cell list every frame
+ * to find out that nothing moved.
+ */
+export function countVisited(grid: Uint8Array): number {
+  let n = 0;
+  for (let i = 0; i < grid.length; i++) n += grid[i];
+  return n;
 }
 
 /** Inset so a cluster floats in the well instead of flushing to the frame. */
@@ -271,6 +284,91 @@ export function panelHasTile(
     if (map.tiles[i] === tile) found = true;
   });
   return found;
+}
+
+/**
+ * Which landmark each overworld panel shows on the HUD map, one byte per panel.
+ *
+ * Built once per world and cached against it. The naive version asked this
+ * question per panel per frame, and answering it for a town meant scanning all
+ * 176 tiles of the panel — roughly 170,000 tile reads a frame late in a run,
+ * to recompute an answer that cannot change. Towns and shrines are placed by
+ * worldgen and never appear or move during play.
+ */
+const poiIndexCache = new WeakMap<World, Uint8Array>();
+
+export function panelPoiIndex(world: World): Uint8Array {
+  const cached = poiIndexCache.get(world);
+  if (cached) return cached;
+
+  const cols = panelsWide(world);
+  const rows = panelsHigh(world);
+  const index = new Uint8Array(cols * rows);
+
+  for (let py = 0; py < rows; py++) {
+    for (let px = 0; px < cols; px++) {
+      let poi = panelPoi(world.pois, px, py);
+      if (poi === MiniPoi.None && panelHasTile(world, px, py, Tile.TownDoor)) {
+        poi = MiniPoi.Town;
+      }
+      index[py * cols + px] = poi;
+    }
+  }
+
+  poiIndexCache.set(world, index);
+  return index;
+}
+
+/**
+ * Same sample as `sampleMinimapRgb`, written straight into an RGBA buffer.
+ *
+ * Avoids returning a fresh three-element tuple per pixel, and reads the tile
+ * colour out of a byte table rather than re-parsing a hex string.
+ */
+export function sampleMinimapInto(
+  map: TileMap,
+  panelX: number,
+  panelY: number,
+  u: number,
+  v: number,
+  waterLevel: number,
+  out: Uint8ClampedArray,
+  o: number,
+): void {
+  const x0 = panelX * PANEL_W;
+  const y0 = panelY * PANEL_H;
+  const tx = x0 + Math.min(PANEL_W - 1, Math.max(0, (u * PANEL_W) | 0));
+  const ty = y0 + Math.min(PANEL_H - 1, Math.max(0, (v * PANEL_H) | 0));
+
+  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) {
+    out[o] = WELL_RGB[0];
+    out[o + 1] = WELL_RGB[1];
+    out[o + 2] = WELL_RGB[2];
+    out[o + 3] = 255;
+    return;
+  }
+
+  const i = ty * map.w + tx;
+  const c = map.tiles[i] * 3;
+  let r = TILE_RGB[c];
+  let g = TILE_RGB[c + 1];
+  let b = TILE_RGB[c + 2];
+
+  if (map.floods) {
+    const depth = floodDepth(map.elev[i], waterLevel);
+    if (depth > 0) {
+      const wet = depth >= 3 ? DEEP : SHALLOW;
+      const t = depth === 1 ? 0.28 : depth === 2 ? 0.52 : depth === 3 ? 0.78 : 1;
+      r = (r + (wet[0] - r) * t + 0.5) | 0;
+      g = (g + (wet[1] - g) * t + 0.5) | 0;
+      b = (b + (wet[2] - b) * t + 0.5) | 0;
+    }
+  }
+
+  out[o] = r;
+  out[o + 1] = g;
+  out[o + 2] = b;
+  out[o + 3] = 255;
 }
 
 export const MINI_POI_COLOR: Record<MiniPoi, string> = {

@@ -16,9 +16,10 @@ npx tsx scripts/survey.ts 12   # worldgen tuning report
 ## The two things to look at
 
 **The game** (`/`) — arrows or WASD to move, space swings the Rod of Aaron, `E` uses
-(enter a dungeon, imbue the Rod at a shrine, frame the skiff, launch), `B` opens the flock, `R` restarts,
-hold shift to fast-forward the clock. `?seed=12345` replays an exact world; `?speed=60`
-compresses the two-hour run into a couple of minutes for testing.
+(enter a dungeon, imbue the Rod at a shrine, frame the skiff, launch), `B` opens the flock,
+`F3` shows frame times, `R` restarts, hold shift to fast-forward the clock. `?seed=12345`
+replays an exact world; `?speed=60` compresses the two-hour run into a couple of minutes
+for testing.
 
 **The world inspector** (`/dev/`) — a phone-first view onto the same generator the game
 runs. Pan and pinch the whole map, drag the day slider to watch the world drown, tap any
@@ -108,9 +109,32 @@ It reports biome share, resource supply against the ark recipe, walkable fractio
 connectivity and solvability rates, and how much dry ground remains at each quarter of
 the flood. Biome bands and resource densities were both set this way.
 
+## The frame budget
+
+**No frame may miss a vsync.** The simulation is pinned at a fixed 60Hz, independent of the
+display, so the flood and collision play out identically everywhere. The render runs once per
+vsync at whatever rate the display offers and interpolates between the last two simulation
+states, so a 144Hz screen is genuinely smoother rather than showing each state twice.
+Catch-up stepping is bounded by wall-clock time rather than by a step count, so a
+fast-forward or a slow frame slips the in-game clock instead of producing a long frame. The
+loop allocates nothing per frame — the collection that reclaims a steady drip of garbage is
+the frame that hitches — and the HUD map caches its raster instead of rescanning 480 panels
+every frame.
+
+"Locked 144" is not achievable in a browser: rAF fires at the display's rate, whatever that
+is. "Never misses its deadline" is stricter where it counts, and it can be tested.
+
+`F3` shows fps, frame-time p50/p99, the worst frame in the last few seconds, and the count of
+frames that missed a vsync — that last number should read 0. `npm run test:e2e` plays a real
+session and fails the build if it doesn't.
+
 ## Status
 
 Playable end to end: worldgen, the flood, resource gathering, the ark, the flock, the
 skiff, win/lose, and dungeons with the resource trade. Enemies, towns and money, the voice
 of God as a recurring character, and the ocean stage are designed for but not yet built —
 see `docs/DESIGN.md`.
+
+`docs/ROADMAP.md` is the plan for what comes next: a world with settlements, roads and
+landforms in it, a barter economy, the instruments (chart, lodestone, sounding line, dove),
+a dry prologue before the rain, and a flood that reaches into the dungeons.
