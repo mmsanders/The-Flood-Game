@@ -4,7 +4,7 @@ import { BIOME_COUNT, Biome, Tile, isResourceNode, isWalkable } from '../src/cor
 import { generateWorld } from '../src/core/worldgen/index.js';
 import { labelRegions } from '../src/core/worldgen/connectivity.js';
 import { isSeamBlocker, onPanelEdge } from '../src/core/worldgen/seams.js';
-import { PoiKind, getPanel } from '../src/core/world.js';
+import { PoiKind, SettlementKind, getPanel } from '../src/core/world.js';
 
 /** A smaller map keeps the broad sweeps fast without changing the algorithms. */
 const SMALL = withParams({ panelsX: 8, panelsY: 20 });
@@ -239,7 +239,11 @@ describe('worldgen: panel seams', () => {
       expect(tiles[(h - 1) * w + x], `south sea ${x} seed ${seed}`).toBe(Tile.Water);
     }
     for (let x = 1; x < w - 1; x++) {
-      expect(tiles[(h - 2) * w + x], `beach ${x} seed ${seed}`).toBe(Tile.Sand);
+      const beach = tiles[(h - 2) * w + x];
+      expect(
+        beach === Tile.Sand || beach === Tile.Water || beach === Tile.Bridge,
+        `beach ${x} seed ${seed}`,
+      ).toBe(true);
     }
     for (let y = 0; y < h; y++) {
       expect(isWalkable(tiles[y * w]), `west rim ${y} seed ${seed}`).toBe(false);
@@ -252,5 +256,144 @@ describe('worldgen: panel seams', () => {
     expect(spawn.y).toBeLessThan(h - 1);
     expect(isWalkable(tiles[spawn.y * w + spawn.x])).toBe(true);
     expect(isWalkable(tiles[ark.y * w + ark.x])).toBe(true);
+  });
+});
+
+describe('worldgen: landforms', () => {
+  it.each(SEEDS.slice(0, 8))('seed %i carves a north-south river', (seed) => {
+    const world = generateWorld(seed, SMALL);
+    let minY = world.h;
+    let maxY = 0;
+    let water = 0;
+    for (let y = 1; y < world.h - 1; y++) {
+      for (let x = 1; x < world.w - 1; x++) {
+        if (world.tiles[y * world.w + x] !== Tile.Water) continue;
+        water++;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+    expect(water, `seed ${seed} has no river`).toBeGreaterThan(40);
+    expect(maxY - minY, `seed ${seed} river is a puddle`).toBeGreaterThan(world.h * 0.45);
+  });
+
+  it.each(SEEDS.slice(0, 8))('seed %i keeps standing water in every biome', (seed) => {
+    const world = generateWorld(seed, SMALL);
+    const wet = [false, false, false, false];
+    for (let i = 0; i < world.tiles.length; i++) {
+      if (world.tiles[i] === Tile.Water) wet[world.biome[i]] = true;
+    }
+    for (let b = 0; b < BIOME_COUNT; b++) {
+      expect(wet[b], `seed ${seed} biome ${b} has no water`).toBe(true);
+    }
+  });
+
+  it.each(SEEDS.slice(0, 8))('seed %i cuts stairs through the escarpments', (seed) => {
+    const world = generateWorld(seed, SMALL);
+    let steps = 0;
+    let nextToCliff = 0;
+    for (let i = 0; i < world.tiles.length; i++) {
+      if (world.tiles[i] !== Tile.Steps) continue;
+      steps++;
+      const x = i % world.w;
+      const y = (i / world.w) | 0;
+      const n4 = [i - 1, i + 1, i - world.w, i + world.w];
+      for (const j of n4) {
+        if (j < 0 || j >= world.tiles.length) continue;
+        const jx = j % world.w;
+        const jy = (j / world.w) | 0;
+        if (Math.abs(jx - x) + Math.abs(jy - y) !== 1) continue;
+        if (world.tiles[j] === Tile.Cliff) nextToCliff++;
+      }
+    }
+    expect(steps, `seed ${seed} has no stairs`).toBeGreaterThan(0);
+    expect(nextToCliff, `seed ${seed} stairs sit in a field`).toBeGreaterThan(0);
+  });
+});
+
+describe('worldgen: settlements', () => {
+  it.each(SEEDS.slice(0, 8))('seed %i founds a tent city, a mill, and a stone city', (seed) => {
+    const world = generateWorld(seed, SMALL);
+    const kinds = new Set(world.settlements.map((s) => s.kind));
+    expect(kinds.has(SettlementKind.TentCity), `seed ${seed} missing tent city`).toBe(true);
+    expect(kinds.has(SettlementKind.LoggingTown), `seed ${seed} missing logging town`).toBe(true);
+    expect(kinds.has(SettlementKind.City), `seed ${seed} missing city`).toBe(true);
+  });
+
+  it('sits each town shrine on a real bearing, close enough to walk', () => {
+    for (const seed of SEEDS.slice(0, 8)) {
+      const world = generateWorld(seed, SMALL);
+      for (const s of world.settlements) {
+        if (!s.shrine) continue;
+        const d = Math.abs(s.x - s.shrine.x) + Math.abs(s.y - s.shrine.y);
+        expect(d, `seed ${seed} shrine stranded from ${s.kind}`).toBeLessThan(36);
+        expect(world.tiles[s.shrine.y * world.w + s.shrine.x]).toBe(Tile.Shrine);
+      }
+    }
+  });
+
+  it('fences a valley pasture and keeps it walkable', () => {
+    const world = generateWorld(4242, SMALL);
+    expect(world.pastures.length).toBeGreaterThan(4);
+    let fences = 0;
+    for (const t of world.tiles) if (t === Tile.Fence) fences++;
+    expect(fences).toBeGreaterThan(8);
+    for (const i of world.pastures) {
+      expect(isWalkable(world.tiles[i])).toBe(true);
+    }
+  });
+
+  it("pitches Noah's tent next to spawn", () => {
+    for (const seed of SEEDS.slice(0, 8)) {
+      const world = generateWorld(seed, SMALL);
+      const { x, y } = world.spawn;
+      let tent = false;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= world.w || ny >= world.h) continue;
+          if (world.tiles[ny * world.w + nx] === Tile.Tent) tent = true;
+        }
+      }
+      expect(tent, `seed ${seed} spawn has no tent`).toBe(true);
+      expect(world.tiles[y * world.w + x]).not.toBe(Tile.Tent);
+    }
+  });
+
+  it('raises the ark on a platform you climb stairs onto', () => {
+    for (const seed of SEEDS.slice(0, 6)) {
+      const world = generateWorld(seed, SMALL);
+      const i = world.ark.y * world.w + world.ark.x;
+      expect(world.tiles[i]).toBe(Tile.ArkSite);
+      let steps = 0;
+      for (let dy = -3; dy <= 2; dy++) {
+        for (let dx = -4; dx <= 4; dx++) {
+          const x = world.ark.x + dx;
+          const y = world.ark.y + dy;
+          if (x < 0 || y < 0 || x >= world.w || y >= world.h) continue;
+          if (world.tiles[y * world.w + x] === Tile.Steps) steps++;
+        }
+      }
+      expect(steps, `seed ${seed} ark has no stairs`).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('worldgen: roads', () => {
+  it.each(SEEDS.slice(0, 8))('seed %i lays roads that actually go somewhere', (seed) => {
+    const world = generateWorld(seed, SMALL);
+    let paths = 0;
+    let stone = 0;
+    for (const t of world.tiles) {
+      if (t === Tile.Path) paths++;
+      if (t === Tile.Road) stone++;
+    }
+    expect(paths + stone, `seed ${seed} has no roads`).toBeGreaterThan(40);
+    const city = world.settlements.find((s) => s.kind === SettlementKind.City);
+    if (city) {
+      expect(stone, `seed ${seed} city has no stone streets`).toBeGreaterThan(0);
+    }
   });
 });

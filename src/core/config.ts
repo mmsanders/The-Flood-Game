@@ -86,7 +86,7 @@ export const DEFAULT_PARAMS: WorldParams = {
 
   // Tuned so each biome holds a few hundred nodes, not thousands: patches
   // should be worth finding, and worth returning to before they drown.
-  resourceDensity: [0.012, 0.013, 0.012, 0.006],
+  resourceDensity: [0.012, 0.017, 0.012, 0.006],
 
   heartContainers: 6,
   dungeonsPerBiome: 1,

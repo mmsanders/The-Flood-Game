@@ -41,6 +41,18 @@ obstacles or hide anything.
 **Elevation.** fBm value noise plus a strong north-south gradient, normalised to fill the
 full 0–255 byte range. This one field drives biome selection, tile painting, and the flood.
 
+The generator no longer paints first and drops points of interest on whatever grass is left.
+It forms an intention and then fills in around it:
+
+```
+elevation → landforms → settlements → siting → roads → paint → connectivity → validation
+```
+
+A north-south river (the skiff's highway once the valleys drown), escarpments with a
+countable number of stairs, a tent city / logging town / stone city / mountain hamlets,
+and roads that actually go somewhere are all written into a plan buffer before paint runs.
+Paint, scatter and resources fill only the cells nothing else claimed.
+
 **Biomes**, as elevation bands, low to high:
 
 | Biome | Share | Resource | Character |
@@ -94,7 +106,9 @@ remembering and worth returning to before it goes under.
 
 **Build:** carry material to the ark site (high, northern, central — among the last ground
 to drown) and it is deposited automatically. The recipe is 40 fiber, 60 gopher wood,
-30 stone, 10 pitch.
+30 stone, 10 pitch. The hull itself is a monument on a raised platform: keel, ribs, hull,
+deck, roof, then pitch, grown from whatever you have delivered, big enough to read from
+the next panel over.
 
 **End:** the ark completes and floats, or your hearts run out. The flock is a high
 score on the same run, never a second win condition.
@@ -204,9 +218,11 @@ Nothing currently threatens the player but water and pits. Two or three types wi
 movement (walker, chaser, shooter), which also gives the Rod something to do besides
 harvest. Biblical flavour: locusts, serpents, foxes; Nephilim as dungeon bosses.
 
-### Towns and money
-One per biome, with shekels as currency. Shops that sell what you'd otherwise spend days
-gathering. `TownDoor` already has a tile ID and a sprite reserved.
+### Towns and shops
+Settlements exist as scenery: a tent city in the valley, a logging town in the forest, a
+stone city in the scrub, isolated dwellings on the mountain. Shrines sit on a bearing from
+town; sheep spawn in a fenced pasture; the slipway is a carpenter's yard. Shops, barter, and
+entering a building are Wave 2 — see `docs/ROADMAP.md`.
 
 ### The voice of God
 Over the top, brusque, King of All Cosmos. Speaks at the start of a run, on milestones
