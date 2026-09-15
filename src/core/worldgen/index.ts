@@ -13,7 +13,7 @@ import {
   tileHeight,
   tileWidth,
 } from '../config.js';
-import { generateDungeon } from '../dungeon.js';
+import { generateDungeonRoom } from '../dungeon.js';
 import { checkSolvable } from '../resources.js';
 import { deriveSeed } from '../rng.js';
 import { BIOME_COUNT, RESOURCE_COUNT, isWalkable, resourceOf } from '../tiles.js';
@@ -23,7 +23,7 @@ import { ensureConnected } from './connectivity.js';
 import { generateElevation } from './elevation.js';
 import { paintTiles } from './paint.js';
 import { placePois } from './pois.js';
-import { wallWorldRim } from './seams.js';
+import { paintSouthBeach, wallWorldRim } from './seams.js';
 
 export { ensureConnected, labelRegions } from './connectivity.js';
 export { generateElevation } from './elevation.js';
@@ -39,6 +39,7 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
   // Re-stamp the frame in case a seam carve nicked a rim tile.
   wallWorldRim(tiles, biome, elev, w, h);
   const { spawn, ark, pois, boatYard } = placePois(seed, params, tiles, elev, biome);
+  paintSouthBeach(tiles, w, h);
 
   const reserved = new Set<number>();
   reserved.add(spawn.y * w + spawn.x);
@@ -51,7 +52,7 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
   // here touches the overworld's own connectivity or solvability.
   const dungeons = pois
     .filter((poi) => poi.kind === PoiKind.Dungeon)
-    .map((poi, i) => generateDungeon(seed, i, poi.biome, { x: poi.x, y: poi.y }));
+    .map((poi, i) => generateDungeonRoom(seed, i, poi.biome, { x: poi.x, y: poi.y }));
 
   const solvability = checkSolvable(tiles, elev, w, h, spawn, params);
 

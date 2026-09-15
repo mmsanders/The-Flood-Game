@@ -41,6 +41,7 @@ export const PALETTE = {
   heart: '#d63a3a',
   town: '#c56a2e',
   dock: '#8a5a28',
+  shrine: '#c8b870',
 
   // Water and flood
   water: '#2b6cb0',
@@ -102,6 +103,8 @@ export const TILE_COLOR: Record<number, string> = {
   0x32: PALETTE.heart,
   0x33: PALETTE.town,
   0x34: PALETTE.dock,
+  0x35: PALETTE.shrine,
+  0x36: PALETTE.stoneGround,
 
   0x40: PALETTE.dungeonFloor,
   0x41: PALETTE.dungeonWall,

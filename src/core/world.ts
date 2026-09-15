@@ -24,6 +24,7 @@ export const enum PoiKind {
   Heart = 2,
   Town = 3,
   BoatYard = 4,
+  Shrine = 5,
 }
 
 export interface Poi extends Point {

@@ -66,6 +66,13 @@ export function buildTilesheet(): Canvas {
   return canvas;
 }
 
+function paintPedestal(c: CanvasRenderingContext2D): void {
+  c.clearRect(0, 0, TILE_PX, TILE_PX);
+  px(c, 3, 12, 10, 3, PALETTE.rockShade);
+  px(c, 4, 11, 8, 3, PALETTE.stoneGround);
+  px(c, 5, 10, 6, 2, PALETTE.gravel);
+}
+
 /** Fill the whole 16x16 cell. */
 function base(ctx: CanvasRenderingContext2D, color: string): void {
   ctx.fillStyle = color;
@@ -286,14 +293,17 @@ const TILE_PAINTERS: Record<number, Painter> = {
   },
 
   [Tile.HeartContainer]: (c) => {
-    base(c, PALETTE.grass);
+    paintPedestal(c);
     c.fillStyle = PALETTE.heart;
-    c.fillRect(3, 4, 4, 4);
-    c.fillRect(9, 4, 4, 4);
-    c.fillRect(3, 6, 10, 4);
-    c.fillRect(5, 10, 6, 2);
-    c.fillRect(7, 12, 2, 2);
-    px(c, 4, 5, 2, 2, '#f07a7a');
+    c.fillRect(4, 2, 3, 3);
+    c.fillRect(9, 2, 3, 3);
+    c.fillRect(4, 4, 8, 4);
+    c.fillRect(6, 8, 4, 2);
+    px(c, 5, 3, 2, 2, '#f07a7a');
+  },
+
+  [Tile.Pedestal]: (c) => {
+    paintPedestal(c);
   },
 
   // -- dungeon terrain ------------------------------------------------------
@@ -414,5 +424,14 @@ const TILE_PAINTERS: Record<number, Painter> = {
     px(c, 2, 9, 12, 1, '#5a3a18');
     px(c, 7, 2, 2, 4, '#7a4a1e');
     px(c, 5, 1, 6, 2, '#d2a05a');
+  },
+
+  [Tile.Shrine]: (c) => {
+    base(c, PALETTE.dirt);
+    px(c, 2, 6, 12, 10, PALETTE.rock);
+    px(c, 3, 3, 10, 13, PALETTE.rockShade);
+    px(c, 4, 1, 8, 15, PALETTE.rock);
+    px(c, 5, 4, 6, 5, PALETTE.shrine);
+    px(c, 6, 5, 4, 3, '#efe6d2');
   },
 };

@@ -44,7 +44,7 @@ export const enum RewardKind {
   HeartContainer = 0,
   /** Numbers 17 — the staff that budded. Harvest two per swing. */
   BuddingRod = 1,
-  /** Exodus 7:12 — the rod that became a serpent. One more tile of reach. */
+  /** Exodus 7:12 — a serpent. One more tile of reach, and dredges two floods. */
   SerpentRod = 2,
 }
 
@@ -215,6 +215,53 @@ export function generateDungeon(
     key,
     reward: BIOME_REWARD[biome] ?? RewardKind.HeartContainer,
     obstacles,
+  };
+}
+
+/**
+ * One panel, walls, a chest, and stairs. The overworld mouth warps here;
+ * walking onto the stairs warps back. Enough cave to feel like a place
+ * without a 16-room raid.
+ */
+export function generateDungeonRoom(
+  _seed: number,
+  id: number,
+  biome: Biome,
+  overworldEntrance: Point,
+): Dungeon {
+  const w = PANEL_W;
+  const h = PANEL_H;
+  const planes = blankPlanes(w, h, { tile: Tile.DungeonWall, elev: 255, biome });
+
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      planes.tiles[y * w + x] = Tile.DungeonFloor;
+    }
+  }
+
+  const stairs = { x: (w / 2) | 0, y: h - 2 };
+  const chest = { x: (w / 2) | 0, y: 2 };
+  const key = { x: 3, y: 5 };
+  planes.tiles[stairs.y * w + stairs.x] = Tile.Stairs;
+  planes.tiles[chest.y * w + chest.x] = Tile.Chest;
+  planes.tiles[key.y * w + key.x] = Tile.Key;
+
+  return {
+    id,
+    biomeKind: biome,
+    w,
+    h,
+    ...planes,
+    floods: false,
+    roomsX: 1,
+    roomsY: 1,
+    rooms: [{ rx: 0, ry: 0, kind: 'entrance', distance: 0, links: [-1, -1, -1, -1] }],
+    stairs,
+    overworldEntrance,
+    chest,
+    key,
+    reward: BIOME_REWARD[biome] ?? RewardKind.HeartContainer,
+    obstacles: [],
   };
 }
 

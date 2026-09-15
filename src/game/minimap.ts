@@ -1,17 +1,15 @@
 /**
  * Zelda-1-style explored-panel map.
  *
- * Only visited panels are drawn. Early on, cells are large squares recentred
- * in the well. Cell size follows how many columns you have actually walked,
- * not the world's full width, so a tall-but-narrow trail still looks like a
- * floating cluster. A little pad around the cluster keeps the edge of the
- * world a secret until you have walked it. Tiles stay square; when the
- * strip is taller than the well the view follows the player with a dead
- * zone: stay two-thirds up while heading north, wait until two-thirds down
- * before scrolling south.
+ * Only visited panels are drawn. Cells stay square. They grow while the
+ * trail is small, but never shrink below the size that would tile the well
+ * east-to-west (one column per world panel). If that floor makes the strip
+ * taller than the well, the view pans — and only whole tiles are drawn, so
+ * nothing bleeds off the north or south edge.
  */
 
 import { PANEL_H, PANEL_W } from '../core/config.js';
+import { floodDepth } from '../core/flood.js';
 import type { TileMap } from '../core/tilemap.js';
 import { Biome } from '../core/tiles.js';
 import { PoiKind, type Poi } from '../core/world.js';
@@ -20,7 +18,10 @@ import { BIOME_COLORS, PALETTE, tileColor } from '../render/palette.js';
 export const MINIMAP_X = 0;
 export const MINIMAP_Y = 0;
 export const MINIMAP_W = 40;
-export const MINIMAP_H = 40;
+/** Full HUD height, so the left column is black, not HUD grey. */
+export const MINIMAP_H = 48;
+/** Square used for tile sizing and for the map while you are not at the south. */
+export const MINIMAP_CORE = 40;
 
 export interface MiniMapCell {
   x: number;
@@ -38,6 +39,8 @@ export interface MiniMapLayout {
   rows: number;
   /** True when the square-tile strip is taller than the well. */
   scrolls: boolean;
+  /** Whole rows that fit in the well at this cell size. */
+  viewRows: number;
   wellX: number;
   wellY: number;
   wellW: number;
@@ -57,10 +60,9 @@ export function visitedCells(grid: Uint8Array, width: number): MiniMapCell[] {
 const FLOAT_PAD = 2;
 
 /**
- * Fit visited panels into the well. Cells are always square, sized from the
- * explored column count so they nearly fill the width with a little pad.
- * Row count never shrinks the tiles — a north-south trail pans instead of
- * pretending you have already seen the whole east-west span.
+ * Fit visited panels into the well. Cells are square. They may grow while
+ * the trail is small, but never drop below the east-west grid size — so a
+ * long north-south walk pans instead of shrinking into specks.
  */
 export function layoutMiniMap(
   cells: readonly MiniMapCell[],
@@ -68,8 +70,10 @@ export function layoutMiniMap(
   wellY: number,
   wellW: number,
   wellH: number,
-  _worldCols: number,
-  _worldRows: number,
+  worldCols: number,
+  worldRows: number,
+  playerPanelY = 0,
+  fillSouth = false,
 ): MiniMapLayout | null {
   if (cells.length === 0) return null;
 
@@ -87,22 +91,37 @@ export function layoutMiniMap(
 
   const cols = maxX - minX + 1;
   const rows = maxY - minY + 1;
-  const innerW = Math.max(1, wellW - FLOAT_PAD * 2);
-  const { cell, gap } = fitWidth(cols, innerW);
+  const core = Math.min(wellW, wellH, MINIMAP_CORE);
+  const minCell = Math.max(1, Math.floor(wellW / Math.max(1, worldCols)));
+  const fitted = fitSquare(cols, rows, wellW - FLOAT_PAD * 2, core - FLOAT_PAD * 2);
+  const cell = Math.max(minCell, fitted.cell);
+  const gap = cell > minCell ? fitted.gap : 0;
   const gridW = cols * cell + (cols - 1) * gap;
   const gridH = rows * cell + (rows - 1) * gap;
-  const scrolls = gridH > wellH;
+  const scrolls = gridH > core;
+  const step = cell + gap;
+  const coreRows = Math.max(1, Math.floor((core + gap) / step));
+  const maxRows = Math.max(1, Math.floor((wellH + gap) / step));
+  const extra = Math.max(0, maxRows - coreRows);
+  const distFromSouth = worldRows - 1 - playerPanelY;
+  let viewRows = rows;
+  if (scrolls) {
+    if (fillSouth) viewRows = Math.min(maxRows, rows);
+    else viewRows = distFromSouth >= extra ? coreRows : maxRows - distFromSouth;
+    viewRows = Math.max(1, Math.min(viewRows, rows, maxRows));
+  }
 
   return {
     cell,
     gap,
     originX: wellX + ((wellW - gridW) >> 1),
-    originY: scrolls ? wellY : wellY + ((wellH - gridH) >> 1),
+    originY: scrolls ? wellY : wellY + ((core - gridH) >> 1),
     minX,
     minY,
     cols,
     rows,
     scrolls,
+    viewRows,
     wellX,
     wellY,
     wellW,
@@ -114,27 +133,28 @@ export function layoutMiniMap(
  * Keep the player in a vertical dead zone: two-thirds up while climbing,
  * and only start following south once they sit two-thirds down.
  *
- * `viewY` is the panel-row at the top of the well. Units are panels, and
- * may be fractional so a 3px cell still pans smoothly.
+ * `viewY` is an integer panel-row at the top of the well, so tiles never
+ * sit half-off the frame.
  */
 export function followMinimapView(
   viewY: number,
   playerPanelY: number,
-  cell: number,
-  wellH: number,
-  worldRows: number,
+  viewRows: number,
+  exploredMinY: number,
+  exploredRows: number,
   scrolls: boolean,
 ): number {
-  if (!scrolls || cell <= 0) return viewY;
-  const viewRows = wellH / cell;
+  if (!scrolls || viewRows <= 0) return exploredMinY;
   const lo = viewRows / 3;
   const hi = (2 * viewRows) / 3;
-  const rel = playerPanelY - viewY;
   let next = viewY;
+  const rel = playerPanelY - viewY;
   if (rel < lo) next = playerPanelY - lo;
   else if (rel > hi) next = playerPanelY - hi;
-  const maxY = Math.max(0, worldRows - viewRows);
-  if (next < 0) return 0;
+  next = Math.round(next);
+  const minY = exploredMinY;
+  const maxY = exploredMinY + Math.max(0, exploredRows - viewRows);
+  if (next < minY) return minY;
   if (next > maxY) return maxY;
   return next;
 }
@@ -144,8 +164,9 @@ export const enum MiniPoi {
   Heart = 1,
   Slipway = 2,
   Town = 3,
-  Ark = 4,
-  Dungeon = 5,
+  Shrine = 4,
+  Ark = 5,
+  Dungeon = 6,
 }
 
 type Rgb = readonly [number, number, number];
@@ -229,9 +250,11 @@ export function panelPoi(pois: readonly Poi[], panelX: number, panelY: number): 
             ? MiniPoi.Town
             : p.kind === PoiKind.BoatYard
               ? MiniPoi.Slipway
-              : p.kind === PoiKind.Heart
-                ? MiniPoi.Heart
-                : MiniPoi.None;
+              : p.kind === PoiKind.Shrine
+                ? MiniPoi.Shrine
+                : p.kind === PoiKind.Heart
+                  ? MiniPoi.Heart
+                  : MiniPoi.None;
     if (kind > best) best = kind;
   }
   return best;
@@ -255,6 +278,7 @@ export const MINI_POI_COLOR: Record<MiniPoi, string> = {
   [MiniPoi.Heart]: PALETTE.heart,
   [MiniPoi.Slipway]: PALETTE.dock,
   [MiniPoi.Town]: PALETTE.town,
+  [MiniPoi.Shrine]: PALETTE.shrine,
   [MiniPoi.Ark]: PALETTE.ark,
   [MiniPoi.Dungeon]: '#c8b8e8',
 };
@@ -272,18 +296,33 @@ export function sampleMinimapPixel(
   v: number,
   waterLevel: number,
 ): string {
+  return hex(sampleMinimapRgb(map, panelX, panelY, u, v, waterLevel));
+}
+
+const WELL_RGB: Rgb = [8, 10, 14];
+
+/** Same sample as `sampleMinimapPixel`, as bytes, for ImageData. */
+export function sampleMinimapRgb(
+  map: TileMap,
+  panelX: number,
+  panelY: number,
+  u: number,
+  v: number,
+  waterLevel: number,
+): Rgb {
   const x0 = panelX * PANEL_W;
   const y0 = panelY * PANEL_H;
   const tx = x0 + Math.min(PANEL_W - 1, Math.max(0, (u * PANEL_W) | 0));
   const ty = y0 + Math.min(PANEL_H - 1, Math.max(0, (v * PANEL_H) | 0));
-  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return '#080a0e';
+  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return WELL_RGB;
   const i = ty * map.w + tx;
-  const elev = map.elev[i];
-  if (map.floods && elev < waterLevel) {
-    const t = Math.min(1, (waterLevel - elev) / 80);
-    return hex(mix(SHALLOW, DEEP, t));
-  }
-  return tileColor(map.tiles[i]);
+  const land = hexToRgb(tileColor(map.tiles[i]));
+  if (!map.floods) return land;
+  const depth = floodDepth(map.elev[i], waterLevel);
+  if (depth <= 0) return land;
+  const wet = depth >= 3 ? DEEP : SHALLOW;
+  const t = depth === 1 ? 0.28 : depth === 2 ? 0.52 : depth === 3 ? 0.78 : 1;
+  return mix(land, wet, t);
 }
 
 function visitPanel(
@@ -325,9 +364,19 @@ export function cellRect(
   };
 }
 
-function fitWidth(cols: number, innerW: number): { cell: number; gap: number } {
+function fitSquare(
+  cols: number,
+  rows: number,
+  innerW: number,
+  innerH: number,
+): { cell: number; gap: number } {
+  const w = Math.max(1, innerW);
+  const h = Math.max(1, innerH);
   for (const gap of [1, 0]) {
-    const cell = Math.floor((innerW - (cols - 1) * gap) / cols);
+    const cell = Math.min(
+      Math.floor((w - (cols - 1) * gap) / cols),
+      Math.floor((h - (rows - 1) * gap) / rows),
+    );
     if (gap === 1 && cell >= 4) return { cell, gap };
     if (gap === 0) return { cell: Math.max(1, cell), gap: 0 };
   }

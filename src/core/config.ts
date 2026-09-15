@@ -91,9 +91,9 @@ export const DEFAULT_PARAMS: WorldParams = {
   heartContainers: 6,
   dungeonsPerBiome: 1,
 
-  // 40 days x 90s = a 60-minute run. Long enough for the flood to reshape the
-  // map several times, short enough to lose and immediately try again.
-  secondsPerDay: 90,
+  // 40 days x 180s = a two-hour run. Doubled so the descent-then-climb and
+  // the shrine upgrades have room before the valleys drown.
+  secondsPerDay: 180,
 };
 
 /** Shallow-merge an override into the defaults, one level deep on `elevation`. */

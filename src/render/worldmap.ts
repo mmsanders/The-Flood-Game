@@ -8,9 +8,9 @@
  */
 
 import { PANEL_H, PANEL_W, TILE_PX } from '../core/config.js';
-import { waterLevelAtDay } from '../core/flood.js';
+import { floodDepth, floodOverlayFill, waterLevelAtDay } from '../core/flood.js';
 import { type TileMap, panelsHigh, panelsWide } from '../core/tilemap.js';
-import { isWalkable } from '../core/tiles.js';
+import { Biome, Tile, carveTo, isWalkable } from '../core/tiles.js';
 import type { World } from '../core/world.js';
 import { BIOME_COLORS, PALETTE, elevationColor, tileColor } from './palette.js';
 import { type Canvas, getTilesheet, tileSheetX, tileSheetY } from './tilesheet.js';
@@ -154,6 +154,7 @@ export const POI_STYLE = [
   { color: PALETTE.heart, glyph: '♥', label: 'Heart container' },
   { color: PALETTE.town, glyph: 'T', label: 'Town' },
   { color: PALETTE.dock, glyph: 'B', label: 'Slipway' },
+  { color: PALETTE.shrine, glyph: 'R', label: 'Rod shrine' },
 ] as const;
 
 /** POI markers in world coordinates, sized in screen pixels. */
@@ -222,7 +223,20 @@ export function renderPanel(
       const wx = panelX * PANEL_W + tx;
       const i = wy * map.w + wx;
       const tile = map.tiles[i];
-
+      if (tile === Tile.HeartContainer || tile === Tile.Pedestal) {
+        const ground = carveTo(map.biome[i] as Biome);
+        ctx.drawImage(
+          sheet as CanvasImageSource,
+          tileSheetX(ground),
+          tileSheetY(ground),
+          TILE_PX,
+          TILE_PX,
+          tx * TILE_PX,
+          ty * TILE_PX,
+          TILE_PX,
+          TILE_PX,
+        );
+      }
       ctx.drawImage(
         sheet as CanvasImageSource,
         tileSheetX(tile),
@@ -235,10 +249,12 @@ export function renderPanel(
         TILE_PX,
       );
 
-      if (map.floods && map.elev[i] < level) {
-        const depth = Math.min(1, (level - map.elev[i]) / 60);
-        ctx.fillStyle = depth > 0.5 ? 'rgba(20, 60, 120, 0.78)' : PALETTE.floodTint;
-        ctx.fillRect(tx * TILE_PX, ty * TILE_PX, TILE_PX, TILE_PX);
+      if (map.floods) {
+        const fill = floodOverlayFill(floodDepth(map.elev[i], level));
+        if (fill) {
+          ctx.fillStyle = fill;
+          ctx.fillRect(tx * TILE_PX, ty * TILE_PX, TILE_PX, TILE_PX);
+        }
       }
     }
   }

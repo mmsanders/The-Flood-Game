@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BOAT_COST_FIBER, BOAT_COST_WOOD } from '../src/core/boat.js';
 import { TILE_PX, withParams } from '../src/core/config.js';
+import { FLOOD_RISE_PER_DAY, floodDepth } from '../src/core/flood.js';
 import { Resource, Tile } from '../src/core/tiles.js';
 import { generateWorld } from '../src/core/worldgen/index.js';
 import {
@@ -11,6 +12,7 @@ import {
   createGame,
   snapCamera,
   step,
+  waterLevel,
   type GameState,
 } from '../src/game/state.js';
 
@@ -112,13 +114,13 @@ describe('boat: sailing and dredging', () => {
     clearArea(state, spawn.x, spawn.y, 4);
     placeAt(state, spawn.x, spawn.y);
     state.hasBoat = true;
-    state.world.tiles[spawn.y * state.world.w + spawn.x - 1] = Tile.Water;
-
-    run(state, 0.6, { moveX: -1, moveY: 0, attackPressed: false });
+    state.world.tiles[spawn.y * state.world.w + spawn.x + 1] = Tile.Water;
+    state.player.dir = Dir.Right;
+    step(state, INTERACT, 1 / 60);
 
     expect(state.inBoat).toBe(true);
     const tx = Math.floor((state.player.x + PLAYER_W / 2) / TILE_PX);
-    expect(tx).toBe(spawn.x - 1);
+    expect(tx).toBe(spawn.x + 1);
   });
 
   it('will not harvest a drowned node on foot', () => {
@@ -129,6 +131,7 @@ describe('boat: sailing and dredging', () => {
     state.world.tiles[spawn.y * state.world.w + spawn.x + 1] = Tile.GopherTree;
     state.world.elev[spawn.y * state.world.w + spawn.x + 1] = 0;
     state.elapsed = state.world.params.secondsPerDay * 20;
+    state.rodTier = 1;
     state.player.dir = Dir.Right;
 
     step(state, { moveX: 0, moveY: 0, attackPressed: true }, 1 / 60);
@@ -145,13 +148,66 @@ describe('boat: sailing and dredging', () => {
     state.hasBoat = true;
     state.inBoat = true;
     state.world.tiles[spawn.y * state.world.w + spawn.x + 1] = Tile.GopherTree;
-    state.world.elev[spawn.y * state.world.w + spawn.x + 1] = 0;
     state.elapsed = state.world.params.secondsPerDay * 20;
+    const level = waterLevel(state);
+    state.world.elev[spawn.y * state.world.w + spawn.x + 1] = Math.max(0, Math.floor(level) - 1);
+    state.rodTier = 1;
     state.player.dir = Dir.Right;
 
     step(state, { moveX: 0, moveY: 0, attackPressed: true }, 1 / 60);
 
     expect(state.carried[Resource.Wood]).toBe(1);
     expect(state.message).toMatch(/dredged/i);
+  });
+
+  it('will not dredge nodes deeper than one flood with the Rod', () => {
+    const state = createGame(generateWorld(4242, SMALL));
+    const { spawn } = state.world;
+    clearArea(state, spawn.x, spawn.y, 3);
+    placeAt(state, spawn.x, spawn.y);
+    state.hasBoat = true;
+    state.inBoat = true;
+    state.world.tiles[spawn.y * state.world.w + spawn.x + 1] = Tile.GopherTree;
+    state.world.elev[spawn.y * state.world.w + spawn.x + 1] = 0;
+    state.elapsed = state.world.params.secondsPerDay * 20;
+    state.rodTier = 1;
+    state.player.dir = Dir.Right;
+
+    step(state, { moveX: 0, moveY: 0, attackPressed: true }, 1 / 60);
+
+    expect(state.carried[Resource.Wood]).toBe(0);
+    expect(state.message).toMatch(/fish/i);
+  });
+
+  it('dredges two floods deep with the Serpent Rod, but not three', () => {
+    const state = createGame(generateWorld(4242, SMALL));
+    const { spawn } = state.world;
+    const i = spawn.y * state.world.w + spawn.x + 1;
+    clearArea(state, spawn.x, spawn.y, 3);
+    placeAt(state, spawn.x, spawn.y);
+    state.hasBoat = true;
+    state.inBoat = true;
+    state.rodTier = 1;
+    state.rodReach = 2;
+    state.elapsed = state.world.params.secondsPerDay * 20;
+    state.player.dir = Dir.Right;
+
+    const level = waterLevel(state);
+    state.world.tiles[i] = Tile.GopherTree;
+    state.world.elev[i] = Math.max(0, Math.floor(level - 1.5 * FLOOD_RISE_PER_DAY));
+    expect(floodDepth(state.world.elev[i], level)).toBe(2);
+
+    step(state, { moveX: 0, moveY: 0, attackPressed: true }, 1 / 60);
+    expect(state.carried[Resource.Wood]).toBe(1);
+    expect(state.message).toMatch(/dredged/i);
+
+    state.player.cooldown = 0;
+    state.world.tiles[i] = Tile.GopherTree;
+    state.world.elev[i] = Math.max(0, Math.floor(level - 2.5 * FLOOD_RISE_PER_DAY));
+    expect(floodDepth(state.world.elev[i], level)).toBe(3);
+
+    step(state, { moveX: 0, moveY: 0, attackPressed: true }, 1 / 60);
+    expect(state.carried[Resource.Wood]).toBe(1);
+    expect(state.message).toMatch(/fish/i);
   });
 });

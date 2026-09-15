@@ -16,9 +16,9 @@ npx tsx scripts/survey.ts 12   # worldgen tuning report
 ## The two things to look at
 
 **The game** (`/`) — arrows or WASD to move, space swings the Rod of Aaron, `E` uses
-(enter a dungeon, frame the skiff, launch), `B` opens the flock, `R` restarts,
+(enter a dungeon, imbue the Rod at a shrine, frame the skiff, launch), `B` opens the flock, `R` restarts,
 hold shift to fast-forward the clock. `?seed=12345` replays an exact world; `?speed=60`
-compresses the hour-long run into a minute for testing.
+compresses the two-hour run into a couple of minutes for testing.
 
 **The world inspector** (`/dev/`) — a phone-first view onto the same generator the game
 runs. Pan and pinch the whole map, drag the day slider to watch the world drown, tap any

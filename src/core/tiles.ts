@@ -40,6 +40,10 @@ export const enum Tile {
   TownDoor = 0x33,
   /** Valley slipway. Craft the skiff here from wood and fiber. */
   BoatYard = 0x34,
+  /** One per biome. Spends that biome's resource to upgrade the Rod. */
+  Shrine = 0x35,
+  /** Left behind after a heart is taken. Blocking. */
+  Pedestal = 0x36,
 
   // -- 0x40 dungeon terrain -------------------------------------------------
   DungeonFloor = 0x40,
@@ -146,6 +150,7 @@ const BLOCKING: readonly Tile[] = [
   Tile.GopherTree,
   Tile.StoneNode,
   Tile.PitchSeep,
+  Tile.Pedestal,
 
   Tile.DungeonWall,
 
@@ -222,6 +227,8 @@ export const TILE_NAMES: Record<number, string> = {
   [Tile.HeartContainer]: 'Heart Container',
   [Tile.TownDoor]: 'Town',
   [Tile.BoatYard]: 'Slipway',
+  [Tile.Shrine]: 'Rod Shrine',
+  [Tile.Pedestal]: 'Pedestal',
   [Tile.DungeonFloor]: 'Dungeon Floor',
   [Tile.DungeonWall]: 'Dungeon Wall',
   [Tile.Stairs]: 'Stairs',

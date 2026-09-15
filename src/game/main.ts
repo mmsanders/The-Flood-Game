@@ -29,8 +29,8 @@ if (!ctx) throw new Error('2D canvas context unavailable');
 const url = new URL(window.location.href);
 
 /**
- * `?speed=N` runs the clock N times faster. Forty days is an hour at normal
- * pace, which is far too slow to check flood behaviour by hand.
+ * `?speed=N` runs the clock N times faster. Forty days is two hours at
+ * normal pace, which is far too slow to check flood behaviour by hand.
  */
 const timeScale = Math.max(0.1, Math.min(200, Number(url.searchParams.get('speed') ?? 1)));
 
@@ -145,7 +145,11 @@ function frame(now: number): void {
   if (nextBest !== best) best = nextBest;
 
   input.endFrame();
-  live.render(ctx as CanvasRenderingContext2D, state, { bestiary, best });
+  try {
+    live.render(ctx as CanvasRenderingContext2D, state, { bestiary, best });
+  } catch (err) {
+    console.error('[flood] render failed', err);
+  }
   raf = requestAnimationFrame(frame);
 }
 

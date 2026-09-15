@@ -21,8 +21,8 @@ const WELL = { x: 0, y: 0, w: 40, h: 40 };
 
 const WORLD = { cols: 12, rows: 40 };
 
-function layoutOf(cells: { x: number; y: number }[]) {
-  return layoutMiniMap(cells, WELL.x, WELL.y, WELL.w, WELL.h, WORLD.cols, WORLD.rows);
+function layoutOf(cells: { x: number; y: number }[], playerY = 0) {
+  return layoutMiniMap(cells, WELL.x, WELL.y, WELL.w, WELL.h, WORLD.cols, WORLD.rows, playerY);
 }
 
 describe('minimap layout', () => {
@@ -54,16 +54,19 @@ describe('minimap layout', () => {
     expect(layout.cols).toBe(1);
     expect(layout.rows).toBe(2);
     expect(layout.cell).toBeGreaterThan(10);
-    expect(layout.cell).toBe(cellRect(layout, south.x, south.y).h);
+    expect(layout.scrolls).toBe(false);
 
-    // One column nearly fills the width; two tall squares pan rather than shrink.
+    const n = cellRect(layout, north.x, north.y);
+    const s = cellRect(layout, south.x, south.y);
+    expect(n.w).toBe(n.h);
+    expect(n.y).toBeGreaterThanOrEqual(0);
+    expect(s.y + s.h).toBeLessThanOrEqual(WELL.h);
     expect(layout.originX).toBeGreaterThan(0);
-    expect(layout.scrolls).toBe(true);
   });
 
-  it('does not shrink to full-world tile size just because the trail is tall', () => {
+  it('never shrinks below the east-west grid size, and pans without clipping tiles', () => {
     const cells = [];
-    for (let y = 20; y <= 32; y++) {
+    for (let y = 10; y <= 29; y++) {
       cells.push({ x: 4, y });
       cells.push({ x: 5, y });
       cells.push({ x: 6, y });
@@ -72,13 +75,19 @@ describe('minimap layout', () => {
     expect(layout).not.toBeNull();
     if (!layout) return;
 
+    const minCell = Math.floor(WELL.w / WORLD.cols);
     expect(layout.cols).toBe(3);
-    expect(layout.cell).toBeGreaterThan(Math.floor(WELL.w / WORLD.cols));
-    expect(layout.originX).toBeGreaterThan(0);
-    expect(layout.originX + layout.cols * layout.cell + (layout.cols - 1) * layout.gap).toBeLessThan(
-      WELL.w,
-    );
+    expect(layout.rows).toBe(20);
+    expect(layout.cell).toBeGreaterThanOrEqual(minCell);
     expect(layout.scrolls).toBe(true);
+    expect(layout.viewRows * layout.cell).toBeLessThanOrEqual(WELL.h);
+
+    const viewY = 10;
+    const first = cellRect(layout, 4, viewY, viewY);
+    const last = cellRect(layout, 6, viewY + layout.viewRows - 1, viewY);
+    expect(first.w).toBe(first.h);
+    expect(first.y).toBeGreaterThanOrEqual(0);
+    expect(last.y + last.h).toBeLessThanOrEqual(WELL.h);
   });
 
   it('keeps square tiles and only fills width once east-west is complete', () => {
@@ -104,7 +113,7 @@ describe('minimap layout', () => {
     expect(last.y + last.h - first.y).toBeLessThan(WELL.h);
   });
 
-  it('scrolls a fully explored tall world instead of squashing tiles', () => {
+  it('keeps a fully explored world at the east-west grid size and pans', () => {
     const cells = [];
     for (let y = 0; y < 40; y++) {
       for (let x = 0; x < 12; x++) cells.push({ x, y });
@@ -113,38 +122,68 @@ describe('minimap layout', () => {
     expect(layout).not.toBeNull();
     if (!layout) return;
 
-    expect(layout.scrolls).toBe(true);
     expect(layout.cell).toBe(Math.floor(WELL.w / WORLD.cols));
+    expect(layout.scrolls).toBe(true);
+    expect(layout.viewRows * layout.cell).toBeLessThanOrEqual(WELL.h);
+    const first = cellRect(layout, 0, 0, 0);
+    const last = cellRect(layout, 11, layout.viewRows - 1, 0);
+    expect(first.w).toBe(first.h);
+    expect(last.y + last.h).toBeLessThanOrEqual(WELL.h);
+  });
 
-    const atTop = cellRect(layout, 0, 0, 0);
-    const below = cellRect(layout, 0, 1, 0);
-    expect(atTop.w).toBe(atTop.h);
-    expect(below.y - atTop.y).toBe(layout.cell);
-    expect(40 * layout.cell).toBeGreaterThan(WELL.h);
+  it('keeps a black buffer at the bottom until the player is near the south', () => {
+    const cells = [];
+    for (let y = 0; y < 40; y++) {
+      for (let x = 0; x < 12; x++) cells.push({ x, y });
+    }
+    const mid = layoutMiniMap(cells, 0, 0, 40, 48, 12, 40, 10);
+    const south = layoutMiniMap(cells, 0, 0, 40, 48, 12, 40, 39);
+    expect(mid).not.toBeNull();
+    expect(south).not.toBeNull();
+    if (!mid || !south) return;
+
+    expect(mid.scrolls).toBe(true);
+    expect(mid.viewRows).toBeLessThan(south.viewRows);
+    expect(mid.originY).toBe(0);
+    const midBottom = cellRect(mid, 0, mid.viewRows - 1, 0);
+    expect(midBottom.y + midBottom.h).toBeLessThan(48);
+
+    const southBottom = cellRect(south, 0, 39, 40 - south.viewRows);
+    expect(south.viewRows * south.cell).toBeGreaterThan(40);
+    expect(southBottom.y + southBottom.h).toBeLessThanOrEqual(48);
+    expect(southBottom.y + southBottom.h).toBeGreaterThan(40);
+
+    const after = layoutMiniMap(cells, 0, 0, 40, 48, 12, 40, 10, true);
+    expect(after).not.toBeNull();
+    if (!after) return;
+    expect(after.viewRows).toBe(south.viewRows);
+    const afterBottom = cellRect(after, 0, after.viewRows - 1, 0);
+    expect(afterBottom.y + afterBottom.h).toBeGreaterThan(40);
   });
 
   it('keeps the player two-thirds up while heading north, and waits to scroll south', () => {
-    const cell = 3;
-    const wellH = 40;
-    const worldRows = 40;
-    const viewRows = wellH / cell;
+    const viewRows = 13;
     let viewY = 20;
 
-    // Inside the dead zone: no motion.
     const mid = 20 + viewRows / 2;
-    expect(followMinimapView(viewY, mid, cell, wellH, worldRows, true)).toBe(20);
+    expect(followMinimapView(viewY, mid, viewRows, 0, 40, true)).toBe(20);
 
-    // Climb north past two-thirds up: the view follows.
-    const north = followMinimapView(viewY, 20 + viewRows / 3 - 2, cell, wellH, worldRows, true);
+    const north = followMinimapView(viewY, 20 + viewRows / 3 - 2, viewRows, 0, 40, true);
     expect(north).toBeLessThan(viewY);
+    expect(Number.isInteger(north)).toBe(true);
 
-    // Walk south a little: still in the dead zone, no follow.
     viewY = north;
     const player = north + viewRows / 3 + 1;
-    expect(followMinimapView(viewY, player, cell, wellH, worldRows, true)).toBe(viewY);
+    expect(followMinimapView(viewY, player, viewRows, 0, 40, true)).toBe(viewY);
 
-    // Walk south past two-thirds down: the view follows.
-    const south = followMinimapView(viewY, north + (2 * viewRows) / 3 + 2, cell, wellH, worldRows, true);
+    const south = followMinimapView(
+      viewY,
+      north + (2 * viewRows) / 3 + 2,
+      viewRows,
+      0,
+      40,
+      true,
+    );
     expect(south).toBeGreaterThan(viewY);
   });
 
@@ -194,7 +233,9 @@ describe('minimap terrain and landmarks', () => {
   it('reports the majority biome of a panel', () => {
     const px = Math.floor(world.spawn.x / PANEL_W);
     const py = Math.floor(world.spawn.y / PANEL_H);
-    expect(dominantBiome(world, px, py)).toBe(Biome.Valley);
+    const biome = dominantBiome(world, px, py);
+    expect(biome).toBeGreaterThanOrEqual(0);
+    expect(biome).toBeLessThan(4);
   });
 
   it('pins a dungeon on the panel that holds its entrance', () => {

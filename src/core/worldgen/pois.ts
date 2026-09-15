@@ -31,7 +31,12 @@ export function placePois(
 
   const walkableByBiome: number[][] = Array.from({ length: BIOME_COUNT }, () => []);
   for (let i = 0; i < tiles.length; i++) {
-    if (isWalkable(tiles[i])) walkableByBiome[biome[i]].push(i);
+    if (!isWalkable(tiles[i])) continue;
+    const x = i % w;
+    const y = (i / w) | 0;
+    // Keep the beach and the rim free of POIs so the south shore stays sand.
+    if (x <= 0 || y <= 0 || x >= w - 1 || y >= h - 2) continue;
+    walkableByBiome[biome[i]].push(i);
   }
 
   const pois: Poi[] = [];
@@ -45,8 +50,8 @@ export function placePois(
   tiles[ark] = Tile.ArkSite;
   pois.push({ ...toPoint(ark, w), kind: PoiKind.Ark, biome: biome[ark] as Biome });
 
-  // -- Spawn: the valley, well south, on the mainland ------------------------
-  const spawn = pickSpawn(rng, tiles, elev, w, h);
+  // -- Spawn: the high north, away from the ark, so the run is a descent -----
+  const spawn = pickSpawn(rng, tiles, elev, w, h, ark);
   taken.add(spawn);
 
   // -- Dungeons: one per biome ----------------------------------------------
@@ -74,6 +79,18 @@ export function placePois(
     taken.add(spot);
     tiles[spot] = Tile.HeartContainer;
     pois.push({ ...toPoint(spot, w), kind: PoiKind.Heart, biome: b as Biome });
+  }
+
+  // -- Rod shrines: one per biome, in order of the harvest ladder ------------
+  for (let b = 0; b < BIOME_COUNT; b++) {
+    const candidates = shuffle(rng, walkableByBiome[b].slice());
+    const spot = candidates.find(
+      (i) => !taken.has(i) && farFrom(i, taken, w, 10) && isWalkable(tiles[i]),
+    );
+    if (spot === undefined) continue;
+    taken.add(spot);
+    tiles[spot] = Tile.Shrine;
+    pois.push({ ...toPoint(spot, w), kind: PoiKind.Shrine, biome: b as Biome });
   }
 
   // -- The slipway: a valley dock where a skiff can be framed ----------------
@@ -124,12 +141,9 @@ function pickArkSite(elev: Uint8Array, w: number, h: number, tiles: Uint8Array):
 }
 
 /**
- * Spawn in the lowlands: bottom fifth of the map, so the player starts where
- * the water starts and every run is a climb.
- *
- * Not at the *lowest* ground available, though — that drowns you within a few
- * days no matter how well you play. Picking from the middle of the southern
- * elevation range keeps the pressure without making the opening unfair.
+ * Spawn in the high north, not on the ark, so the run is: walk down, gather,
+ * climb back. Lower-mid elevation among northern candidates keeps the ark
+ * the last ground standing.
  */
 function pickSpawn(
   rng: () => number,
@@ -137,21 +151,28 @@ function pickSpawn(
   elev: Uint8Array,
   w: number,
   h: number,
+  arkIndex: number,
 ): number {
-  const from = Math.floor(h * 0.8);
+  const until = Math.max(3, Math.floor(h * 0.2));
+  const arkX = arkIndex % w;
+  const arkY = (arkIndex / w) | 0;
   const candidates: number[] = [];
 
-  for (let y = from; y < h; y++) {
-    for (let x = 0; x < w; x++) {
+  for (let y = 1; y < until; y++) {
+    for (let x = 1; x < w - 1; x++) {
       const i = y * w + x;
-      if (isWalkable(tiles[i])) candidates.push(i);
+      if (!isWalkable(tiles[i])) continue;
+      const dx = x - arkX;
+      const dy = y - arkY;
+      if (dx * dx + dy * dy < 14 * 14) continue;
+      candidates.push(i);
     }
   }
-  if (candidates.length === 0) return findAnyWalkable(tiles, tiles.length - 1);
+  if (candidates.length === 0) return findAnyWalkable(tiles, 0);
 
   candidates.sort((a, b) => elev[a] - elev[b]);
-  const lo = Math.floor(candidates.length * 0.45);
-  const hi = Math.max(lo + 1, Math.floor(candidates.length * 0.7));
+  const lo = Math.floor(candidates.length * 0.25);
+  const hi = Math.max(lo + 1, Math.floor(candidates.length * 0.55));
   const pool = candidates.slice(lo, hi);
   return pool[Math.floor(rng() * pool.length)];
 }

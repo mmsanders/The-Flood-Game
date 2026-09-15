@@ -9,9 +9,9 @@
 
 import { PANEL_H, PANEL_PX_H, PANEL_PX_W, PANEL_W, TILE_PX } from '../core/config.js';
 import { ANIMAL_DEFS, ANIMAL_H, ANIMAL_W, AnimalDir, AnimalStatus, FLOCK_TOTAL } from '../core/animals.js';
-import { panelFloodFraction } from '../core/flood.js';
+import { floodDepth, floodOverlayFill } from '../core/flood.js';
 import { panelsHigh, panelsWide } from '../core/tilemap.js';
-import { RESOURCE_COUNT, Tile } from '../core/tiles.js';
+import { Biome, RESOURCE_COUNT, Tile, carveTo } from '../core/tiles.js';
 import { PALETTE } from '../render/palette.js';
 import { getTilesheet, tileSheetX, tileSheetY } from '../render/tilesheet.js';
 import {
@@ -22,13 +22,11 @@ import {
   MINIMAP_Y,
   MiniPoi,
   cellRect,
-  dominantBiome,
   followMinimapView,
   layoutMiniMap,
-  minimapFlatColor,
   panelHasTile,
   panelPoi,
-  sampleMinimapPixel,
+  sampleMinimapRgb,
   visitedCells,
 } from './minimap.js';
 import {
@@ -44,6 +42,7 @@ import {
   flockScore,
   waterLevel,
 } from './state.js';
+import { isDaylight, todAt } from './tod.js';
 import type { BestFlock } from './persist.js';
 
 export const HUD_H = 48;
@@ -52,6 +51,11 @@ export const SCREEN_H = PANEL_PX_H + HUD_H;
 
 const RESOURCE_COLOR = [PALETTE.flax, PALETTE.gopher, PALETTE.stoneNode, '#6a625c'];
 const RESOURCE_INITIAL = ['F', 'W', 'S', 'P'];
+const ROD_SHAFT = ['#c8a06a', '#7a4a1e', '#8b8578', '#4a4038', '#241f1c'];
+const ROD_BUD = ['#7fd06a', '#d9d05a', '#c48a48', '#9aa0a6', '#e8c84a'];
+const SERPENT_BODY = '#3f8a44';
+const SERPENT_BELLY = '#d2dc78';
+const SERPENT_TONGUE = '#c83c3c';
 
 export interface RenderUi {
   bestiary?: boolean;
@@ -71,6 +75,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, ui?: Ren
   drawWorld(ctx, state);
   drawAnimals(ctx, state);
   drawPlayer(ctx, state);
+  drawTodFilter(ctx, state);
   ctx.restore();
 
   drawHud(ctx, state);
@@ -124,6 +129,26 @@ export function cameraOrigin(state: GameState): { x: number; y: number } {
   return { x: toX + (fromX - toX) * t, y: toY + (fromY - toY) * t };
 }
 
+function blitTile(
+  ctx: CanvasRenderingContext2D,
+  sheet: CanvasImageSource,
+  tile: number,
+  dx: number,
+  dy: number,
+): void {
+  ctx.drawImage(
+    sheet,
+    tileSheetX(tile),
+    tileSheetY(tile),
+    TILE_PX,
+    TILE_PX,
+    dx,
+    dy,
+    TILE_PX,
+    TILE_PX,
+  );
+}
+
 function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
   const map = activeMap(state);
   const cam = cameraOrigin(state);
@@ -134,6 +159,7 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
   const y0 = Math.floor(cam.y / TILE_PX);
   const x1 = Math.ceil((cam.x + SCREEN_W) / TILE_PX);
   const y1 = Math.ceil((cam.y + PANEL_PX_H) / TILE_PX);
+  const floods: number[] = [];
 
   for (let ty = y0; ty <= y1; ty++) {
     for (let tx = x0; tx <= x1; tx++) {
@@ -148,22 +174,27 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
       }
 
       const i = ty * map.w + tx;
-      ctx.drawImage(
-        sheet as CanvasImageSource,
-        tileSheetX(map.tiles[i]),
-        tileSheetY(map.tiles[i]),
-        TILE_PX,
-        TILE_PX,
-        sx,
-        sy,
-        TILE_PX,
-        TILE_PX,
-      );
+      const tile = map.tiles[i];
+      if (tile === Tile.HeartContainer || tile === Tile.Pedestal) {
+        blitTile(ctx, sheet, carveTo(map.biome[i] as Biome), sx, sy);
+      }
+      blitTile(ctx, sheet, tile, sx, sy);
 
-      if (map.floods && map.elev[i] < level) {
-        const depth = Math.min(1, (level - map.elev[i]) / 60);
-        ctx.fillStyle = depth > 0.5 ? 'rgba(18, 58, 118, 0.82)' : PALETTE.floodTint;
-        ctx.fillRect(sx, sy, TILE_PX, TILE_PX);
+      if (map.floods) {
+        const d = floodDepth(map.elev[i], level);
+        if (d > 0) floods.push(sx, sy, d);
+      }
+    }
+  }
+
+  // Four fillStyles instead of one per tile — the overlay colours are discrete.
+  for (let depth = 1; depth <= 4; depth++) {
+    const fill = floodOverlayFill(depth);
+    if (!fill) continue;
+    ctx.fillStyle = fill;
+    for (let i = 0; i < floods.length; i += 3) {
+      if (floods[i + 2] === depth || (depth === 4 && floods[i + 2] >= 4)) {
+        ctx.fillRect(floods[i], floods[i + 1], TILE_PX, TILE_PX);
       }
     }
   }
@@ -263,6 +294,8 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState): void {
   // Blink through invulnerability frames.
   if (p.invuln > 0 && Math.floor(p.invuln * 12) % 2 === 0) return;
 
+  drawPlayerShadow(ctx, state, x, y);
+
   if (state.inBoat) {
     ctx.fillStyle = '#6a3e18';
     ctx.fillRect(x - 3, y + 6, PLAYER_W + 6, 7);
@@ -302,35 +335,133 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (p.swing > 0) drawRod(ctx, state, x, y);
 }
 
-/** The Rod of Aaron: a budded staff, thrust in the facing direction. */
+/**
+ * Ground blob thrown by the sun. Long west at dawn, gone at noon, long
+ * east at dusk. Night keeps the throw and only fades the opacity.
+ */
+function drawPlayerShadow(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  x: number,
+  y: number,
+): void {
+  if (state.location.kind !== 'overworld') return;
+  const { shadowDx: dx, shadowAlpha } = todAt(currentDay(state));
+  if (shadowAlpha < 0.02 || Math.abs(dx) < 0.5) return;
+
+  const throwX = Math.round(dx);
+  const footY = y + PLAYER_H - 2;
+  ctx.fillStyle = `rgba(16, 12, 24, ${0.4 * shadowAlpha})`;
+  ctx.fillRect(
+    x + (throwX < 0 ? throwX : 1),
+    footY,
+    PLAYER_W - 2 + Math.abs(throwX),
+    3,
+  );
+}
+
+/** Multiply the playfield. Day is white and is skipped. Dungeons have no sky. */
+function drawTodFilter(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (state.location.kind !== 'overworld') return;
+  const tod = todAt(currentDay(state));
+  if (isDaylight(tod)) return;
+
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.fillStyle = `rgb(${tod.mulR | 0},${tod.mulG | 0},${tod.mulB | 0})`;
+  ctx.fillRect(0, 0, SCREEN_W, PANEL_PX_H);
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/** The Rod of Aaron: a budded staff, or a two-tile serpent once blessed. */
 function drawRod(ctx: CanvasRenderingContext2D, state: GameState, x: number, y: number): void {
   const p = state.player;
   const cx = x + PLAYER_W / 2;
   const cy = y + PLAYER_H / 2;
+  if ((state.rodReach ?? 1) >= 2) {
+    drawSerpentRod(ctx, p.dir, cx, cy);
+    return;
+  }
   const len = 12;
-
-  ctx.fillStyle = '#c8a06a';
+  const tier = Math.min(4, Math.max(0, state.rodTier ?? 0));
+  ctx.fillStyle = ROD_SHAFT[tier];
   switch (p.dir) {
     case Dir.Up:
       ctx.fillRect(cx - 1, cy - len, 2, len);
-      ctx.fillStyle = '#7fd06a';
+      ctx.fillStyle = ROD_BUD[tier];
       ctx.fillRect(cx - 2, cy - len - 2, 4, 3);
       break;
     case Dir.Down:
       ctx.fillRect(cx - 1, cy, 2, len);
-      ctx.fillStyle = '#7fd06a';
+      ctx.fillStyle = ROD_BUD[tier];
       ctx.fillRect(cx - 2, cy + len - 1, 4, 3);
       break;
     case Dir.Left:
       ctx.fillRect(cx - len, cy - 1, len, 2);
-      ctx.fillStyle = '#7fd06a';
+      ctx.fillStyle = ROD_BUD[tier];
       ctx.fillRect(cx - len - 2, cy - 2, 3, 4);
       break;
     case Dir.Right:
       ctx.fillRect(cx, cy - 1, len, 2);
-      ctx.fillStyle = '#7fd06a';
+      ctx.fillStyle = ROD_BUD[tier];
       ctx.fillRect(cx + len - 1, cy - 2, 3, 4);
       break;
+  }
+}
+
+/** Wavy snake whose head sits in the second harvest tile. */
+function drawSerpentRod(
+  ctx: CanvasRenderingContext2D,
+  dir: Dir,
+  cx: number,
+  cy: number,
+): void {
+  const ax = dir === Dir.Left ? -1 : dir === Dir.Right ? 1 : 0;
+  const ay = dir === Dir.Up ? -1 : dir === Dir.Down ? 1 : 0;
+  const px = ay !== 0 ? 1 : 0;
+  const py = ax !== 0 ? 1 : 0;
+  const len = TILE_PX * 2;
+
+  for (let i = 0; i < len; i += 4) {
+    const wave = (i >> 2) & 1 ? 1 : -1;
+    const sx = Math.round(cx + ax * i + px * wave) - 1;
+    const sy = Math.round(cy + ay * i + py * wave) - 1;
+    ctx.fillStyle = SERPENT_BODY;
+    if (ax !== 0) {
+      ctx.fillRect(sx, sy, 5, 3);
+      ctx.fillStyle = SERPENT_BELLY;
+      ctx.fillRect(sx, sy + 1, 5, 1);
+    } else {
+      ctx.fillRect(sx, sy, 3, 5);
+      ctx.fillStyle = SERPENT_BELLY;
+      ctx.fillRect(sx + 1, sy, 1, 5);
+    }
+  }
+
+  const hx = Math.round(cx + ax * len);
+  const hy = Math.round(cy + ay * len);
+  ctx.fillStyle = SERPENT_BODY;
+  ctx.fillRect(hx - 2, hy - 2, 5, 5);
+  ctx.fillStyle = SERPENT_BELLY;
+  ctx.fillRect(hx - 1, hy - 1, 3, 3);
+  ctx.fillStyle = '#1a1a20';
+  if (ax !== 0) {
+    ctx.fillRect(hx, hy - 2, 1, 1);
+    ctx.fillRect(hx, hy + 1, 1, 1);
+  } else {
+    ctx.fillRect(hx - 2, hy, 1, 1);
+    ctx.fillRect(hx + 1, hy, 1, 1);
+  }
+  ctx.fillStyle = SERPENT_TONGUE;
+  const tx = hx + ax * 3;
+  const ty = hy + ay * 3;
+  if (ax !== 0) {
+    ctx.fillRect(hx + ax * 2, hy, 2, 1);
+    ctx.fillRect(tx, ty - 1, 1, 1);
+    ctx.fillRect(tx, ty + 1, 1, 1);
+  } else {
+    ctx.fillRect(hx, hy + ay * 2, 1, 2);
+    ctx.fillRect(tx - 1, ty, 1, 1);
+    ctx.fillRect(tx + 1, ty, 1, 1);
   }
 }
 
@@ -346,15 +477,17 @@ function drawHud(ctx: CanvasRenderingContext2D, state: GameState): void {
   ctx.fillRect(MINIMAP_W, 0, 1, HUD_H);
   ctx.fillRect(MINIMAP_W, HUD_H - 1, SCREEN_W - MINIMAP_W, 1);
 
-  const col = MINIMAP_W + 4;
-  drawHearts(ctx, state, col, 3);
-  let badgeX = col + state.player.maxHearts * 10 + 2;
+  const midX = MINIMAP_W + 4;
+  const cargoX = 160;
+  const midW = cargoX - midX - 6;
+
+  drawHearts(ctx, state, midX, 3);
+  let badgeX = midX + state.player.maxHearts * 10 + 2;
   badgeX = drawBoatBadge(ctx, state, badgeX, 4);
   drawKeys(ctx, state, badgeX, 4);
-  drawDay(ctx, state, col, 14);
-  drawFlock(ctx, state, col, 26);
-  drawArkMeter(ctx, state, col, 38);
-  drawInventory(ctx, state, SCREEN_W - 32, 2);
+  drawDay(ctx, state, midX, 15, midW);
+  drawArkMeter(ctx, state, midX, 36, midW);
+  drawCargo(ctx, state, cargoX, 2);
 }
 
 /**
@@ -377,6 +510,10 @@ function drawMiniMap(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (!grid) return;
 
   const cells = visitedCells(grid, width);
+  const worldRows = panelsHigh(map);
+  if (state.location.kind === 'overworld' && state.camera.panelY >= worldRows - 1) {
+    state.minimapFilledSouth = true;
+  }
   const layout = layoutMiniMap(
     cells,
     MINIMAP_X,
@@ -384,38 +521,45 @@ function drawMiniMap(ctx: CanvasRenderingContext2D, state: GameState): void {
     MINIMAP_W,
     MINIMAP_H,
     width,
-    panelsHigh(map),
+    worldRows,
+    state.camera.panelY,
+    state.minimapFilledSouth,
   );
   if (!layout) return;
 
-  const height = panelsHigh(map);
   state.minimapViewY = followMinimapView(
     state.minimapViewY,
     state.camera.panelY,
-    layout.cell,
-    layout.wellH,
-    height,
+    layout.viewRows,
+    layout.minY,
+    layout.rows,
     layout.scrolls,
   );
 
   const level = waterLevel(state);
   const flash = Math.floor(state.elapsed * 6) % 2 === 0;
+  rasterizeMiniMap(ctx, state, map, cells, layout, state.minimapViewY, level);
+
   ctx.save();
   ctx.beginPath();
   ctx.rect(layout.wellX, layout.wellY, layout.wellW, layout.wellH);
   ctx.clip();
   for (const c of cells) {
+    if (layout.scrolls) {
+      const ly = c.y - state.minimapViewY;
+      if (ly < 0 || ly >= layout.viewRows) continue;
+    }
     const r = cellRect(layout, c.x, c.y, state.minimapViewY);
-    if (r.y + r.h <= layout.wellY || r.y >= layout.wellY + layout.wellH) continue;
-    if (r.x + r.w <= layout.wellX || r.x >= layout.wellX + layout.wellW) continue;
     const here = c.x === state.camera.panelX && c.y === state.camera.panelY;
-    const depth = panelFloodFraction(map, c.x, c.y, level);
     const poi = landmarkOnPanel(state, c.x, c.y);
-    drawMiniMapCell(ctx, map, c.x, c.y, r, level, depth, poi, here && flash);
-    if (here && Math.min(r.w, r.h) >= 3) {
+    if (poi !== MiniPoi.None && r.w >= 3 && r.h >= 3) drawMiniPoi(ctx, r, poi);
+    if (here && flash && Math.min(r.w, r.h) >= 3) {
       ctx.strokeStyle = '#fff6c8';
       ctx.lineWidth = 1;
       ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+    } else if (here && flash) {
+      ctx.fillStyle = 'rgba(240, 224, 160, 0.45)';
+      ctx.fillRect(r.x, r.y, r.w, r.h);
     }
   }
   ctx.restore();
@@ -439,44 +583,65 @@ function landmarkOnPanel(state: GameState, panelX: number, panelY: number): Mini
   return poi;
 }
 
-function drawMiniMapCell(
+let miniBits: ImageData | null = null;
+
+/**
+ * One putImageData for the whole well. Per-pixel fillRect on a 36x36 cell
+ * was thousands of canvas state changes a frame and was the hitch.
+ */
+function rasterizeMiniMap(
   ctx: CanvasRenderingContext2D,
+  state: GameState,
   map: ReturnType<typeof activeMap>,
-  panelX: number,
-  panelY: number,
-  r: { x: number; y: number; w: number; h: number },
+  cells: { x: number; y: number }[],
+  layout: NonNullable<ReturnType<typeof layoutMiniMap>>,
+  viewY: number,
   level: number,
-  depth: number,
-  poi: MiniPoi,
-  highlight: boolean,
 ): void {
-  if (r.w <= 2 || r.h <= 2) {
-    const biome = dominantBiome(map, panelX, panelY);
-    ctx.fillStyle =
-      poi !== MiniPoi.None ? MINI_POI_COLOR[poi] : minimapFlatColor(biome, depth);
-    ctx.fillRect(r.x, r.y, r.w, r.h);
-    return;
+  if (!miniBits || miniBits.width !== MINIMAP_W || miniBits.height !== MINIMAP_H) {
+    miniBits = ctx.createImageData(MINIMAP_W, MINIMAP_H);
+  }
+  const data = miniBits.data;
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = 8;
+    data[i + 1] = 10;
+    data[i + 2] = 14;
+    data[i + 3] = 255;
   }
 
-  for (let py = 0; py < r.h; py++) {
-    for (let px = 0; px < r.w; px++) {
-      ctx.fillStyle = sampleMinimapPixel(
-        map,
-        panelX,
-        panelY,
-        (px + 0.5) / r.w,
-        (py + 0.5) / r.h,
-        level,
-      );
-      ctx.fillRect(r.x + px, r.y + py, 1, 1);
+  for (const c of cells) {
+    if (layout.scrolls) {
+      const ly = c.y - viewY;
+      if (ly < 0 || ly >= layout.viewRows) continue;
+    }
+    const r = cellRect(layout, c.x, c.y, viewY);
+    const rw = Math.max(1, r.w | 0);
+    const rh = Math.max(1, r.h | 0);
+    const x0 = r.x | 0;
+    const y0 = r.y | 0;
+    const poi = landmarkOnPanel(state, c.x, c.y);
+    const pin = poi !== MiniPoi.None && rw <= 2 ? hexToRgbLocal(MINI_POI_COLOR[poi]) : null;
+    for (let py = 0; py < rh; py++) {
+      for (let px = 0; px < rw; px++) {
+        const rgb =
+          pin ?? sampleMinimapRgb(map, c.x, c.y, (px + 0.5) / rw, (py + 0.5) / rh, level);
+        const x = x0 + px;
+        const y = y0 + py;
+        if (x < 0 || y < 0 || x >= MINIMAP_W || y >= MINIMAP_H) continue;
+        const o = (y * MINIMAP_W + x) * 4;
+        data[o] = rgb[0];
+        data[o + 1] = rgb[1];
+        data[o + 2] = rgb[2];
+        data[o + 3] = 255;
+      }
     }
   }
+  ctx.putImageData(miniBits, MINIMAP_X, MINIMAP_Y);
+}
 
-  if (poi !== MiniPoi.None) drawMiniPoi(ctx, r, poi);
-  if (highlight) {
-    ctx.fillStyle = 'rgba(240, 224, 160, 0.35)';
-    ctx.fillRect(r.x, r.y, r.w, r.h);
-  }
+function hexToRgbLocal(hex: string): [number, number, number] {
+  const v = parseInt(hex.slice(1), 16);
+  return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
 }
 
 function drawMiniPoi(
@@ -523,18 +688,53 @@ function drawBoatBadge(
   return x + 28;
 }
 
-function drawFlock(ctx: CanvasRenderingContext2D, state: GameState, x: number, y: number): void {
-  if (currentDungeon(state)) return;
-  const score = flockScore(state);
+function drawCargo(ctx: CanvasRenderingContext2D, state: GameState, x: number, y: number): void {
   ctx.font = '8px ui-monospace, monospace';
   ctx.textBaseline = 'top';
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#8d98ab';
-  ctx.fillText('FLOCK', x, y);
-  ctx.fillStyle = '#e6e9ef';
-  ctx.fillText(`${String(score.rescued).padStart(2, '0')}/20`, x + 28, y);
-  ctx.fillStyle = PALETTE.ark;
-  ctx.fillText(`${score.pairs}p`, x + 58, y);
+
+  if (!currentDungeon(state)) {
+    const score = flockScore(state);
+    ctx.fillStyle = '#8d98ab';
+    ctx.fillText('FLOCK', x, y);
+    ctx.fillStyle = '#e6e9ef';
+    ctx.fillText(
+      `${String(score.rescued).padStart(2, '0')}/${String(FLOCK_TOTAL).padStart(2, '0')}`,
+      x + 28,
+      y,
+    );
+    ctx.fillStyle = PALETTE.ark;
+    ctx.fillText(`${score.pairs}p`, x + 56, y);
+  }
+
+  drawRodHud(ctx, state, SCREEN_W - 14, y);
+  drawInventory(ctx, state, x, y + 12);
+}
+
+/** Staff plus four resource pips, filled as the Rod is imbued. */
+function drawRodHud(ctx: CanvasRenderingContext2D, state: GameState, x: number, y: number): void {
+  const tier = Math.min(4, Math.max(0, state.rodTier ?? 0));
+  if ((state.rodReach ?? 1) >= 2) {
+    ctx.fillStyle = SERPENT_BODY;
+    ctx.fillRect(x + 1, y + 4, 2, 3);
+    ctx.fillRect(x + 3, y + 7, 2, 3);
+    ctx.fillRect(x + 1, y + 10, 2, 5);
+    ctx.fillRect(x, y, 5, 5);
+    ctx.fillStyle = SERPENT_BELLY;
+    ctx.fillRect(x + 1, y + 1, 3, 3);
+    ctx.fillStyle = SERPENT_TONGUE;
+    ctx.fillRect(x + 1, y - 1, 1, 1);
+    ctx.fillRect(x + 3, y - 1, 1, 1);
+  } else {
+    ctx.fillStyle = ROD_SHAFT[tier];
+    ctx.fillRect(x + 2, y + 3, 2, 12);
+    ctx.fillStyle = ROD_BUD[tier];
+    ctx.fillRect(x + 1, y, 4, 4);
+  }
+  for (let i = 0; i < 4; i++) {
+    ctx.fillStyle = i <= Math.min(tier, 3) ? RESOURCE_COLOR[i] : '#2a3140';
+    ctx.fillRect(x + 6, y + 1 + i * 4, 3, 3);
+  }
 }
 
 function drawHearts(ctx: CanvasRenderingContext2D, state: GameState, x: number, y: number): void {
@@ -552,8 +752,16 @@ function drawHearts(ctx: CanvasRenderingContext2D, state: GameState, x: number, 
   }
 }
 
-function drawDay(ctx: CanvasRenderingContext2D, state: GameState, x: number, y: number): void {
+function drawDay(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  x: number,
+  y: number,
+  barW: number,
+): void {
   const day = currentDay(state);
+  // Humans count the first day as 1. The flood clock is still 0..40.
+  const shown = Math.min(40, Math.floor(day) + 1);
   ctx.font = '8px ui-monospace, monospace';
   ctx.textBaseline = 'top';
   ctx.textAlign = 'left';
@@ -561,16 +769,14 @@ function drawDay(ctx: CanvasRenderingContext2D, state: GameState, x: number, y: 
   ctx.fillStyle = '#8d98ab';
   ctx.fillText('DAY', x, y);
   ctx.fillStyle = '#e6e9ef';
-  ctx.fillText(`${Math.floor(day)}`.padStart(2, '0'), x + 20, y);
+  ctx.fillText(`${shown}`.padStart(2, '0'), x + 20, y);
   ctx.fillStyle = '#5c6879';
   ctx.fillText('/40', x + 32, y);
 
-  // Water-rise bar: how much of the forty days has run.
-  const w = 52;
   ctx.fillStyle = '#1c2330';
-  ctx.fillRect(x, y + 10, w, 3);
+  ctx.fillRect(x, y + 10, barW, 3);
   ctx.fillStyle = PALETTE.water;
-  ctx.fillRect(x, y + 10, Math.round((day / 40) * w), 3);
+  ctx.fillRect(x, y + 10, Math.round((day / 40) * barW), 3);
 }
 
 function drawInventory(
@@ -583,14 +789,15 @@ function drawInventory(
   ctx.textBaseline = 'top';
   ctx.textAlign = 'left';
 
+  const colW = 44;
   for (let r = 0; r < RESOURCE_COUNT; r++) {
-    const cy = y + r * 9;
+    const cx = x + (r % 2) * colW;
+    const cy = y + Math.floor(r / 2) * 12;
     ctx.fillStyle = RESOURCE_COLOR[r];
-    ctx.fillRect(x, cy + 2, 3, 3);
-    ctx.fillStyle = RESOURCE_COLOR[r];
-    ctx.fillText(RESOURCE_INITIAL[r], x + 5, cy);
+    ctx.fillRect(cx, cy + 2, 3, 3);
+    ctx.fillText(RESOURCE_INITIAL[r], cx + 5, cy);
     ctx.fillStyle = '#c8d0dd';
-    ctx.fillText(String(state.carried[r]), x + 13, cy);
+    ctx.fillText(String(state.carried[r]), cx + 14, cy);
   }
 }
 
@@ -599,9 +806,10 @@ function drawArkMeter(
   state: GameState,
   x: number,
   y: number,
+  totalW: number,
 ): void {
-  const w = SCREEN_W - x - 40;
   const progress = arkProgress(state);
+  const barW = Math.max(8, totalW - 44);
 
   ctx.font = '8px ui-monospace, monospace';
   ctx.textBaseline = 'top';
@@ -609,13 +817,11 @@ function drawArkMeter(
   ctx.fillText('ARK', x, y);
 
   ctx.fillStyle = '#1c2330';
-  ctx.fillRect(x + 20, y + 1, w - 20, 6);
+  ctx.fillRect(x + 20, y + 1, barW, 6);
   ctx.fillStyle = PALETTE.ark;
-  ctx.fillRect(x + 20, y + 1, Math.round((w - 20) * progress), 6);
+  ctx.fillRect(x + 20, y + 1, Math.round(barW * progress), 6);
   ctx.fillStyle = '#e6e9ef';
-  ctx.textAlign = 'right';
-  ctx.fillText(`${Math.round(progress * 100)}%`, x + w, y);
-  ctx.textAlign = 'left';
+  ctx.fillText(`${Math.round(progress * 100)}%`, x + 24 + barW, y);
 }
 
 function drawMessage(ctx: CanvasRenderingContext2D, state: GameState): void {

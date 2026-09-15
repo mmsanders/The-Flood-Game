@@ -4,7 +4,7 @@ import { BIOME_COUNT, Biome, Tile, isResourceNode, isWalkable } from '../src/cor
 import { generateWorld } from '../src/core/worldgen/index.js';
 import { labelRegions } from '../src/core/worldgen/connectivity.js';
 import { isSeamBlocker, onPanelEdge } from '../src/core/worldgen/seams.js';
-import { getPanel } from '../src/core/world.js';
+import { PoiKind, getPanel } from '../src/core/world.js';
 
 /** A smaller map keeps the broad sweeps fast without changing the algorithms. */
 const SMALL = withParams({ panelsX: 8, panelsY: 20 });
@@ -109,11 +109,11 @@ describe('worldgen: shape of the world', () => {
     expect(max).toBe(255);
   });
 
-  it('puts the ark high and north, and the spawn low and south', () => {
+  it('puts the ark and the spawn in the north, ark on higher ground', () => {
     for (const seed of SEEDS.slice(0, 6)) {
       const world = generateWorld(seed, SMALL);
       expect(world.ark.y).toBeLessThan(world.h / 3);
-      expect(world.spawn.y).toBeGreaterThan(world.h * 0.75);
+      expect(world.spawn.y).toBeLessThan(world.h * 0.25);
 
       const arkElev = world.elev[world.ark.y * world.w + world.ark.x];
       const spawnElev = world.elev[world.spawn.y * world.w + world.spawn.x];
@@ -127,6 +127,16 @@ describe('worldgen: shape of the world', () => {
       expect(isWalkable(world.tiles[poi.y * world.w + poi.x])).toBe(true);
     }
     expect(isWalkable(world.tiles[world.spawn.y * world.w + world.spawn.x])).toBe(true);
+  });
+
+  it('places one rod shrine per biome', () => {
+    const world = generateWorld(8080, SMALL);
+    const shrines = world.pois.filter((p) => p.kind === PoiKind.Shrine);
+    expect(shrines.length).toBe(BIOME_COUNT);
+    expect(new Set(shrines.map((s) => s.biome)).size).toBe(BIOME_COUNT);
+    for (const s of shrines) {
+      expect(world.tiles[s.y * world.w + s.x]).toBe(Tile.Shrine);
+    }
   });
 
   it('places one dungeon per biome', () => {
@@ -226,7 +236,10 @@ describe('worldgen: panel seams', () => {
 
     for (let x = 0; x < w; x++) {
       expect(isWalkable(tiles[x]), `north rim ${x} seed ${seed}`).toBe(false);
-      expect(isWalkable(tiles[(h - 1) * w + x]), `south rim ${x} seed ${seed}`).toBe(false);
+      expect(tiles[(h - 1) * w + x], `south sea ${x} seed ${seed}`).toBe(Tile.Water);
+    }
+    for (let x = 1; x < w - 1; x++) {
+      expect(tiles[(h - 2) * w + x], `beach ${x} seed ${seed}`).toBe(Tile.Sand);
     }
     for (let y = 0; y < h; y++) {
       expect(isWalkable(tiles[y * w]), `west rim ${y} seed ${seed}`).toBe(false);
