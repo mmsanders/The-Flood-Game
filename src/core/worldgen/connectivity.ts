@@ -9,7 +9,7 @@
  */
 
 import { PANEL_H, PANEL_W, type WorldParams, tileHeight, tileWidth } from '../config.js';
-import { Biome, Tile, carveTo, isResourceNode, isWalkable } from '../tiles.js';
+import { Biome, Tile, carveOpening, isResourceNode, isWalkable } from '../tiles.js';
 import { isWorldRim, openSeamMismatches, seamPartnerIndices } from './seams.js';
 
 /** Cost to cut a path through a tile. 0 means it is already walkable. */
@@ -23,8 +23,13 @@ function enterCost(tile: number): number {
     case Tile.Shrub:
     case Tile.Rock:
       return 1;
+    case Tile.Fence:
+    case Tile.Tent:
+    case Tile.House:
+    case Tile.StoneWall:
+      return 2;
     case Tile.Water:
-      return 3; // a causeway across a pond
+      return 3; // a causeway across a pond, or a ford across the river
     case Tile.Cliff:
       return MAX_COST; // a mountain pass: expensive, but never impossible
     default:
@@ -111,7 +116,7 @@ function carveWithSeams(
   for (const j of nodes) {
     if (isWorldRim(j % w, (j / w) | 0, w, h)) continue;
     if (!isWalkable(tiles[j])) {
-      tiles[j] = carveTo(biome[j] as Biome);
+      tiles[j] = carveOpening(tiles[j], biome[j] as Biome);
       carved++;
     }
   }

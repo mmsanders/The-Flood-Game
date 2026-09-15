@@ -19,6 +19,10 @@ export const enum Tile {
   StoneGround = 0x07,
   Snow = 0x08,
   Reed = 0x09,
+  /** City streets. Dirt Path is the farm road; this is the paved one. */
+  Road = 0x0a,
+  /** Walkable stair through an escarpment. North is up. */
+  Steps = 0x0b,
 
   // -- 0x10 blocking scenery ------------------------------------------------
   Tree = 0x10,
@@ -26,6 +30,10 @@ export const enum Tile {
   Rock = 0x12,
   Cliff = 0x13,
   Water = 0x14,
+  Fence = 0x15,
+  Tent = 0x16,
+  House = 0x17,
+  StoneWall = 0x18,
 
   // -- 0x20 resource nodes --------------------------------------------------
   Flax = 0x20,
@@ -145,6 +153,10 @@ const BLOCKING: readonly Tile[] = [
   Tile.Rock,
   Tile.Cliff,
   Tile.Water,
+  Tile.Fence,
+  Tile.Tent,
+  Tile.House,
+  Tile.StoneWall,
 
   Tile.Flax,
   Tile.GopherTree,
@@ -185,7 +197,15 @@ export function isDungeonTile(tile: number): boolean {
 
 /** Blocking scenery that worldgen may carve away to restore connectivity. */
 export function isCarvable(tile: number): boolean {
-  return tile === Tile.Tree || tile === Tile.Shrub || tile === Tile.Rock;
+  return (
+    tile === Tile.Tree ||
+    tile === Tile.Shrub ||
+    tile === Tile.Rock ||
+    tile === Tile.Fence ||
+    tile === Tile.Tent ||
+    tile === Tile.House ||
+    tile === Tile.StoneWall
+  );
 }
 
 /** The ground tile to leave behind when carving a path through scenery. */
@@ -202,6 +222,18 @@ export function carveTo(biome: Biome): Tile {
   }
 }
 
+/**
+ * What connectivity leaves behind when it has to open a tile.
+ *
+ * Cliffs become stairs and water becomes a ford, so a repair pass does not
+ * punch holes in an escarpment or pave over the river.
+ */
+export function carveOpening(tile: number, biome: Biome): Tile {
+  if (tile === Tile.Cliff) return Tile.Steps;
+  if (tile === Tile.Water) return Tile.Bridge;
+  return carveTo(biome);
+}
+
 export const TILE_NAMES: Record<number, string> = {
   [Tile.Grass]: 'Grass',
   [Tile.Dirt]: 'Dirt',
@@ -213,11 +245,17 @@ export const TILE_NAMES: Record<number, string> = {
   [Tile.StoneGround]: 'Stone',
   [Tile.Snow]: 'Snow',
   [Tile.Reed]: 'Reeds',
+  [Tile.Road]: 'Stone Road',
+  [Tile.Steps]: 'Steps',
   [Tile.Tree]: 'Tree',
   [Tile.Shrub]: 'Shrub',
   [Tile.Rock]: 'Rock',
   [Tile.Cliff]: 'Cliff',
   [Tile.Water]: 'Water',
+  [Tile.Fence]: 'Fence',
+  [Tile.Tent]: 'Tent',
+  [Tile.House]: 'House',
+  [Tile.StoneWall]: 'Wall',
   [Tile.Flax]: 'Flax',
   [Tile.GopherTree]: 'Gopher Tree',
   [Tile.StoneNode]: 'Stone Node',

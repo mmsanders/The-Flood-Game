@@ -131,10 +131,8 @@ session and fails the build if it doesn't.
 ## Status
 
 Playable end to end: worldgen, the flood, resource gathering, the ark, the flock, the
-skiff, win/lose, and dungeons with the resource trade. Enemies, towns and money, the voice
-of God as a recurring character, and the ocean stage are designed for but not yet built —
-see `docs/DESIGN.md`.
-
-`docs/ROADMAP.md` is the plan for what comes next: a world with settlements, roads and
-landforms in it, a barter economy, the instruments (chart, lodestone, sounding line, dove),
-a dry prologue before the rain, and a flood that reaches into the dungeons.
+skiff, win/lose, and dungeons with the resource trade. Wave 1 of `docs/ROADMAP.md` is in:
+a river you can sail, escarpments you have to find stairs through, towns with roads that
+go somewhere, a pasture for the sheep, Noah's tent at spawn, and an ark that grows as you
+build it. Enemies, shops, the voice of God as a recurring character, and the ocean stage
+are still ahead.

@@ -191,6 +191,25 @@ const TILE_PAINTERS: Record<number, Painter> = {
     for (let x = 2; x < TILE_PX; x += 4) c.fillRect(x, 1, 1, 14);
   },
 
+  [Tile.Road]: (c) => {
+    base(c, PALETTE.road);
+    px(c, 0, 0, TILE_PX, 1, '#6a6560');
+    px(c, 0, 8, TILE_PX, 1, '#4e4a44');
+    px(c, 8, 0, 1, TILE_PX, '#4e4a44');
+    px(c, 0, 0, 1, TILE_PX, '#6a6560');
+    specks(c, '#6e6860', SPARSE);
+  },
+
+  [Tile.Steps]: (c) => {
+    base(c, PALETTE.steps);
+    // Treads climb north: each band higher is a step further up the slope.
+    for (let i = 0; i < 5; i++) {
+      px(c, 0, i * 3, TILE_PX, 2, i % 2 === 0 ? '#9a9080' : '#7a7268');
+      px(c, 0, i * 3 + 2, TILE_PX, 1, PALETTE.cliffShade);
+    }
+    px(c, 0, 15, TILE_PX, 1, PALETTE.cliffShade);
+  },
+
   // -- blocking scenery -----------------------------------------------------
   [Tile.Tree]: (c) => {
     base(c, PALETTE.grass);
@@ -219,11 +238,13 @@ const TILE_PAINTERS: Record<number, Painter> = {
   },
 
   [Tile.Cliff]: (c) => {
-    base(c, PALETTE.cliff);
-    px(c, 0, 0, TILE_PX, 3, '#635c52');
-    px(c, 0, 13, TILE_PX, 3, PALETTE.cliffShade);
-    px(c, 5, 3, 2, 10, PALETTE.cliffShade);
-    px(c, 11, 3, 2, 10, PALETTE.cliffShade);
+    // Lit top face, dark front face — a step you can read from a panel away.
+    base(c, PALETTE.cliffShade);
+    px(c, 0, 0, TILE_PX, 5, PALETTE.cliff);
+    px(c, 0, 0, TILE_PX, 1, '#8a8276');
+    px(c, 0, 5, TILE_PX, 1, '#2e2a24');
+    px(c, 4, 7, 2, 9, '#2a2620');
+    px(c, 11, 7, 2, 9, '#2a2620');
   },
 
   [Tile.Water]: (c) => {
@@ -233,6 +254,44 @@ const TILE_PAINTERS: Record<number, Painter> = {
     c.fillRect(2, 6, 5, 1);
     c.fillRect(9, 10, 5, 1);
     c.fillRect(4, 13, 4, 1);
+  },
+
+  [Tile.Fence]: (c) => {
+    base(c, PALETTE.grass);
+    specks(c, PALETTE.grassAlt, SPARSE);
+    px(c, 2, 2, 2, 13, PALETTE.treeTrunk);
+    px(c, 12, 2, 2, 13, PALETTE.treeTrunk);
+    px(c, 1, 5, 14, 2, '#8a5a28');
+    px(c, 1, 10, 14, 2, '#8a5a28');
+  },
+
+  [Tile.Tent]: (c) => {
+    base(c, PALETTE.dirt);
+    px(c, 1, 12, 14, 3, '#8f5f30');
+    px(c, 2, 6, 12, 8, PALETTE.tent);
+    px(c, 4, 3, 8, 5, PALETTE.tent);
+    px(c, 6, 1, 4, 4, '#d8c48a');
+    px(c, 7, 8, 2, 7, '#5a3a18');
+    px(c, 3, 7, 3, 2, '#efe6d2');
+  },
+
+  [Tile.House]: (c) => {
+    base(c, PALETTE.dirt);
+    px(c, 1, 7, 14, 8, PALETTE.house);
+    px(c, 0, 3, 16, 5, '#6a3a1c');
+    px(c, 2, 1, 12, 4, '#8a4a20');
+    px(c, 7, 10, 3, 5, '#3a2412');
+    px(c, 3, 9, 3, 3, '#e8d9a0');
+  },
+
+  [Tile.StoneWall]: (c) => {
+    base(c, PALETTE.stoneWall);
+    px(c, 0, 0, TILE_PX, 1, '#6a6560');
+    px(c, 0, 5, TILE_PX, 1, '#3a3834');
+    px(c, 0, 10, TILE_PX, 1, '#3a3834');
+    px(c, 4, 1, 1, 5, '#3a3834');
+    px(c, 11, 6, 1, 5, '#3a3834');
+    px(c, 7, 11, 1, 5, '#3a3834');
   },
 
   // -- resource nodes -------------------------------------------------------

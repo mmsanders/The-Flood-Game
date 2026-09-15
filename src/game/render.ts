@@ -11,7 +11,7 @@ import { PANEL_H, PANEL_PX_H, PANEL_PX_W, PANEL_W, TILE_PX } from '../core/confi
 import { ANIMAL_DEFS, ANIMAL_H, ANIMAL_W, AnimalDir, AnimalStatus, FLOCK_TOTAL } from '../core/animals.js';
 import { floodDepth, floodOverlayFill } from '../core/flood.js';
 import { panelsHigh, panelsWide, type TileMap } from '../core/tilemap.js';
-import { Biome, RESOURCE_COUNT, Tile, carveTo } from '../core/tiles.js';
+import { Biome, RESOURCE_COUNT, Resource, Tile, carveTo } from '../core/tiles.js';
 import { PALETTE } from '../render/palette.js';
 import { getTilesheet, tileSheetX, tileSheetY } from '../render/tilesheet.js';
 import {
@@ -99,6 +99,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, ui?: Ren
   ctx.clip();
   ctx.translate(0, HUD_H);
   drawWorld(ctx, state);
+  drawArkMonument(ctx, state);
   drawAnimals(ctx, state);
   drawPlayer(ctx, state);
   drawTodFilter(ctx, state);
@@ -199,6 +200,7 @@ function blitTile(
  * exposes, so it never grows and never reallocates.
  */
 const floodScratch = new Int32Array((PANEL_W + 3) * (PANEL_H + 3) * 3);
+const shadowScratch = new Int32Array((PANEL_W + 3) * (PANEL_H + 3) * 2);
 
 function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
   const map = activeMap(state);
@@ -211,6 +213,7 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
   const x1 = Math.ceil((cam.x + SCREEN_W) / TILE_PX);
   const y1 = Math.ceil((cam.y + PANEL_PX_H) / TILE_PX);
   let floodLen = 0;
+  let shadowLen = 0;
 
   for (let ty = y0; ty <= y1; ty++) {
     for (let tx = x0; tx <= x1; tx++) {
@@ -231,6 +234,15 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
       }
       blitTile(ctx, sheet, tile, sx, sy);
 
+      if (ty + 1 < map.h && shadowLen + 2 <= shadowScratch.length) {
+        const south = i + map.w;
+        if (map.biome[i] > map.biome[south] || map.elev[i] - map.elev[south] >= 40) {
+          shadowScratch[shadowLen] = sx;
+          shadowScratch[shadowLen + 1] = sy;
+          shadowLen += 2;
+        }
+      }
+
       if (map.floods && floodLen + 3 <= floodScratch.length) {
         const d = floodDepth(map.elev[i], level);
         if (d > 0) {
@@ -241,6 +253,11 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
         }
       }
     }
+  }
+
+  ctx.fillStyle = 'rgba(12, 10, 8, 0.42)';
+  for (let i = 0; i < shadowLen; i += 2) {
+    ctx.fillRect(shadowScratch[i], shadowScratch[i + 1] + TILE_PX - 3, TILE_PX, 3);
   }
 
   // Four fillStyles instead of one per tile — the overlay colours are discrete.
@@ -254,6 +271,81 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
       }
     }
   }
+}
+
+/**
+ * The ark is a monument, not a sprite: keel, ribs, hull, deck, roof, then
+ * pitch, grown from whatever has been delivered. Size is a pure function of
+ * progress so you can read the meter from the next panel over.
+ */
+function drawArkMonument(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (state.location.kind !== 'overworld') return;
+  const cam = cameraOrigin(state);
+  const cx = Math.round(state.world.ark.x * TILE_PX + TILE_PX / 2 - cam.x);
+  const cy = Math.round(state.world.ark.y * TILE_PX + TILE_PX - cam.y);
+  const progress = arkProgress(state);
+  const hullW = 40 + Math.round(progress * 152);
+  const hullH = 18 + Math.round(progress * 92);
+  if (cx + hullW < -8 || cx - hullW > SCREEN_W + 8) return;
+  if (cy + 16 < -8 || cy - hullH > PANEL_PX_H + 8) return;
+
+  const x = cx - (hullW >> 1);
+  const y = cy - hullH + 6;
+  const wood = progress < 0.15 ? '#7a4a1e' : PALETTE.ark;
+  const shade = '#6a3a14';
+  const pitch = state.delivered[Resource.Pitch] > 0;
+
+  // Keel.
+  ctx.fillStyle = shade;
+  ctx.fillRect(x + 4, y + hullH - 6, hullW - 8, 4);
+  ctx.fillStyle = wood;
+  ctx.fillRect(x + 6, y + hullH - 7, hullW - 12, 3);
+
+  if (progress < 0.12) return;
+
+  // Ribs.
+  ctx.fillStyle = shade;
+  const ribs = 3 + Math.round(progress * 5);
+  for (let i = 1; i < ribs; i++) {
+    const rx = x + Math.round((i * hullW) / ribs);
+    ctx.fillRect(rx, y + 8, 2, hullH - 14);
+  }
+
+  if (progress < 0.32) return;
+
+  // Hull sides.
+  ctx.fillStyle = pitch ? PALETTE.pitch : wood;
+  ctx.fillRect(x + 2, y + Math.round(hullH * 0.35), 4, Math.round(hullH * 0.55));
+  ctx.fillRect(x + hullW - 6, y + Math.round(hullH * 0.35), 4, Math.round(hullH * 0.55));
+  ctx.fillStyle = pitch ? '#1a1612' : shade;
+  ctx.fillRect(x + 1, y + Math.round(hullH * 0.7), hullW - 2, 5);
+
+  if (progress < 0.52) return;
+
+  // Deck.
+  ctx.fillStyle = pitch ? '#2a241c' : '#c48a48';
+  ctx.fillRect(x + 8, y + Math.round(hullH * 0.28), hullW - 16, 5);
+  ctx.fillStyle = shade;
+  ctx.fillRect(x + 8, y + Math.round(hullH * 0.28) + 5, hullW - 16, 1);
+
+  if (progress < 0.72) return;
+
+  // Roof / cabin.
+  const cabinW = Math.round(hullW * 0.42);
+  const cabinX = cx - (cabinW >> 1);
+  const cabinY = y + 4;
+  ctx.fillStyle = pitch ? PALETTE.pitch : '#8a4a20';
+  ctx.fillRect(cabinX, cabinY + 8, cabinW, Math.round(hullH * 0.22));
+  ctx.fillStyle = pitch ? '#1a1612' : '#6a3a14';
+  ctx.fillRect(cabinX - 2, cabinY + 4, cabinW + 4, 5);
+  ctx.fillRect(cabinX + 2, cabinY, cabinW - 4, 5);
+
+  if (progress < 0.92) return;
+
+  // Stem and stern posts, the last of the timber.
+  ctx.fillStyle = pitch ? PALETTE.pitch : '#7a4a1e';
+  ctx.fillRect(x + 4, y + 2, 3, hullH - 8);
+  ctx.fillRect(x + hullW - 7, y + 2, 3, hullH - 8);
 }
 
 function drawAnimals(ctx: CanvasRenderingContext2D, state: GameState): void {

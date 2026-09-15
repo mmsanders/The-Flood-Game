@@ -261,6 +261,7 @@ export function spawnAnimals(
   w: number,
   reserved: Set<number>,
   spawn: Point,
+  pastures: readonly number[] = [],
 ): Animal[] {
   const rng = stageRng(seed, 'animals');
   const byBiome: number[][] = [[], [], [], []];
@@ -270,6 +271,8 @@ export function spawnAnimals(
     byBiome[biome[i]].push(i);
   }
 
+  const pastureTiles = pastures.filter((i) => isWalkable(tiles[i]) && !reserved.has(i));
+
   const taken = new Set<number>(reserved);
   const animals: Animal[] = [];
   let id = 0;
@@ -277,8 +280,10 @@ export function spawnAnimals(
   for (let k = 0; k < ANIMAL_COUNT; k++) {
     const def = ANIMAL_DEFS[k];
     const home = byBiome[def.biome];
+    const prefer = def.biome === Biome.Valley && pastureTiles.length > 0 ? pastureTiles : home;
     for (let n = 0; n < ANIMALS_PER_KIND; n++) {
       const spot =
+        pickSpot(rng, prefer, taken, w, spawn, prefer === pastureTiles ? 3 : 14) ??
         pickSpot(rng, home, taken, w, spawn, 14) ??
         pickSpot(rng, home, taken, w, spawn, 6) ??
         pickSpot(rng, flatten(byBiome), taken, w, spawn, 4) ??

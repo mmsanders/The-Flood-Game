@@ -1,10 +1,13 @@
 /**
  * World generation pipeline.
  *
- *   elevation -> biomes -> paint (seams + world rim) -> connectivity repair -> POIs -> validation
+ *   elevation → landforms → settlements → siting → roads → paint →
+ *   connectivity repair → validation
  *
- * Each stage draws from its own derived sub-seed, so re-tuning one stage does
- * not reshuffle the others.
+ * Later passes overwrite earlier ones via the plan buffer, so a road stays a
+ * road and a pasture stays a pasture instead of growing a random tree. Each
+ * stage draws from its own derived sub-seed, so re-tuning one stage does not
+ * reshuffle the others.
  */
 
 import {
@@ -21,9 +24,13 @@ import { PoiKind, type World, type WorldStats } from '../world.js';
 import { spawnAnimals } from '../animals.js';
 import { ensureConnected } from './connectivity.js';
 import { generateElevation } from './elevation.js';
+import { carveLandforms } from './landforms.js';
 import { paintTiles } from './paint.js';
+import { freshPlan } from './plan.js';
 import { placePois } from './pois.js';
+import { layRoads } from './roads.js';
 import { paintSouthBeach, wallWorldRim } from './seams.js';
+import { placeSettlements } from './settlements.js';
 
 export { ensureConnected, labelRegions } from './connectivity.js';
 export { generateElevation } from './elevation.js';
@@ -33,12 +40,24 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
   const h = tileHeight(params);
 
   const { elev, biome } = generateElevation(seed, params);
-  const tiles = paintTiles({ seed, params, elev, biome });
+  const plan = freshPlan(w * h);
+
+  carveLandforms(seed, params, elev, biome, plan);
+  const { settlements, pastures } = placeSettlements(seed, params, biome, plan);
+  const { spawn, ark, pois, boatYard } = placePois(seed, params, elev, biome, plan, settlements);
+
+  layRoads(seed, params, biome, plan, settlements, {
+    ark,
+    spawn,
+    dungeons: pois.filter((p) => p.kind === PoiKind.Dungeon),
+    docks: pois.filter((p) => p.kind === PoiKind.BoatYard),
+  });
+
+  const tiles = paintTiles({ seed, params, elev, biome, plan });
 
   const connectivity = ensureConnected(tiles, biome, params);
   // Re-stamp the frame in case a seam carve nicked a rim tile.
   wallWorldRim(tiles, biome, elev, w, h);
-  const { spawn, ark, pois, boatYard } = placePois(seed, params, tiles, elev, biome);
   paintSouthBeach(tiles, w, h);
 
   const reserved = new Set<number>();
@@ -46,7 +65,8 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
   reserved.add(ark.y * w + ark.x);
   reserved.add(boatYard.y * w + boatYard.x);
   for (const poi of pois) reserved.add(poi.y * w + poi.x);
-  const animals = spawnAnimals(seed, tiles, biome, w, reserved, spawn);
+  const livePastures = pastures.filter((i) => isWalkable(tiles[i]) && !reserved.has(i));
+  const animals = spawnAnimals(seed, tiles, biome, w, reserved, spawn, livePastures);
 
   // One dungeon per entrance placed above. They are separate maps, so nothing
   // here touches the overworld's own connectivity or solvability.
@@ -78,6 +98,8 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
     ark,
     boatYard,
     pois,
+    settlements,
+    pastures: livePastures,
     animals,
     dungeons,
     stats,

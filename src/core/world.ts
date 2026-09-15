@@ -32,6 +32,19 @@ export interface Poi extends Point {
   biome: Biome;
 }
 
+export const enum SettlementKind {
+  TentCity = 0,
+  LoggingTown = 1,
+  City = 2,
+  Hamlet = 3,
+}
+
+export interface Settlement extends Point {
+  kind: SettlementKind;
+  biome: Biome;
+  shrine: Point | null;
+}
+
 export interface WorldStats {
   /** Tiles per biome, indexed by Biome. */
   biomeTiles: number[];
@@ -56,6 +69,10 @@ export interface World extends TileMap {
   ark: Point;
   boatYard: Point;
   pois: Poi[];
+  /** Towns, the logging camp, the city, mountain hamlets. */
+  settlements: Settlement[];
+  /** Walkable pasture tiles. Valley livestock prefer these. */
+  pastures: number[];
   /** Two of each biblical kind, wandering their home biomes. */
   animals: Animal[];
   /** One per biome. Entrances are linked by index from the matching Poi. */

@@ -9,7 +9,7 @@
  */
 
 import { PANEL_H, PANEL_W, type WorldParams, tileHeight, tileWidth } from '../config.js';
-import { Biome, Tile, carveTo, isResourceNode } from '../tiles.js';
+import { Biome, Tile, carveOpening, isResourceNode } from '../tiles.js';
 
 /** True on the first or last row/column of any panel, including the map rim. */
 export function onPanelEdge(x: number, y: number): boolean {
@@ -30,7 +30,11 @@ export function isSeamBlocker(tile: number): boolean {
     tile === Tile.Shrub ||
     tile === Tile.Rock ||
     tile === Tile.Cliff ||
-    tile === Tile.Water
+    tile === Tile.Water ||
+    tile === Tile.Fence ||
+    tile === Tile.Tent ||
+    tile === Tile.House ||
+    tile === Tile.StoneWall
   );
 }
 
@@ -120,7 +124,14 @@ export function wallWorldRim(
 /** Walkable sand just north of the sea, between the east and west walls. */
 export function paintSouthBeach(tiles: Uint8Array, w: number, h: number): void {
   if (h < 3) return;
-  for (let x = 1; x < w - 1; x++) tiles[(h - 2) * w + x] = Tile.Sand;
+  for (let x = 1; x < w - 1; x++) {
+    const i = (h - 2) * w + x;
+    const north = tiles[(h - 3) * w + x];
+    // Let the river keep its mouth; everywhere else is the strand.
+    if (north === Tile.Water) tiles[i] = Tile.Water;
+    else if (north === Tile.Bridge) tiles[i] = Tile.Bridge;
+    else tiles[i] = Tile.Sand;
+  }
 }
 
 function rimTile(biome: Biome, elev: number): Tile {
@@ -155,11 +166,11 @@ export function openSeamMismatches(
     const bBlock = isSeamBlocker(tiles[b]);
     if (aBlock === bBlock) return false;
     if (aBlock && !isWorldRim(a % w, (a / w) | 0, w, h)) {
-      tiles[a] = carveTo(biome[a] as Biome);
+      tiles[a] = carveOpening(tiles[a], biome[a] as Biome);
       carved++;
     }
     if (bBlock && !isWorldRim(b % w, (b / w) | 0, w, h)) {
-      tiles[b] = carveTo(biome[b] as Biome);
+      tiles[b] = carveOpening(tiles[b], biome[b] as Biome);
       carved++;
     }
     return true;
@@ -207,12 +218,29 @@ function placeCounterpart(
   i: number,
   source: number,
 ): boolean {
-  // Resources are kept off edges; never bury a node to match a tree.
-  if (isResourceNode(tiles[i])) return false;
+  // Resources and anything the plan placed with intent stay put. A road that
+  // hits a seam next to a tree should keep being a road; connectivity will
+  // open the other side rather than grow a forest over the path.
+  if (isResourceNode(tiles[i]) || isPlannedKeep(tiles[i])) return false;
   const next = counterpartTile(biome[i] as Biome, elev[i], source);
   if (tiles[i] === next) return false;
   tiles[i] = next;
   return true;
+}
+
+function isPlannedKeep(tile: number): boolean {
+  return (
+    tile === Tile.Path ||
+    tile === Tile.Road ||
+    tile === Tile.Steps ||
+    tile === Tile.Bridge ||
+    tile === Tile.ArkSite ||
+    tile === Tile.DungeonEntrance ||
+    tile === Tile.HeartContainer ||
+    tile === Tile.TownDoor ||
+    tile === Tile.BoatYard ||
+    tile === Tile.Shrine
+  );
 }
 
 function counterpartTile(biome: Biome, elev: number, source: number): Tile {
