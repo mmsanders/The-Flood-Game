@@ -28,8 +28,14 @@ export const NODE_YIELD = 1;
  * shrine spends pitch to crown it (tier 4), which also buds the harvest.
  *
  * Indexed by the shrine's biome / the current `rodTier`.
+ *
+ * Roughly a third of what the ark itself wants of that resource, against an
+ * ark recipe of 40 / 60 / 30 / 10. The previous costs (6 / 8 / 5 / 3) were
+ * close to free, which made the whole Rod ladder a formality rather than the
+ * run's first real decision. The survey says supply carries it: even pitch,
+ * the scarcest, comes in around six times the recipe within reach.
  */
-export const SHRINE_COST: readonly number[] = [6, 8, 5, 3];
+export const SHRINE_COST: readonly number[] = [18, 24, 15, 9];
 
 /** True if this Rod tier can take this resource. Fiber is always free. */
 export function canRodHarvest(rodTier: number, res: Resource): boolean {

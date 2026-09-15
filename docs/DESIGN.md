@@ -177,6 +177,26 @@ take over.
 
 ---
 
+## The frame budget
+
+A hard rule, ahead of every feature below: **no frame ever misses a vsync.**
+
+The simulation is fixed at 60Hz and never varies with the display, so the flood, collision
+and animal movement play out identically on every machine. The render runs once per vsync at
+whatever rate the display offers and interpolates between the last two simulation states,
+which is what makes a high-refresh screen smoother rather than just repetitive. Catch-up
+stepping is bounded by wall-clock time, so a fast-forward or a slow frame slips the in-game
+clock rather than producing a long one. The loop allocates nothing per frame; the HUD map
+caches its raster and rebuilds only when an input to it changed.
+
+"Locked 144" is not the target and is not achievable in a browser — rAF fires at the
+display's rate, whatever that is. "Never misses its deadline" is stricter where it counts and
+can be tested, which `tests/e2e/frametime.spec.ts` does on every build. `F3` shows the same
+numbers live.
+
+The rule is load-bearing for the plan in `ROADMAP.md`: every wave of it adds per-frame work,
+and the budget is easier to defend than to recover.
+
 ## Deferred
 
 ### Enemies

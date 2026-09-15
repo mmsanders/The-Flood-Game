@@ -10,7 +10,7 @@
 import { PANEL_H, PANEL_PX_H, PANEL_PX_W, PANEL_W, TILE_PX } from '../core/config.js';
 import { ANIMAL_DEFS, ANIMAL_H, ANIMAL_W, AnimalDir, AnimalStatus, FLOCK_TOTAL } from '../core/animals.js';
 import { floodDepth, floodOverlayFill } from '../core/flood.js';
-import { panelsHigh, panelsWide } from '../core/tilemap.js';
+import { panelsHigh, panelsWide, type TileMap } from '../core/tilemap.js';
 import { Biome, RESOURCE_COUNT, Tile, carveTo } from '../core/tiles.js';
 import { PALETTE } from '../render/palette.js';
 import { getTilesheet, tileSheetX, tileSheetY } from '../render/tilesheet.js';
@@ -20,13 +20,14 @@ import {
   MINIMAP_W,
   MINIMAP_X,
   MINIMAP_Y,
+  type MiniMapLayout,
   MiniPoi,
   cellRect,
+  countVisited,
   followMinimapView,
   layoutMiniMap,
-  panelHasTile,
-  panelPoi,
-  sampleMinimapRgb,
+  panelPoiIndex,
+  sampleMinimapInto,
   visitedCells,
 } from './minimap.js';
 import {
@@ -44,6 +45,7 @@ import {
 } from './state.js';
 import { isDaylight, todAt } from './tod.js';
 import type { BestFlock } from './persist.js';
+import { MISS_RATIO, type PerfSnapshot } from './perf.js';
 
 export const HUD_H = 48;
 export const SCREEN_W = PANEL_PX_W;
@@ -60,9 +62,33 @@ const SERPENT_TONGUE = '#c83c3c';
 export interface RenderUi {
   bestiary?: boolean;
   best?: BestFlock;
+  /**
+   * How far the display is between the last two simulation steps, 0..1.
+   *
+   * The simulation is pinned at 60Hz; the display runs at whatever it runs at.
+   * Drawing at `previous + (current - previous) * alpha` is what makes a 144Hz
+   * screen genuinely smoother rather than just showing each state twice.
+   * Defaults to 1 — the current state — for tests and single-shot renders.
+   */
+  alpha?: number;
+  perf?: PerfSnapshot | null;
+}
+
+/**
+ * The alpha for the frame being drawn.
+ *
+ * Module-scoped rather than threaded through every draw function: it is a
+ * property of the frame, it never outlives one `render` call, and passing it
+ * down by hand would put an unused parameter on a dozen signatures.
+ */
+let renderAlpha = 1;
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
 }
 
 export function render(ctx: CanvasRenderingContext2D, state: GameState, ui?: RenderUi): void {
+  renderAlpha = ui?.alpha ?? 1;
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
@@ -83,6 +109,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, ui?: Ren
   drawMessage(ctx, state);
   if (state.phase !== 'playing') drawEndCard(ctx, state);
   if (ui?.bestiary) drawBestiary(ctx, state, ui.best ?? { pairs: 0, rescued: 0 });
+  if (ui?.perf) drawPerf(ctx, ui.perf);
 }
 
 /**
@@ -118,15 +145,32 @@ function drawObstaclePrompt(ctx: CanvasRenderingContext2D, state: GameState): vo
   ctx.textBaseline = 'top';
 }
 
-/** Camera origin in world pixels, interpolated during a panel transition. */
+/**
+ * Camera origin in world pixels, interpolated during a panel transition.
+ *
+ * Writes into a shared result rather than returning a fresh object: this is
+ * called three times a frame, and a steady drip of short-lived objects is
+ * what eventually buys you a collection pause in the middle of a swing.
+ */
+const camScratch = { x: 0, y: 0 };
+
 export function cameraOrigin(state: GameState): { x: number; y: number } {
   const { camera } = state;
   const toX = camera.panelX * PANEL_PX_W;
   const toY = camera.panelY * PANEL_PX_H;
   const fromX = camera.fromX * PANEL_PX_W;
   const fromY = camera.fromY * PANEL_PX_H;
-  const t = camera.scroll;
-  return { x: toX + (fromX - toX) * t, y: toY + (fromY - toY) * t };
+  // The scroll eases from 1 to 0 over a transition, and is *set* to 1 on the
+  // frame the panel flips — at the same moment `fromX`/`fromY` change. There
+  // is nothing meaningful to interpolate across that jump, so only the
+  // easing-out direction is smoothed.
+  const t =
+    camera.scroll < camera.prevScroll
+      ? lerp(camera.prevScroll, camera.scroll, renderAlpha)
+      : camera.scroll;
+  camScratch.x = toX + (fromX - toX) * t;
+  camScratch.y = toY + (fromY - toY) * t;
+  return camScratch;
 }
 
 function blitTile(
@@ -149,6 +193,13 @@ function blitTile(
   );
 }
 
+/**
+ * Screen position and depth of every flooded tile in view, as (sx, sy, depth)
+ * triples. One screenful plus the partial row and column a mid-scroll camera
+ * exposes, so it never grows and never reallocates.
+ */
+const floodScratch = new Int32Array((PANEL_W + 3) * (PANEL_H + 3) * 3);
+
 function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
   const map = activeMap(state);
   const cam = cameraOrigin(state);
@@ -159,7 +210,7 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
   const y0 = Math.floor(cam.y / TILE_PX);
   const x1 = Math.ceil((cam.x + SCREEN_W) / TILE_PX);
   const y1 = Math.ceil((cam.y + PANEL_PX_H) / TILE_PX);
-  const floods: number[] = [];
+  let floodLen = 0;
 
   for (let ty = y0; ty <= y1; ty++) {
     for (let tx = x0; tx <= x1; tx++) {
@@ -180,9 +231,14 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
       }
       blitTile(ctx, sheet, tile, sx, sy);
 
-      if (map.floods) {
+      if (map.floods && floodLen + 3 <= floodScratch.length) {
         const d = floodDepth(map.elev[i], level);
-        if (d > 0) floods.push(sx, sy, d);
+        if (d > 0) {
+          floodScratch[floodLen] = sx;
+          floodScratch[floodLen + 1] = sy;
+          floodScratch[floodLen + 2] = d;
+          floodLen += 3;
+        }
       }
     }
   }
@@ -192,9 +248,9 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
     const fill = floodOverlayFill(depth);
     if (!fill) continue;
     ctx.fillStyle = fill;
-    for (let i = 0; i < floods.length; i += 3) {
-      if (floods[i + 2] === depth || (depth === 4 && floods[i + 2] >= 4)) {
-        ctx.fillRect(floods[i], floods[i + 1], TILE_PX, TILE_PX);
+    for (let i = 0; i < floodLen; i += 3) {
+      if (floodScratch[i + 2] === depth || (depth === 4 && floodScratch[i + 2] >= 4)) {
+        ctx.fillRect(floodScratch[i], floodScratch[i + 1], TILE_PX, TILE_PX);
       }
     }
   }
@@ -205,8 +261,8 @@ function drawAnimals(ctx: CanvasRenderingContext2D, state: GameState): void {
   const cam = cameraOrigin(state);
   for (const a of state.world.animals) {
     if (a.status !== AnimalStatus.Wild) continue;
-    const x = Math.round(a.x - cam.x);
-    const y = Math.round(a.y - cam.y);
+    const x = Math.round(lerp(a.prevX, a.x, renderAlpha) - cam.x);
+    const y = Math.round(lerp(a.prevY, a.y, renderAlpha) - cam.y);
     if (x < -16 || y < -16 || x > SCREEN_W + 16 || y > PANEL_PX_H + 16) continue;
     const bob = Math.round(Math.sin(a.anim * 8 + a.id) * 0.8);
     drawCreature(ctx, a.kind, x, y + bob, a.dir, a.anim);
@@ -288,8 +344,8 @@ function faceX(x: number, dir: AnimalDir): number {
 function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState): void {
   const p = state.player;
   const cam = cameraOrigin(state);
-  const x = Math.round(p.x - cam.x);
-  const y = Math.round(p.y - cam.y);
+  const x = Math.round(lerp(p.prevX, p.x, renderAlpha) - cam.x);
+  const y = Math.round(lerp(p.prevY, p.y, renderAlpha) - cam.y);
 
   // Blink through invulnerability frames.
   if (p.invuln > 0 && Math.floor(p.invuln * 12) % 2 === 0) return;
@@ -419,7 +475,10 @@ function drawSerpentRod(
   const ay = dir === Dir.Up ? -1 : dir === Dir.Down ? 1 : 0;
   const px = ay !== 0 ? 1 : 0;
   const py = ax !== 0 ? 1 : 0;
-  const len = TILE_PX * 2;
+  // The head sits on the near edge of the second tile, not its centre. The
+  // Rod's reach is what harvests there; the sprite only has to reach far
+  // enough to say so, and a full two tiles read as absurdly long.
+  const len = TILE_PX + TILE_PX / 2;
 
   for (let i = 0; i < len; i += 4) {
     const wave = (i >> 2) & 1 ? 1 : -1;
@@ -497,6 +556,48 @@ function drawHud(ctx: CanvasRenderingContext2D, state: GameState): void {
  * Flood is the same scalar the world uses: each cell tints, and when there
  * is room for it the water rises from the bottom of the square.
  */
+/**
+ * Everything the cached raster was built from.
+ *
+ * The HUD map used to be rebuilt from scratch every frame — a per-panel scan
+ * of all 176 tiles to find a town door, twice, plus a hex-string parse per
+ * pixel. It is a 40x48 widget whose contents change a few times a minute, so
+ * it is now rebuilt only when one of these inputs actually moves.
+ */
+interface MiniCache {
+  bits: ImageData | null;
+  layout: MiniMapLayout | null;
+  map: TileMap | null;
+  visited: number;
+  panelX: number;
+  panelY: number;
+  filledSouth: boolean;
+  viewY: number;
+  waterBucket: number;
+  mapRevision: number;
+}
+
+const mini: MiniCache = {
+  bits: null,
+  layout: null,
+  map: null,
+  visited: -1,
+  panelX: -1,
+  panelY: -1,
+  filledSouth: false,
+  viewY: -1,
+  waterBucket: Number.NaN,
+  mapRevision: -1,
+};
+
+/** Drop the cached raster. Called when the rules module is hot-swapped. */
+export function invalidateMiniMap(): void {
+  mini.bits = null;
+  mini.layout = null;
+  mini.map = null;
+  mini.visited = -1;
+}
+
 function drawMiniMap(ctx: CanvasRenderingContext2D, state: GameState): void {
   ctx.fillStyle = '#080a0e';
   ctx.fillRect(MINIMAP_X, MINIMAP_Y, MINIMAP_W, MINIMAP_H);
@@ -509,22 +610,41 @@ function drawMiniMap(ctx: CanvasRenderingContext2D, state: GameState): void {
       : state.exploredOverworld;
   if (!grid) return;
 
-  const cells = visitedCells(grid, width);
   const worldRows = panelsHigh(map);
   if (state.location.kind === 'overworld' && state.camera.panelY >= worldRows - 1) {
     state.minimapFilledSouth = true;
   }
-  const layout = layoutMiniMap(
-    cells,
-    MINIMAP_X,
-    MINIMAP_Y,
-    MINIMAP_W,
-    MINIMAP_H,
-    width,
-    worldRows,
-    state.camera.panelY,
-    state.minimapFilledSouth,
-  );
+
+  // Layout depends only on which panels are known and where the player is.
+  const visited = countVisited(grid);
+  if (
+    mini.layout === null ||
+    mini.map !== map ||
+    mini.visited !== visited ||
+    mini.panelX !== state.camera.panelX ||
+    mini.panelY !== state.camera.panelY ||
+    mini.filledSouth !== state.minimapFilledSouth
+  ) {
+    mini.layout = layoutMiniMap(
+      visitedCells(grid, width),
+      MINIMAP_X,
+      MINIMAP_Y,
+      MINIMAP_W,
+      MINIMAP_H,
+      width,
+      worldRows,
+      state.camera.panelY,
+      state.minimapFilledSouth,
+    );
+    mini.map = map;
+    mini.visited = visited;
+    mini.panelX = state.camera.panelX;
+    mini.panelY = state.camera.panelY;
+    mini.filledSouth = state.minimapFilledSouth;
+    mini.waterBucket = Number.NaN;
+  }
+
+  const layout = mini.layout;
   if (!layout) return;
 
   state.minimapViewY = followMinimapView(
@@ -537,32 +657,62 @@ function drawMiniMap(ctx: CanvasRenderingContext2D, state: GameState): void {
   );
 
   const level = waterLevel(state);
-  const flash = Math.floor(state.elapsed * 6) % 2 === 0;
-  rasterizeMiniMap(ctx, state, map, cells, layout, state.minimapViewY, level);
+  // The map tints in whole flood-depth steps and the water climbs about 0.04
+  // elevation units a second, so a one-unit bucket rebuilds the raster roughly
+  // twice a minute rather than sixty times a second, with no visible lag.
+  const waterBucket = Math.floor(level);
 
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(layout.wellX, layout.wellY, layout.wellW, layout.wellH);
-  ctx.clip();
-  for (const c of cells) {
-    if (layout.scrolls) {
-      const ly = c.y - state.minimapViewY;
-      if (ly < 0 || ly >= layout.viewRows) continue;
-    }
-    const r = cellRect(layout, c.x, c.y, state.minimapViewY);
-    const here = c.x === state.camera.panelX && c.y === state.camera.panelY;
-    const poi = landmarkOnPanel(state, c.x, c.y);
-    if (poi !== MiniPoi.None && r.w >= 3 && r.h >= 3) drawMiniPoi(ctx, r, poi);
-    if (here && flash && Math.min(r.w, r.h) >= 3) {
-      ctx.strokeStyle = '#fff6c8';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
-    } else if (here && flash) {
-      ctx.fillStyle = 'rgba(240, 224, 160, 0.45)';
-      ctx.fillRect(r.x, r.y, r.w, r.h);
-    }
+  if (
+    mini.bits === null ||
+    mini.viewY !== state.minimapViewY ||
+    mini.waterBucket !== waterBucket ||
+    mini.mapRevision !== state.mapRevision
+  ) {
+    mini.bits = rasterizeMiniMap(ctx, state, map, grid, width, layout, state.minimapViewY, level);
+    mini.viewY = state.minimapViewY;
+    mini.waterBucket = waterBucket;
+    mini.mapRevision = state.mapRevision;
   }
-  ctx.restore();
+
+  ctx.putImageData(mini.bits, MINIMAP_X, MINIMAP_Y);
+
+  // The only thing that changes several times a second is the blink on the
+  // panel you are standing in, so that alone stays a live draw.
+  drawHereFlash(ctx, state, layout);
+}
+
+/** Blink the current panel over the cached raster. */
+function drawHereFlash(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  layout: MiniMapLayout,
+): void {
+  if (Math.floor(state.elapsed * 6) % 2 !== 0) return;
+
+  const cy = state.camera.panelY;
+  if (layout.scrolls) {
+    const ly = cy - state.minimapViewY;
+    if (ly < 0 || ly >= layout.viewRows) return;
+  }
+
+  const r = cellRect(layout, state.camera.panelX, cy, state.minimapViewY);
+  if (
+    r.x < layout.wellX ||
+    r.y < layout.wellY ||
+    r.x + r.w > layout.wellX + layout.wellW ||
+    r.y + r.h > layout.wellY + layout.wellH
+  ) {
+    return;
+  }
+
+  if (Math.min(r.w, r.h) >= 3) {
+    ctx.strokeStyle = '#fff6c8';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+  } else {
+    ctx.fillStyle = 'rgba(240, 224, 160, 0.45)';
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+  }
 }
 
 function landmarkOnPanel(state: GameState, panelX: number, panelY: number): MiniPoi {
@@ -576,32 +726,42 @@ function landmarkOnPanel(state: GameState, panelX: number, panelY: number): Mini
     return MiniPoi.None;
   }
 
-  let poi = panelPoi(state.world.pois, panelX, panelY);
-  if (poi === MiniPoi.None && panelHasTile(state.world, panelX, panelY, Tile.TownDoor)) {
-    poi = MiniPoi.Town;
-  }
-  return poi;
+  // Towns and shrines are placed by worldgen and never move, so this is a
+  // table lookup rather than the 176-tile panel scan it used to be.
+  return panelPoiIndex(state.world)[panelY * panelsWide(state.world) + panelX] as MiniPoi;
 }
 
-let miniBits: ImageData | null = null;
+/** `MINI_POI_COLOR` as bytes, so the rasteriser never parses a hex string. */
+const MINI_POI_RGB: [number, number, number][] = (
+  Object.keys(MINI_POI_COLOR) as unknown as MiniPoi[]
+).reduce<[number, number, number][]>((table, key) => {
+  const v = parseInt(MINI_POI_COLOR[key].slice(1), 16);
+  table[key] = [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+  return table;
+}, []);
 
 /**
- * One putImageData for the whole well. Per-pixel fillRect on a 36x36 cell
- * was thousands of canvas state changes a frame and was the hitch.
+ * Paint the whole well into one ImageData, for a single putImageData.
+ *
+ * Only called when `drawMiniMap` decides an input changed — a newly explored
+ * panel, the waterline crossing a tint step, a harvested node, a new map.
  */
 function rasterizeMiniMap(
   ctx: CanvasRenderingContext2D,
   state: GameState,
-  map: ReturnType<typeof activeMap>,
-  cells: { x: number; y: number }[],
-  layout: NonNullable<ReturnType<typeof layoutMiniMap>>,
+  map: TileMap,
+  grid: Uint8Array,
+  width: number,
+  layout: MiniMapLayout,
   viewY: number,
   level: number,
-): void {
-  if (!miniBits || miniBits.width !== MINIMAP_W || miniBits.height !== MINIMAP_H) {
-    miniBits = ctx.createImageData(MINIMAP_W, MINIMAP_H);
-  }
-  const data = miniBits.data;
+): ImageData {
+  const bits =
+    mini.bits && mini.bits.width === MINIMAP_W && mini.bits.height === MINIMAP_H
+      ? mini.bits
+      : ctx.createImageData(MINIMAP_W, MINIMAP_H);
+
+  const data = bits.data;
   for (let i = 0; i < data.length; i += 4) {
     data[i] = 8;
     data[i + 1] = 10;
@@ -609,54 +769,86 @@ function rasterizeMiniMap(
     data[i + 3] = 255;
   }
 
-  for (const c of cells) {
+  for (let gi = 0; gi < grid.length; gi++) {
+    if (!grid[gi]) continue;
+    const cellX = gi % width;
+    const cellY = (gi / width) | 0;
+
     if (layout.scrolls) {
-      const ly = c.y - viewY;
+      const ly = cellY - viewY;
       if (ly < 0 || ly >= layout.viewRows) continue;
     }
-    const r = cellRect(layout, c.x, c.y, viewY);
+
+    const r = cellRect(layout, cellX, cellY, viewY);
     const rw = Math.max(1, r.w | 0);
     const rh = Math.max(1, r.h | 0);
     const x0 = r.x | 0;
     const y0 = r.y | 0;
-    const poi = landmarkOnPanel(state, c.x, c.y);
-    const pin = poi !== MiniPoi.None && rw <= 2 ? hexToRgbLocal(MINI_POI_COLOR[poi]) : null;
+    const poi = landmarkOnPanel(state, cellX, cellY);
+    const pin = poi !== MiniPoi.None && rw <= 2 ? MINI_POI_RGB[poi] : null;
+
     for (let py = 0; py < rh; py++) {
+      const y = y0 + py;
+      if (y < 0 || y >= MINIMAP_H) continue;
       for (let px = 0; px < rw; px++) {
-        const rgb =
-          pin ?? sampleMinimapRgb(map, c.x, c.y, (px + 0.5) / rw, (py + 0.5) / rh, level);
         const x = x0 + px;
-        const y = y0 + py;
-        if (x < 0 || y < 0 || x >= MINIMAP_W || y >= MINIMAP_H) continue;
+        if (x < 0 || x >= MINIMAP_W) continue;
         const o = (y * MINIMAP_W + x) * 4;
-        data[o] = rgb[0];
-        data[o + 1] = rgb[1];
-        data[o + 2] = rgb[2];
-        data[o + 3] = 255;
+        if (pin) {
+          data[o] = pin[0];
+          data[o + 1] = pin[1];
+          data[o + 2] = pin[2];
+          data[o + 3] = 255;
+        } else {
+          sampleMinimapInto(
+            map,
+            cellX,
+            cellY,
+            (px + 0.5) / rw,
+            (py + 0.5) / rh,
+            level,
+            data,
+            o,
+          );
+        }
       }
     }
+
+    if (poi !== MiniPoi.None && rw >= 3 && rh >= 3) {
+      paintMiniPoi(data, x0 + (rw >> 1), y0 + (rh >> 1), poi);
+    }
   }
-  ctx.putImageData(miniBits, MINIMAP_X, MINIMAP_Y);
+
+  return bits;
 }
 
-function hexToRgbLocal(hex: string): [number, number, number] {
-  const v = parseInt(hex.slice(1), 16);
-  return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+/** A backed plus-sign landmark pip, written straight into the raster. */
+function paintMiniPoi(data: Uint8ClampedArray, cx: number, cy: number, poi: MiniPoi): void {
+  const color = MINI_POI_RGB[poi];
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      // The plus itself takes the landmark colour; the corners stay dark so
+      // the pip reads against whatever terrain is underneath it.
+      const arm = dx === 0 || dy === 0;
+      putMiniPixel(data, cx + dx, cy + dy, arm ? color : DARK_PIP);
+    }
+  }
 }
 
-function drawMiniPoi(
-  ctx: CanvasRenderingContext2D,
-  r: { x: number; y: number; w: number; h: number },
-  poi: MiniPoi,
+const DARK_PIP: [number, number, number] = [0x0a, 0x0c, 0x10];
+
+function putMiniPixel(
+  data: Uint8ClampedArray,
+  x: number,
+  y: number,
+  rgb: readonly [number, number, number],
 ): void {
-  const color = MINI_POI_COLOR[poi];
-  const cx = r.x + (r.w >> 1);
-  const cy = r.y + (r.h >> 1);
-  ctx.fillStyle = '#0a0c10';
-  ctx.fillRect(cx - 1, cy - 1, 3, 3);
-  ctx.fillStyle = color;
-  ctx.fillRect(cx, cy - 1, 1, 3);
-  ctx.fillRect(cx - 1, cy, 3, 1);
+  if (x < 0 || y < 0 || x >= MINIMAP_W || y >= MINIMAP_H) return;
+  const o = (y * MINIMAP_W + x) * 4;
+  data[o] = rgb[0];
+  data[o + 1] = rgb[1];
+  data[o + 2] = rgb[2];
+  data[o + 3] = 255;
 }
 
 /** Keys sit next to the hearts, the way Zelda 1 parked them on the status bar. */
@@ -929,4 +1121,69 @@ function drawBestiary(ctx: CanvasRenderingContext2D, state: GameState, best: Bes
     16,
     HUD_H + PANEL_PX_H - 24,
   );
+}
+
+/**
+ * The frame-time overlay (F3).
+ *
+ * A locked frame rate is a claim, and a claim you cannot see is one that
+ * quietly stops being true. `MISS` is the number that matters: frames that ran
+ * past the display's own interval by enough to have missed a vsync. It should
+ * read 0, always, and if it doesn't the p99 says how badly.
+ */
+function drawPerf(ctx: CanvasRenderingContext2D, perf: PerfSnapshot): void {
+  const w = 112;
+  const h = 46;
+  const x = SCREEN_W - w - 3;
+  const y = HUD_H + 3;
+
+  ctx.fillStyle = 'rgba(6, 8, 12, 0.84)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = '#2a3140';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+
+  ctx.font = '8px ui-monospace, monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+
+  const budget = perf.interval * MISS_RATIO;
+  const col2 = x + 58;
+
+  const label = (text: string, cx: number, cy: number): void => {
+    ctx.fillStyle = '#8d98ab';
+    ctx.fillText(text, cx, cy);
+  };
+  const value = (text: string, cx: number, cy: number, color: string): void => {
+    ctx.fillStyle = color;
+    ctx.fillText(text, cx, cy);
+  };
+
+  label('FPS', x + 4, y + 4);
+  value(perf.fps.toFixed(1), x + 26, y + 4, perf.p99 <= budget ? '#8fe06a' : '#e0908a');
+  value(`@${(1000 / perf.interval).toFixed(0)}Hz`, col2 + 14, y + 4, '#5c6879');
+
+  label('p50', x + 4, y + 14);
+  value(perf.p50.toFixed(1), x + 26, y + 14, '#c8d0dd');
+  label('p99', col2, y + 14);
+  value(perf.p99.toFixed(1), col2 + 22, y + 14, perf.p99 <= budget ? '#c8d0dd' : '#e0908a');
+
+  label('max', x + 4, y + 24);
+  value(perf.worst.toFixed(1), x + 26, y + 24, perf.worst <= budget ? '#c8d0dd' : '#e0908a');
+  label('stp', col2, y + 24);
+  value(String(perf.steps), col2 + 22, y + 24, '#c8d0dd');
+
+  // The number that matters: frames that ran long enough to have missed a
+  // vsync. It should read 0, and it is why the overlay exists at all.
+  label('MISS', x + 4, y + 34);
+  value(String(perf.missesTotal), x + 30, y + 34, perf.missesTotal === 0 ? '#8fe06a' : '#e0908a');
+
+  // p99 against the budget, so "how close are we" is legible at a glance.
+  const barX = col2;
+  const barY = y + 34;
+  const barW = w - (barX - x) - 4;
+  ctx.fillStyle = '#1c2330';
+  ctx.fillRect(barX, barY, barW, 7);
+  ctx.fillStyle = perf.p99 <= budget ? '#3d8a2a' : '#b5533a';
+  ctx.fillRect(barX, barY, Math.round(Math.min(1, perf.p99 / budget) * barW), 7);
 }

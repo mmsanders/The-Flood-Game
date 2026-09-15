@@ -15,12 +15,39 @@ import { parseSeed, randomSeed } from '../core/rng.js';
 import { generateValidWorld } from '../core/worldgen/index.js';
 import { flashHotfix, markLive } from './hot.js';
 import { Input } from './input.js';
+import { PerfMonitor } from './perf.js';
 import { considerBestFlock, loadBestFlock, type BestFlock } from './persist.js';
 import { SCREEN_H, SCREEN_W, render } from './render.js';
 import { adoptHotState, createGame, flockScore, type GameState, say, step } from './state.js';
 
+/**
+ * Simulation rate. Fixed, and deliberately independent of the display: the
+ * flood, collision and animal movement must play out identically on a 60Hz
+ * laptop and a 144Hz monitor.
+ */
 const STEP = 1 / 60;
+
+/** Longest real gap a frame may account for. Covers a backgrounded tab. */
 const MAX_FRAME = 0.25;
+
+/**
+ * Hard backstop on catch-up steps. The wall-clock budget below is the real
+ * guard; this only exists so a pathological `?speed=` cannot loop forever.
+ */
+const MAX_STEPS = 240;
+
+/**
+ * Wall-clock milliseconds a single frame may spend inside the simulation.
+ *
+ * Half the display's interval, so stepping can never be what makes the frame
+ * late. When the budget runs out the whole steps still owed are discarded and
+ * the in-game clock slips: a simulation that quietly runs slow is a bug you
+ * can live with, a 400ms frame is not. This is what stops fast-forward and a
+ * missed frame from turning into a visible hitch.
+ */
+function stepBudgetMs(intervalMs: number): number {
+  return Math.max(3, Math.min(8, intervalMs * 0.5));
+}
 
 const canvas = document.getElementById('screen') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d');
@@ -63,6 +90,8 @@ function applyCanvasSize(): void {
 applyCanvasSize();
 
 let input = new live.Input();
+const perf = new PerfMonitor();
+let showPerf = Boolean(import.meta.hot?.data.showPerf);
 let bestiary = Boolean(import.meta.hot?.data.bestiary);
 let best: BestFlock = loadBestFlock();
 let state = bootState();
@@ -103,8 +132,18 @@ let last = performance.now();
 let accumulator = (import.meta.hot?.data.accumulator as number | undefined) ?? 0;
 let raf = 0;
 
+/** Reused every frame; see the note on allocations in `perf.ts`. */
+const stepInput = { moveX: 0, moveY: 0, attackPressed: false, interactPressed: false };
+const renderUi: { bestiary: boolean; best: BestFlock; alpha: number; perf: ReturnType<PerfMonitor['read']> | null } = {
+  bestiary: false,
+  best: { pairs: 0, rescued: 0 },
+  alpha: 1,
+  perf: null,
+};
+
 function frame(now: number): void {
-  const elapsed = Math.min((now - last) / 1000, MAX_FRAME);
+  const frameMs = now - last;
+  const elapsed = Math.min(frameMs / 1000, MAX_FRAME);
   last = now;
 
   const intents = input.read();
@@ -112,31 +151,39 @@ function frame(now: number): void {
   if (intents.restartPressed) {
     state = newRun(live.randomSeed());
     accumulator = 0;
+    perf.reset();
   }
 
   if (intents.bestiaryPressed) bestiary = !bestiary;
+  if (intents.perfPressed) showPerf = !showPerf;
 
+  let steps = 0;
   if (!bestiary) {
     const scale = timeScale * (intents.fastForward ? 8 : 1);
     accumulator += elapsed * scale;
 
-    let steps = 0;
-    while (accumulator >= STEP && steps < 240) {
-      live.step(
-        state,
-        {
-          moveX: intents.moveX,
-          moveY: intents.moveY,
-          // Edge-triggered intents fire on the first substep only, so one key
-          // press cannot swing or pay several times in a single frame.
-          attackPressed: intents.attackPressed && steps === 0,
-          interactPressed: intents.interactPressed && steps === 0,
-        },
-        STEP,
-      );
+    const budget = stepBudgetMs(perf.interval());
+    const startedAt = performance.now();
+
+    while (accumulator >= STEP && steps < MAX_STEPS) {
+      stepInput.moveX = intents.moveX;
+      stepInput.moveY = intents.moveY;
+      // Edge-triggered intents fire on the first substep only, so one key
+      // press cannot swing or pay several times in a single frame.
+      stepInput.attackPressed = intents.attackPressed && steps === 0;
+      stepInput.interactPressed = intents.interactPressed && steps === 0;
+
+      live.step(state, stepInput, STEP);
       accumulator -= STEP;
       steps++;
+
+      if (performance.now() - startedAt >= budget) break;
     }
+
+    // Whole steps we could not afford are dropped rather than carried into the
+    // next frame, where they would compound into a worse one. The sub-step
+    // remainder is kept: it is exactly the render interpolation alpha.
+    if (accumulator >= STEP) accumulator %= STEP;
   } else {
     accumulator = 0;
   }
@@ -145,8 +192,15 @@ function frame(now: number): void {
   if (nextBest !== best) best = nextBest;
 
   input.endFrame();
+  perf.record(frameMs, steps);
+
+  renderUi.bestiary = bestiary;
+  renderUi.best = best;
+  renderUi.alpha = accumulator / STEP;
+  renderUi.perf = showPerf ? perf.read() : null;
+
   try {
-    live.render(ctx as CanvasRenderingContext2D, state, { bestiary, best });
+    live.render(ctx as CanvasRenderingContext2D, state, renderUi);
   } catch (err) {
     console.error('[flood] render failed', err);
   }
@@ -168,6 +222,9 @@ Object.assign(window as unknown as Record<string, unknown>, {
       state = newRun(seed);
     },
     render: () => live.render(ctx as CanvasRenderingContext2D, state, { bestiary, best }),
+    get perf() {
+      return perf.read();
+    },
   },
 });
 
@@ -200,6 +257,7 @@ if (import.meta.hot) {
     live.render = mod.render;
     live.SCREEN_W = mod.SCREEN_W;
     live.SCREEN_H = mod.SCREEN_H;
+    mod.invalidateMiniMap();
     applyCanvasSize();
     fitCanvas();
     flashHotfix('look');
@@ -245,6 +303,7 @@ if (import.meta.hot) {
     data.state = state;
     data.accumulator = accumulator;
     data.bestiary = bestiary;
+    data.showPerf = showPerf;
     cancelAnimationFrame(raf);
     input.dispose();
     window.removeEventListener('resize', fitCanvas);

@@ -16,6 +16,8 @@ export interface Intents {
   restartPressed: boolean;
   bestiaryPressed: boolean;
   fastForward: boolean;
+  /** Toggles the frame-time overlay. */
+  perfPressed: boolean;
 }
 
 const KEYS = {
@@ -28,11 +30,23 @@ const KEYS = {
   restart: ['KeyR'],
   bestiary: ['KeyB'],
   fast: ['ShiftLeft', 'ShiftRight'],
+  perf: ['F3'],
 } as const;
 
 export class Input {
   private down = new Set<string>();
   private pressed = new Set<string>();
+  private readonly intents: Intents = {
+    moveX: 0,
+    moveY: 0,
+    attack: false,
+    attackPressed: false,
+    interactPressed: false,
+    restartPressed: false,
+    bestiaryPressed: false,
+    fastForward: false,
+    perfPressed: false,
+  };
   private readonly target: EventTarget;
   private readonly onKeyDown: (e: Event) => void;
   private readonly onKeyUp: (e: Event) => void;
@@ -70,20 +84,40 @@ export class Input {
     this.pressed.clear();
   }
 
+  /**
+   * The frame's intents.
+   *
+   * Written into one long-lived object rather than allocated fresh: this is
+   * called every frame, and the object plus the two closures it used to build
+   * were pure garbage by the next one. Callers read the result within the
+   * frame; nobody should hold on to it across frames.
+   */
   read(): Intents {
-    const held = (codes: readonly string[]): boolean => codes.some((c) => this.down.has(c));
-    const hit = (codes: readonly string[]): boolean => codes.some((c) => this.pressed.has(c));
+    const i = this.intents;
+    i.moveX = (this.held(KEYS.right) ? 1 : 0) - (this.held(KEYS.left) ? 1 : 0);
+    i.moveY = (this.held(KEYS.down) ? 1 : 0) - (this.held(KEYS.up) ? 1 : 0);
+    i.attack = this.held(KEYS.attack);
+    i.attackPressed = this.hit(KEYS.attack);
+    i.interactPressed = this.hit(KEYS.interact);
+    i.restartPressed = this.hit(KEYS.restart);
+    i.bestiaryPressed = this.hit(KEYS.bestiary);
+    i.fastForward = this.held(KEYS.fast);
+    i.perfPressed = this.hit(KEYS.perf);
+    return i;
+  }
 
-    return {
-      moveX: (held(KEYS.right) ? 1 : 0) - (held(KEYS.left) ? 1 : 0),
-      moveY: (held(KEYS.down) ? 1 : 0) - (held(KEYS.up) ? 1 : 0),
-      attack: held(KEYS.attack),
-      attackPressed: hit(KEYS.attack),
-      interactPressed: hit(KEYS.interact),
-      restartPressed: hit(KEYS.restart),
-      bestiaryPressed: hit(KEYS.bestiary),
-      fastForward: held(KEYS.fast),
-    };
+  private held(codes: readonly string[]): boolean {
+    for (let n = 0; n < codes.length; n++) {
+      if (this.down.has(codes[n])) return true;
+    }
+    return false;
+  }
+
+  private hit(codes: readonly string[]): boolean {
+    for (let n = 0; n < codes.length; n++) {
+      if (this.pressed.has(codes[n])) return true;
+    }
+    return false;
   }
 
   /** Call once per frame, after reading, to clear edge-triggered state. */
