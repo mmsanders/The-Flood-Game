@@ -5,6 +5,8 @@
 A procedurally generated overworld drains from the south while you climb north gathering
 material for an ark. Forty days. Permadeath. One seed, one world, one run.
 
+**Play:** [the game](https://mmsanders.github.io/The-Flood-Game/) · [the world inspector](https://mmsanders.github.io/The-Flood-Game/dev/)
+
 ```
 npm install
 npm run dev          # game at /, world inspector at /dev/
@@ -15,13 +17,13 @@ npx tsx scripts/survey.ts 12   # worldgen tuning report
 
 ## The two things to look at
 
-**The game** (`/`) — arrows or WASD to move, space swings the Rod of Aaron, `E` uses
+**[The game](https://mmsanders.github.io/The-Flood-Game/)** (`/`) — arrows or WASD to move, space swings the Rod of Aaron, `E` uses
 (enter a dungeon, imbue the Rod at a shrine, frame the skiff, launch), `B` opens the flock,
 `F3` shows frame times, `R` restarts, hold shift to fast-forward the clock. `?seed=12345`
 replays an exact world; `?speed=60` compresses the two-hour run into a couple of minutes
 for testing.
 
-**The world inspector** (`/dev/`) — a phone-first view onto the same generator the game
+**[The world inspector](https://mmsanders.github.io/The-Flood-Game/dev/)** (`/dev/`) — a phone-first view onto the same generator the game
 runs. Pan and pinch the whole map, drag the day slider to watch the world drown, tap any
 panel for its sprites and its raw bytes, and switch overlays for biome, elevation and
 walkability. The seed lives in the URL, so a link is a world.
