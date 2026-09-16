@@ -203,7 +203,7 @@ describe('boat: sailing and dredging', () => {
 
     state.player.cooldown = 0;
     state.world.tiles[i] = Tile.GopherTree;
-    state.world.elev[i] = Math.max(0, Math.floor(level - 2.5 * FLOOD_RISE_PER_DAY));
+    state.world.elev[i] = Math.max(0, Math.floor(level - 3.5 * FLOOD_RISE_PER_DAY));
     expect(floodDepth(state.world.elev[i], level)).toBe(3);
 
     step(state, { moveX: 0, moveY: 0, attackPressed: true }, 1 / 60);
