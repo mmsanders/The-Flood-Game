@@ -204,6 +204,11 @@ html.touch-ui .touch-control {
   display: flex;
 }
 
+/* The generic touch-control rule is flex; the D-pad itself must stay a 3x3 grid. */
+html.touch-ui .dpad {
+  display: grid;
+}
+
 html.touch-ui .overlay {
   display: none;
 }
