@@ -155,6 +155,8 @@ export const POI_STYLE = [
   { color: PALETTE.town, glyph: 'T', label: 'Town' },
   { color: PALETTE.dock, glyph: 'B', label: 'Slipway' },
   { color: PALETTE.shrine, glyph: 'R', label: 'Rod shrine' },
+  { color: PALETTE.town, glyph: 'S', label: 'Shop' },
+  { color: PALETTE.rock, glyph: 'H', label: 'Hermit' },
 ] as const;
 
 /** POI markers in world coordinates, sized in screen pixels. */
