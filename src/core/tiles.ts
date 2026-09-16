@@ -59,6 +59,8 @@ export const enum Tile {
   Shrine = 0x35,
   /** Left behind after a heart is taken. Blocking. */
   Pedestal = 0x36,
+  /** A skiff set down on dry ground. Walkable so Noah can take hold of it. */
+  Skiff = 0x37,
 
   // -- 0x40 dungeon terrain -------------------------------------------------
   DungeonFloor = 0x40,
@@ -281,10 +283,11 @@ export const TILE_NAMES: Record<number, string> = {
   [Tile.ArkSite]: 'Ark Site',
   [Tile.DungeonEntrance]: 'Dungeon',
   [Tile.HeartContainer]: 'Heart Container',
-  [Tile.TownDoor]: 'Town',
+  [Tile.TownDoor]: 'Town Market',
   [Tile.BoatYard]: 'Slipway',
   [Tile.Shrine]: 'Rod Shrine',
   [Tile.Pedestal]: 'Pedestal',
+  [Tile.Skiff]: 'Beached Skiff',
   [Tile.DungeonFloor]: 'Dungeon Floor',
   [Tile.DungeonWall]: 'Dungeon Wall',
   [Tile.Stairs]: 'Stairs',
