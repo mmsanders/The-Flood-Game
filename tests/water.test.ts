@@ -159,7 +159,7 @@ describe('the skiff and the drowned landscape', () => {
     expect(isBoatableTile(state, dryLand % map.w, (dryLand / map.w) | 0)).toBe(false);
   });
 
-  it('floats over a boulder once the water is over it', () => {
+  it('floats over a boulder once depth two covers it', () => {
     const state = newState();
     const map = state.world;
     const i = map.tiles.indexOf(Tile.Grass);
@@ -173,9 +173,19 @@ describe('the skiff and the drowned landscape', () => {
     expect(depthAt(state, tx, ty)).toBe(1);
     expect(isBoatableTile(state, tx, ty)).toBe(false);
 
-    // Deep: you sail straight over it.
+    // Wave two gives the ordinary skiff a hard depth-2 ceiling. Find an
+    // elevation at the later water level that exercises exactly that rung.
     state.elapsed = state.world.params.secondsPerDay * 20;
-    expect(depthAt(state, tx, ty)).toBeGreaterThanOrEqual(2);
+    let depthTwoElevation = -1;
+    for (let elevation = 0; elevation <= 255; elevation++) {
+      map.elev[i] = elevation;
+      if (depthAt(state, tx, ty) === 2) {
+        depthTwoElevation = elevation;
+        break;
+      }
+    }
+    expect(depthTwoElevation).toBeGreaterThanOrEqual(0);
+    expect(depthAt(state, tx, ty)).toBe(2);
     expect(isBoatableTile(state, tx, ty)).toBe(true);
   });
 
