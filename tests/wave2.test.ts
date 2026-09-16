@@ -82,7 +82,7 @@ describe('wave 2: the depth ladder', () => {
     const i = spawn.y * state.world.w + spawn.x + 1;
     const level = waterLevel(state);
     state.world.tiles[i] = Tile.Grass;
-    state.world.elev[i] = Math.max(0, Math.floor(level - 2.5 * FLOOD_RISE_PER_DAY));
+    state.world.elev[i] = Math.max(0, Math.floor(level - 3.5 * FLOOD_RISE_PER_DAY));
     expect(depthAt(state, spawn.x + 1, spawn.y)).toBe(3);
 
     state.boatDepth = BASE_BOAT_DEPTH;
@@ -90,7 +90,7 @@ describe('wave 2: the depth ladder', () => {
     state.boatDepth = PITCHED_BOAT_DEPTH;
     expect(isBoatableTile(state, spawn.x + 1, spawn.y)).toBe(true);
 
-    state.world.elev[i] = Math.max(0, Math.floor(level - 3.5 * FLOOD_RISE_PER_DAY));
+    state.world.elev[i] = Math.max(0, Math.floor(level - 6.5 * FLOOD_RISE_PER_DAY));
     expect(depthAt(state, spawn.x + 1, spawn.y)).toBe(4);
     expect(isBoatableTile(state, spawn.x + 1, spawn.y)).toBe(false);
   });
@@ -151,7 +151,7 @@ describe('wave 2: the physical skiff', () => {
     state.elapsed = state.world.params.secondsPerDay * 20;
     const i = spawn.y * state.world.w + spawn.x;
     const level = waterLevel(state);
-    state.world.elev[i] = Math.max(0, Math.floor(level - 2.5 * FLOOD_RISE_PER_DAY));
+    state.world.elev[i] = Math.max(0, Math.floor(level - 3.5 * FLOOD_RISE_PER_DAY));
     expect(depthAt(state, spawn.x, spawn.y)).toBe(3);
     expect(boatDestroyedAtDepth(state.boatDepth, 3)).toBe(true);
 
