@@ -90,6 +90,7 @@ describe('Wave 2: depth ladder by gear tier', () => {
     }
     expect(state.player.x).toBeGreaterThan(before);
 
+    // Depth 2: still on foot — cannot enter.
     state.elapsed = state.world.params.secondsPerDay * 20;
     state.world.elev[wet] = Math.max(0, Math.floor(waterLevel(state) - 1.5 * FLOOD_RISE_PER_DAY));
     expect(floodDepth(state.world.elev[wet], waterLevel(state))).toBe(2);
@@ -198,6 +199,7 @@ describe('Wave 2: barter prices move as the world drowns', () => {
     expect(prompt?.label).toMatch(/Barter/i);
     expect(prompt?.affordable).toBe(false);
 
+    // Still dry early — prices near base.
     const early = biomeDryFractions(state);
     expect(early.wood).toBeGreaterThan(0.2);
   });
