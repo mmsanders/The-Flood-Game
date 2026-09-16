@@ -75,8 +75,10 @@ export class TouchControls {
 
     return {
       bottomHeight: Math.max(dpad?.height ?? 0, actions?.height ?? 0, utility?.height ?? 0) + 30,
-      leftWidth: Math.max(dpad?.width ?? 0, utility?.width ?? 0) + 24,
-      rightWidth: (actions?.width ?? 0) + 24,
+      // The layout itself owns the safe-area padding and inter-column gaps, so
+      // only a small thumb-space margin belongs in the side reservation.
+      leftWidth: Math.max(dpad?.width ?? 0, utility?.width ?? 0) + 12,
+      rightWidth: (actions?.width ?? 0) + 12,
     };
   }
 
