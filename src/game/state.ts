@@ -1,1 +1,1 @@
-file:///workspace/flood-wave2/repo/src/game/state.ts
+@/workspace/flood-wave2/repo/src/game/state.ts
