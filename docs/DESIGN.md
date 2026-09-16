@@ -97,10 +97,13 @@ tile", 0 (dry) to 4 (the deep), so wading, sailing, beaching and dredging cannot
 
 - **Natural water** is never shallow — a pond is depth 2 whatever the sea is doing, which is
   what stops it being a shortcut you paddle across.
-- **The gorge** carries its own runoff from the first day of rain, deepening a step roughly
-  every ten days. It is rain coming off the mountain rather than the sea arriving, which is
-  why the channel is wet in the north long before the south coast is, and why it is the
-  first thing on the map to tell you the weather has turned.
+- **The gorge** carries runoff, and it does not fill like a bathtub. Water arrives at the
+  top of the channel on day one and runs *down* it: a front sweeping from the northern
+  spring to the southern mouth over about a day, leaving the whole channel running at a
+  depth you cannot wade. It is rain off the mountain, not the sea arriving, which is why
+  the north is a river while the south is still a dry ditch — and why it is the first thing
+  on the map to tell you the weather has turned. When the prologue lands, holding the front
+  back until the rain starts is one constant.
 - **Everything else** is the flood: elevation against sea level.
 
 Sail over anything at depth 2 or more, boulders included; below that the drowned landscape
@@ -125,7 +128,14 @@ remembering and worth returning to before it goes under.
 
 **Build:** the ark stands on the one hand-authored panel in the world, directly north of
 the panel you wake up on — a walled platform filling the centre-bottom of the screen with a
-single stair up from the south, and the hull growing out of it as you deliver. Material is
+single stair up from the south, and the hull growing out of it as you deliver.
+
+It is drawn to read as a *boat* at every stage rather than only at the end: the keel and the
+two upswept posts go down first, so the silhouette is a hull from about a tenth of the way
+in, and the planking, decks, roof, cabin and gangway fill into that outline. The hull has a
+real sheer — the top edge dipping amidships and sweeping up at bow and stern — which is the
+single line that separates a ship from a crate. Pitch tars the hull rather than the whole
+vessel; a wholly black ark lost every line that made it a ship. Material is
 deposited by standing on it. The recipe is 40 fiber, 60 gopher wood, 30 stone, 10 pitch.
 
 There is deliberately no road to it. It is one screen from your tent; that is the direction

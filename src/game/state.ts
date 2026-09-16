@@ -19,7 +19,7 @@ import {
  * the scrub shrine that teaches the Rod to take pitch at all.
  */
 const SEAL_TIER = Resource.Pitch;
-import { gorgeDepthAtDay, waterDepth, waterLevelAtSeconds } from '../core/flood.js';
+import { gorgeDepthAt, waterDepth, waterLevelAtSeconds } from '../core/flood.js';
 import { ARK_RECIPE, NODE_YIELD, PLAYER_TILES_PER_SEC, SHRINE_COST, canRodHarvest } from '../core/resources.js';
 import { panelsHigh, panelsWide, type TileMap } from '../core/tilemap.js';
 import {
@@ -521,12 +521,18 @@ export function depthAt(state: GameState, tx: number, ty: number): number {
   if (!map.floods) return 0;
   if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return 0;
   const i = ty * map.w + tx;
-  return waterDepth(map.tiles[i], map.elev[i], waterLevel(state), gorgeDepth(state));
+  return waterDepth(map.tiles[i], map.elev[i], waterLevel(state), gorgeRunoff(state, ty));
 }
 
-/** How deep the gorge is running right now. */
-export function gorgeDepth(state: GameState): number {
-  return gorgeDepthAtDay(currentDay(state));
+/**
+ * How deep the gorge runs at a given row right now.
+ *
+ * Per row, not per world: the runoff front starts at the top of the map and
+ * travels south, so the channel is a river in the north while it is still a
+ * dry ditch in the south.
+ */
+export function gorgeRunoff(state: GameState, ty: number): number {
+  return gorgeDepthAt(currentDay(state), ty, activeMap(state).h);
 }
 
 /**

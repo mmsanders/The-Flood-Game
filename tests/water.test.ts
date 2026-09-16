@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { TILE_PX, withParams } from '../src/core/config.js';
 import {
   FLOOD_GRACE_DAYS,
+  GORGE_FILL_DAYS,
   floodDepth,
-  gorgeDepthAtDay,
+  gorgeDepthAt,
   waterDepth,
   waterLevelAtDay,
 } from '../src/core/flood.js';
@@ -47,34 +48,55 @@ describe('the depth model', () => {
     expect(waterDepth(Tile.Water, 0, drowned, 0)).toBeGreaterThan(2);
   });
 
-  it('keeps the gorge dry until the rain starts, then runs it', () => {
-    expect(gorgeDepthAtDay(0)).toBe(0);
-    expect(gorgeDepthAtDay(FLOOD_GRACE_DAYS)).toBe(0);
-    expect(gorgeDepthAtDay(FLOOD_GRACE_DAYS + 0.5)).toBe(1);
+  it('is a dry ditch before the first drop falls', () => {
+    const H = 440;
+    for (let y = 0; y < H; y += 40) expect(gorgeDepthAt(0, y, H)).toBe(0);
     expect(waterDepth(Tile.Gorge, 250, 0, 0)).toBe(0);
-    expect(waterDepth(Tile.Gorge, 250, 0, 1)).toBe(1);
+  });
+
+  it('fills from the top of the map downwards, not like a bathtub', () => {
+    const H = 440;
+    // A third of the way through the first day: wet at the top, dry at the
+    // bottom. The water is running *down* the channel, not rising in it.
+    const day = GORGE_FILL_DAYS / 3;
+    expect(gorgeDepthAt(day, 0, H)).toBeGreaterThan(0);
+    expect(gorgeDepthAt(day, H - 1, H)).toBe(0);
+
+    // And the front only ever moves south.
+    let frontier = 0;
+    for (let t = 0; t <= 1; t += 0.05) {
+      let wet = 0;
+      for (let y = 0; y < H; y++) if (gorgeDepthAt(t * GORGE_FILL_DAYS, y, H) > 0) wet++;
+      expect(wet).toBeGreaterThanOrEqual(frontier);
+      frontier = wet;
+    }
+  });
+
+  it('has the whole channel running by the end of the first day', () => {
+    const H = 440;
+    for (let y = 0; y < H; y += 20) {
+      expect(gorgeDepthAt(GORGE_FILL_DAYS, y, H), `row ${y}`).toBeGreaterThan(0);
+    }
+    // ...and at a depth you cannot wade, which is what makes it the skiff's road.
+    expect(gorgeDepthAt(GORGE_FILL_DAYS + 1, 0, H)).toBe(2);
   });
 
   it('runs the gorge in the high north long before the sea gets there', () => {
-    // The complaint this fixes: on day 10 the whole channel should be wet,
-    // because it is rain coming off the mountain, not the sea coming up.
+    // On day 10 the whole channel is wet, because it is rain coming off the
+    // mountain, not the sea coming up.
     const day = 10;
+    const H = 440;
     const level = waterLevelAtDay(day);
-    const runoff = gorgeDepthAtDay(day);
     const highGround = 240;
     expect(floodDepth(highGround, level)).toBe(0);
-    expect(waterDepth(Tile.Gorge, highGround, level, runoff)).toBeGreaterThan(0);
+    expect(waterDepth(Tile.Gorge, highGround, level, gorgeDepthAt(day, 4, H))).toBeGreaterThan(0);
   });
 
-  it('deepens the gorge as the rain goes on, and never past the deep', () => {
-    let last = 0;
-    for (let day = 0; day <= 40; day++) {
-      const d = gorgeDepthAtDay(day);
-      expect(d).toBeGreaterThanOrEqual(last);
-      expect(d).toBeLessThanOrEqual(4);
-      last = d;
-    }
-    expect(gorgeDepthAtDay(40)).toBe(4);
+  it('lets the sea deepen the channel past its own running depth', () => {
+    const H = 440;
+    const drowned = waterLevelAtDay(38);
+    const runoff = gorgeDepthAt(38, 400, H);
+    expect(waterDepth(Tile.Gorge, 0, drowned, runoff)).toBeGreaterThan(runoff);
   });
 });
 

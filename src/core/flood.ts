@@ -70,21 +70,37 @@ export function floodDepth(elev: number, waterLevel: number): number {
 }
 
 /**
- * How deep the gorge runs, in the same units as `floodDepth`.
+ * Days for the runoff front to travel the length of the map.
  *
- * The gorge is not the sea arriving — it is rain coming off the mountain and
- * running downhill, which starts the moment the rain does and is why the
- * channel is wet in the north long before the south coast is. It deepens a
- * step roughly every ten days, so an early skiff gets a highway and a late one
- * gets a river it has to respect.
+ * The gorge does not fill like a bathtub. It is rain coming off the high
+ * ground, so the water arrives at the top of the channel and runs *down* it:
+ * a front sweeping from the northern spring to the southern mouth. One day,
+ * so it is something you watch happen on the first morning rather than a state
+ * the world was already in.
+ */
+export const GORGE_FILL_DAYS = 1;
+
+/** Depth the channel runs at once the front has gone past. */
+const GORGE_RUNNING_DEPTH = 2;
+
+/**
+ * Rows of shallower water at the leading edge, so the front reads as water
+ * arriving rather than as a line that teleports down the map.
+ */
+const GORGE_FRONT_ROWS = 10;
+
+/**
+ * How deep the gorge runs at a given row, on a given day.
  *
+ * Starts at the top of the map on day one and reaches the mouth a day later.
  * Sea level still applies on top: once the flood proper reaches the channel,
  * whichever is deeper wins.
  */
-export function gorgeDepthAtDay(day: number): number {
-  const rain = day - FLOOD_GRACE_DAYS;
-  if (rain <= 0) return 0;
-  return Math.min(4, 1 + Math.floor(rain / 10));
+export function gorgeDepthAt(day: number, y: number, mapHeight: number): number {
+  if (day <= 0) return 0;
+  const front = (day / GORGE_FILL_DAYS) * mapHeight;
+  if (y > front) return 0;
+  return front - y < GORGE_FRONT_ROWS ? 1 : GORGE_RUNNING_DEPTH;
 }
 
 /**
@@ -96,19 +112,20 @@ export function gorgeDepthAtDay(day: number): number {
  * - **Natural water** is never shallow. A pond is over your head — depth 2 —
  *   whatever the sea is doing, which is what stops it being a shortcut you
  *   paddle across.
- * - **The gorge** carries its own runoff from the first day of rain, and is
- *   dry before that.
+ * - **The gorge** carries runoff, which arrives at the top of the channel on
+ *   day one and runs down it — so `runoff` is the depth for *this row*, not a
+ *   single number for the whole channel.
  * - **Everything else** is the flood: elevation against sea level.
  */
 export function waterDepth(
   tile: number,
   elev: number,
   waterLevel: number,
-  gorgeDepth: number,
+  runoff: number,
 ): number {
   const flood = floodDepth(elev, waterLevel);
   if (tile === Tile.Water) return flood > 2 ? flood : 2;
-  if (tile === Tile.Gorge) return flood > gorgeDepth ? flood : gorgeDepth;
+  if (tile === Tile.Gorge) return flood > runoff ? flood : runoff;
   return flood;
 }
 

@@ -38,7 +38,7 @@ export const enum Tile {
    * The gorge floor: a dry channel too steep to climb down into, cut by the
    * river long before the rain. Impassable on foot whether it is wet or dry.
    * Once the rain starts it runs with water off the mountain and becomes the
-   * skiff's highway — see `gorgeDepthAtDay`.
+   * skiff's highway — see `gorgeDepthAt`.
    */
   Gorge = 0x19,
 
