@@ -41,6 +41,7 @@ import {
   currentDay,
   currentDungeon,
   flockScore,
+  gorgeDepth,
   waterLevel,
 } from './state.js';
 import { isDaylight, todAt } from './tod.js';
@@ -207,6 +208,7 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
   const cam = cameraOrigin(state);
   const sheet = getTilesheet();
   const level = waterLevel(state);
+  const runoff = map.floods ? gorgeDepth(state) : 0;
 
   const x0 = Math.floor(cam.x / TILE_PX);
   const y0 = Math.floor(cam.y / TILE_PX);
@@ -232,19 +234,28 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
       if (tile === Tile.HeartContainer || tile === Tile.Pedestal) {
         blitTile(ctx, sheet, carveTo(map.biome[i] as Biome), sx, sy);
       }
-      blitTile(ctx, sheet, tile, sx, sy);
+      // A gorge with water in it is a river, and should look like one. Dry,
+      // it is a hole in the ground you cannot climb into.
+      const wetGorge = tile === Tile.Gorge && runoff > 0;
+      blitTile(ctx, sheet, wetGorge ? Tile.Water : tile, sx, sy);
 
       if (ty + 1 < map.h && shadowLen + 2 <= shadowScratch.length) {
         const south = i + map.w;
         if (map.biome[i] > map.biome[south] || map.elev[i] - map.elev[south] >= 40) {
+          // Recorded against the tile *below* the step: the face belongs to
+          // the ground the drop looks down on, not to the ground on top.
           shadowScratch[shadowLen] = sx;
-          shadowScratch[shadowLen + 1] = sy;
+          shadowScratch[shadowLen + 1] = sy + TILE_PX;
           shadowLen += 2;
         }
       }
 
       if (map.floods && floodLen + 3 <= floodScratch.length) {
-        const d = floodDepth(map.elev[i], level);
+        // Natural water keeps exactly the look it always had — the overlay is
+        // the *flood* arriving, not the fact that a pond is deep. The gorge is
+        // the one tile that carries its own water before the sea gets there.
+        const flood = floodDepth(map.elev[i], level);
+        const d = wetGorge && runoff > flood ? runoff : flood;
         if (d > 0) {
           floodScratch[floodLen] = sx;
           floodScratch[floodLen + 1] = sy;
@@ -255,10 +266,7 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
     }
   }
 
-  ctx.fillStyle = 'rgba(12, 10, 8, 0.42)';
-  for (let i = 0; i < shadowLen; i += 2) {
-    ctx.fillRect(shadowScratch[i], shadowScratch[i + 1] + TILE_PX - 3, TILE_PX, 3);
-  }
+  drawElevationFaces(ctx, shadowLen);
 
   // Four fillStyles instead of one per tile — the overlay colours are discrete.
   for (let depth = 1; depth <= 4; depth++) {
@@ -347,6 +355,46 @@ function drawArkMonument(ctx: CanvasRenderingContext2D, state: GameState): void 
   ctx.fillRect(x + 4, y + 2, 3, hullH - 8);
   ctx.fillRect(x + hullW - 7, y + 2, 3, hullH - 8);
 }
+
+/**
+ * Draw the drop where the ground steps down to the south.
+ *
+ * This used to be a single 3px translucent line along the *bottom of the upper
+ * tile*, which read as a seam between two flat tiles rather than as height —
+ * the ground looked smudged, not stepped.
+ *
+ * A step is a wall, so this draws one, onto the top of the tile below: a bright
+ * lip catching the light where the upper ground ends, a solid rock face under
+ * it, and a contact shadow where the face meets the lower ground. Three bands
+ * and a hard edge, which is how every 2D game from Zelda on has said "this is
+ * higher than that".
+ */
+function drawElevationFaces(ctx: CanvasRenderingContext2D, count: number): void {
+  // Lip first, so the whole run of steps shares one fillStyle each pass.
+  ctx.fillStyle = FACE_LIP;
+  for (let i = 0; i < count; i += 2) {
+    ctx.fillRect(shadowScratch[i], shadowScratch[i + 1], TILE_PX, 1);
+  }
+  ctx.fillStyle = FACE_ROCK;
+  for (let i = 0; i < count; i += 2) {
+    ctx.fillRect(shadowScratch[i], shadowScratch[i + 1] + 1, TILE_PX, FACE_H - 2);
+  }
+  ctx.fillStyle = FACE_FOOT;
+  for (let i = 0; i < count; i += 2) {
+    ctx.fillRect(shadowScratch[i], shadowScratch[i + 1] + FACE_H - 1, TILE_PX, 1);
+  }
+  // A short cast shadow on the ground below, so the face has somewhere to sit.
+  ctx.fillStyle = 'rgba(10, 8, 6, 0.30)';
+  for (let i = 0; i < count; i += 2) {
+    ctx.fillRect(shadowScratch[i], shadowScratch[i + 1] + FACE_H, TILE_PX, 2);
+  }
+}
+
+/** Height of a drawn drop, in pixels. Six of sixteen reads as a real step. */
+const FACE_H = 6;
+const FACE_LIP = '#9a917f';
+const FACE_ROCK = '#4a443b';
+const FACE_FOOT = '#26221c';
 
 function drawAnimals(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (state.location.kind !== 'overworld') return;
@@ -853,6 +901,7 @@ function rasterizeMiniMap(
       ? mini.bits
       : ctx.createImageData(MINIMAP_W, MINIMAP_H);
 
+  const miniRunoff = map.floods ? gorgeDepth(state) : 0;
   const data = bits.data;
   for (let i = 0; i < data.length; i += 4) {
     data[i] = 8;
@@ -899,6 +948,7 @@ function rasterizeMiniMap(
             (px + 0.5) / rw,
             (py + 0.5) / rh,
             level,
+            miniRunoff,
             data,
             o,
           );

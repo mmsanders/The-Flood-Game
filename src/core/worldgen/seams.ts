@@ -9,7 +9,7 @@
  */
 
 import { PANEL_H, PANEL_W, type WorldParams, tileHeight, tileWidth } from '../config.js';
-import { Biome, Tile, carveOpening, isResourceNode } from '../tiles.js';
+import { Biome, Tile, carveOpening, carveTo, isCarvable, isResourceNode } from '../tiles.js';
 
 /** True on the first or last row/column of any panel, including the map rim. */
 export function onPanelEdge(x: number, y: number): boolean {
@@ -255,4 +255,79 @@ function counterpartTile(biome: Biome, elev: number, source: number): Tile {
     case Biome.Mountain:
       return elev > 240 ? Tile.Cliff : Tile.Rock;
   }
+}
+
+/**
+ * Open the ground immediately above and below every stair.
+ *
+ * A stair is the one way through an escarpment, so a tree or a boulder landing
+ * on its approach turns a deliberate route into a dead end you have to walk a
+ * panel to discover. Scatter is painted from a noise field that knows nothing
+ * about stairs, so this has to be swept afterwards rather than prevented.
+ *
+ * Runs *after* the connectivity repair, because that pass cuts new stairs of
+ * its own when it carves a route through a cliff — sweeping first left those
+ * ones blocked.
+ *
+ * Only scatter is removed, and only to the north and south. A cliff, a gorge
+ * or a lake next to a stair is a landform doing its job, and opening east or
+ * west would punch a hole through the escarpment the stair belongs to.
+ */
+export function clearStairApproaches(
+  tiles: Uint8Array,
+  biome: Uint8Array,
+  w: number,
+  h: number,
+): number {
+  let opened = 0;
+  for (let i = 0; i < tiles.length; i++) {
+    if (tiles[i] !== Tile.Steps) continue;
+    const x = i % w;
+    const y = (i / w) | 0;
+    for (const ny of [y - 1, y + 1]) {
+      if (ny < 0 || ny >= h) continue;
+      if (isWorldRim(x, ny, w, h)) continue;
+      const j = ny * w + x;
+      if (!isScatter(tiles[j])) continue;
+
+      // A blocker on a seam is mirrored on the other side, and the two have to
+      // stay in step: clearing one alone leaves an invisible wall on the
+      // neighbouring screen. At a panel corner a tile sits on two seams at
+      // once and its partners have partners of their own, so the whole group
+      // is gathered and cleared together — or, if anything in it is a landform
+      // this pass may not touch, not at all.
+      const group = seamGroup(tiles, w, h, j);
+      if (!group) continue;
+      for (const k of group) {
+        tiles[k] = carveTo(biome[k] as Biome);
+        opened++;
+      }
+    }
+  }
+  return opened;
+}
+
+/**
+ * Every tile that must be cleared alongside `start` to keep panel seams in
+ * step, or null if any of them is something this pass may not remove.
+ */
+function seamGroup(
+  tiles: Uint8Array,
+  w: number,
+  h: number,
+  start: number,
+): number[] | null {
+  const group: number[] = [start];
+  for (let n = 0; n < group.length; n++) {
+    if (!isScatter(tiles[group[n]])) return null;
+    for (const k of seamPartnerIndices(group[n], w, h)) {
+      if (!group.includes(k)) group.push(k);
+    }
+  }
+  return group;
+}
+
+/** Scenery this pass may remove: painted clutter, never a landform. */
+function isScatter(tile: number): boolean {
+  return isCarvable(tile) || isResourceNode(tile);
 }

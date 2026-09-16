@@ -69,6 +69,57 @@ export function floodDepth(elev: number, waterLevel: number): number {
   return Math.max(1, Math.ceil((waterLevel - elev) / FLOOD_RISE_PER_DAY));
 }
 
+/**
+ * How deep the gorge runs, in the same units as `floodDepth`.
+ *
+ * The gorge is not the sea arriving — it is rain coming off the mountain and
+ * running downhill, which starts the moment the rain does and is why the
+ * channel is wet in the north long before the south coast is. It deepens a
+ * step roughly every ten days, so an early skiff gets a highway and a late one
+ * gets a river it has to respect.
+ *
+ * Sea level still applies on top: once the flood proper reaches the channel,
+ * whichever is deeper wins.
+ */
+export function gorgeDepthAtDay(day: number): number {
+  const rain = day - FLOOD_GRACE_DAYS;
+  if (rain <= 0) return 0;
+  return Math.min(4, 1 + Math.floor(rain / 10));
+}
+
+/**
+ * Standing water on a tile, 0 (dry) to 4 (the deep).
+ *
+ * The one place that answers "how much water is here", so wading, sailing and
+ * dredging cannot disagree about it:
+ *
+ * - **Natural water** is never shallow. A pond is over your head — depth 2 —
+ *   whatever the sea is doing, which is what stops it being a shortcut you
+ *   paddle across.
+ * - **The gorge** carries its own runoff from the first day of rain, and is
+ *   dry before that.
+ * - **Everything else** is the flood: elevation against sea level.
+ */
+export function waterDepth(
+  tile: number,
+  elev: number,
+  waterLevel: number,
+  gorgeDepth: number,
+): number {
+  const flood = floodDepth(elev, waterLevel);
+  if (tile === Tile.Water) return flood > 2 ? flood : 2;
+  if (tile === Tile.Gorge) return flood > gorgeDepth ? flood : gorgeDepth;
+  return flood;
+}
+
+/**
+ * Depth past which a tile is too deep to stand in at all.
+ *
+ * Depth 1 is water you are standing in; 2 is over your head. Nothing wades
+ * past 1 today — galoshes are the first thing that will.
+ */
+export const WADE_DEPTH = 1;
+
 /** Overlay fill for a flooded tile, or null if dry. */
 export function floodOverlayFill(depth: number): string | null {
   if (depth <= 0) return null;

@@ -332,6 +332,7 @@ export function sampleMinimapInto(
   u: number,
   v: number,
   waterLevel: number,
+  runoff: number,
   out: Uint8ClampedArray,
   o: number,
 ): void {
@@ -355,7 +356,11 @@ export function sampleMinimapInto(
   let b = TILE_RGB[c + 2];
 
   if (map.floods) {
-    const depth = floodDepth(map.elev[i], waterLevel);
+    // The gorge runs before the sea arrives, so the HUD map shows the river
+    // filling in from the north — which is the clearest signal the rain has
+    // actually started.
+    const flood = floodDepth(map.elev[i], waterLevel);
+    const depth = map.tiles[i] === Tile.Gorge && runoff > flood ? runoff : flood;
     if (depth > 0) {
       const wet = depth >= 3 ? DEEP : SHALLOW;
       const t = depth === 1 ? 0.28 : depth === 2 ? 0.52 : depth === 3 ? 0.78 : 1;

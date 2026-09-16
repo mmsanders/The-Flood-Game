@@ -92,6 +92,25 @@ Submerged ground blocks movement *into* it, but a player the water has risen und
 keep wading (at 55% speed), taking a heart every two seconds. Otherwise a rising tide
 would freeze you in place instead of chasing you uphill.
 
+**Depth, and the two other kinds of water.** One function answers "how much water is on this
+tile", 0 (dry) to 4 (the deep), so wading, sailing, beaching and dredging cannot disagree:
+
+- **Natural water** is never shallow — a pond is depth 2 whatever the sea is doing, which is
+  what stops it being a shortcut you paddle across.
+- **The gorge** carries its own runoff from the first day of rain, deepening a step roughly
+  every ten days. It is rain coming off the mountain rather than the sea arriving, which is
+  why the channel is wet in the north long before the south coast is, and why it is the
+  first thing on the map to tell you the weather has turned.
+- **Everything else** is the flood: elevation against sea level.
+
+Sail over anything at depth 2 or more, boulders included; below that the drowned landscape
+still steers you. The ladder of things that beat each depth — galoshes, the skiff, a pitched
+skiff — is designed in `ROADMAP.md` and not built yet.
+
+**The gorge** is a landform, not a river. It is cut before the rain, too steep to climb into
+wet or dry, and its fords are stamped as part of the cut so the channel never divides the
+world in the first place.
+
 ---
 
 ## The run
@@ -104,9 +123,13 @@ drowns you in four days no matter how well you play.
 Nodes are clustered into patches rather than sprinkled evenly, so a location is worth
 remembering and worth returning to before it goes under.
 
-**Build:** carry material to the ark site (high, northern, central — among the last ground
-to drown) and it is deposited automatically. The recipe is 40 fiber, 60 gopher wood,
-30 stone, 10 pitch. The hull itself is a monument on a raised platform: keel, ribs, hull,
+**Build:** the ark stands on the one hand-authored panel in the world, directly north of
+the panel you wake up on — a walled platform filling the centre-bottom of the screen with a
+single stair up from the south, and the hull growing out of it as you deliver. Material is
+deposited by standing on it. The recipe is 40 fiber, 60 gopher wood, 30 stone, 10 pitch.
+
+There is deliberately no road to it. It is one screen from your tent; that is the direction
+you learn on the first day and never have to be told again. The hull itself is a monument on a raised platform: keel, ribs, hull,
 deck, roof, then pitch, grown from whatever you have delivered, big enough to read from
 the next panel over.
 
@@ -182,6 +205,20 @@ corridor would be an obstacle, and obstacles are things you pay to cross.
 
 The Budding Rod is the loop closing: ark material spent on a tool that gathers ark material
 twice as fast. It sits in the forest so it lands mid-run, while doubling still pays.
+
+**The Serpent Rod is sealed.** Dungeon mouths sit near their own biome, and the mountain one
+ends up a short walk from where you wake, so the best tool in the game was free on day one.
+A **seal of pitch** now stands across its vault: not bought, *parted*, and only by a Rod that
+has already been imbued with pitch at the scrub shrine. It gates the reward behind the whole
+Rod ladder without charging pitch for it — pitch is the one resource a dungeon must never
+eat, because losing it strands the run.
+
+**The Rod ladder is validated.** The Rod harvests fiber and nothing else until a shrine says
+otherwise, so the three lower shrines are the gate on every other resource in the game — and
+the valley, where the first one stands, is the first ground to drown. Shrines are sited on
+the high ground near their town, and worldgen rejects a world whose required shrines go under
+too early to have afforded their price. Before that, the valley shrine drowned on a median
+of day 6.3 and as early as day 2.1, taking the run with it silently.
 
 **The flood reaches the entrance, not the interior.** Once the mouth submerges that dungeon
 is gone for the run, which makes a low-lying one a decision about *when*, not whether — the

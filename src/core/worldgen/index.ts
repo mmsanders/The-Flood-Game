@@ -29,7 +29,7 @@ import { paintTiles } from './paint.js';
 import { freshPlan } from './plan.js';
 import { placePois } from './pois.js';
 import { layRoads } from './roads.js';
-import { paintSouthBeach, wallWorldRim } from './seams.js';
+import { clearStairApproaches, paintSouthBeach, wallWorldRim } from './seams.js';
 import { placeSettlements } from './settlements.js';
 
 export { ensureConnected, labelRegions } from './connectivity.js';
@@ -43,11 +43,10 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
   const plan = freshPlan(w * h);
 
   carveLandforms(seed, params, elev, biome, plan);
-  const { settlements, pastures } = placeSettlements(seed, params, biome, plan);
+  const { settlements, pastures } = placeSettlements(seed, params, elev, biome, plan);
   const { spawn, ark, pois, boatYard } = placePois(seed, params, elev, biome, plan, settlements);
 
-  layRoads(seed, params, biome, plan, settlements, {
-    ark,
+  layRoads(seed, params, elev, biome, plan, settlements, {
     spawn,
     dungeons: pois.filter((p) => p.kind === PoiKind.Dungeon),
     docks: pois.filter((p) => p.kind === PoiKind.BoatYard),
@@ -56,6 +55,10 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
   const tiles = paintTiles({ seed, params, elev, biome, plan });
 
   const connectivity = ensureConnected(tiles, biome, params);
+  // After the repair, not before: that pass cuts its own stairs when it carves
+  // a route through a cliff, and those need clearing too. Removing scatter can
+  // only make the map more connected, never less.
+  clearStairApproaches(tiles, biome, w, h);
   // Re-stamp the frame in case a seam carve nicked a rim tile.
   wallWorldRim(tiles, biome, elev, w, h);
   paintSouthBeach(tiles, w, h);
@@ -74,12 +77,21 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
     .filter((poi) => poi.kind === PoiKind.Dungeon)
     .map((poi, i) => generateDungeonRoom(seed, i, poi.biome, { x: poi.x, y: poi.y }));
 
-  const solvability = checkSolvable(tiles, elev, w, h, spawn, params);
+  const solvability = checkSolvable(
+    tiles,
+    elev,
+    w,
+    h,
+    spawn,
+    params,
+    pois.filter((p) => p.kind === PoiKind.Shrine),
+  );
 
   const stats = collectStats(tiles, biome, w, h);
   stats.connected = connectivity.connected;
   stats.solvable = solvability.solvable;
   stats.reachableResources = solvability.reachable;
+  stats.ladder = solvability.ladder;
   stats.problems = [
     ...(connectivity.connected ? [] : ['World is not fully connected']),
     ...solvability.problems,
@@ -154,6 +166,7 @@ function collectStats(
     totalTiles: w * h,
     connected: false,
     solvable: false,
+    ladder: [],
     problems: [],
   };
 }

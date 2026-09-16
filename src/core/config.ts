@@ -86,7 +86,14 @@ export const DEFAULT_PARAMS: WorldParams = {
 
   // Tuned so each biome holds a few hundred nodes, not thousands: patches
   // should be worth finding, and worth returning to before they drown.
-  resourceDensity: [0.012, 0.017, 0.012, 0.006],
+  //
+  // Pitch is the exception and is set by its *worst* seed, not its average.
+  // The mountain band is the smallest biome by design, so pitch count swings
+  // hard between worlds — at 0.006 the spread across twelve seeds ran from
+  // 2.0x what a run needs to 7.1x, and the low end is a world you lose to the
+  // map rather than to the clock. At 0.009 the floor is 3.1x and the median is
+  // still under 7x, so pitch stays the thing you go north for.
+  resourceDensity: [0.012, 0.017, 0.012, 0.009],
 
   heartContainers: 6,
   dungeonsPerBiome: 1,

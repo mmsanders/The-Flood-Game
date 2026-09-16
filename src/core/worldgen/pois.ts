@@ -7,9 +7,9 @@
  * grass. Writes into the plan; paint fills whatever is still unplanned.
  */
 
-import { type WorldParams, tileHeight, tileWidth } from '../config.js';
+import { PANEL_H, PANEL_W, type WorldParams, tileHeight, tileWidth } from '../config.js';
 import { shuffle, stageRng, type Rng } from '../rng.js';
-import { BIOME_COUNT, Biome, Tile } from '../tiles.js';
+import { BIOME_COUNT, Biome, Tile, carveTo } from '../tiles.js';
 import {
   PoiKind,
   SettlementKind,
@@ -41,14 +41,17 @@ export function placePois(
   const pois: Poi[] = [];
   const taken = new Set<number>();
 
-  const arkIndex = pickArkSite(elev, plan, w, h);
-  stampArkPlatform(plan, elev, w, h, arkIndex);
-  taken.add(arkIndex);
-  pois.push({ ...toPoint(arkIndex, w), kind: PoiKind.Ark, biome: biome[arkIndex] as Biome });
-
-  const spawn = pickSpawn(rng, plan, elev, w, h, arkIndex);
+  // Spawn is chosen first now, and the ark is built on the panel directly
+  // north of it. The ark used to be sited independently and joined to the
+  // world by a road, which made the single most important place on the map
+  // something you had to go looking for.
+  const spawn = pickSpawn(rng, plan, elev, w, h);
   taken.add(spawn);
   stampCamp(plan, w, h, spawn);
+
+  const arkIndex = buildArkPanel(plan, elev, biome, w, h, spawn);
+  taken.add(arkIndex);
+  pois.push({ ...toPoint(arkIndex, w), kind: PoiKind.Ark, biome: biome[arkIndex] as Biome });
 
   for (const s of settlements) {
     if (s.kind !== SettlementKind.Hamlet) {
@@ -109,89 +112,179 @@ export function placePois(
   };
 }
 
-function pickArkSite(elev: Uint8Array, plan: Uint8Array, w: number, h: number): number {
-  const limit = Math.floor(h / 3);
-  const cx = (w - 1) / 2;
-  let best = -1;
-  let bestScore = -Infinity;
+/**
+ * Build the ark on its own hand-authored panel, one screen north of spawn.
+ *
+ * This is the only panel in the world that is not generated. Everything else
+ * is noise the pipeline shapes; this is a place, and it is laid out the same
+ * way every run so that "the ark is one screen north of your tent" is a thing
+ * you learn once and then always know.
+ *
+ * The whole panel is overwritten, so a road, a gorge or a stray tree cannot
+ * wander through it. A walled platform fills the centre-bottom with a single
+ * stair up from the south — the hull then grows out of it as you deliver, and
+ * by the end it covers most of the screen.
+ */
+function buildArkPanel(
+  plan: Uint8Array,
+  elev: Uint8Array,
+  biome: Uint8Array,
+  w: number,
+  h: number,
+  spawn: number,
+): number {
+  const panelX = ((spawn % w) / PANEL_W) | 0;
+  const panelY = (((spawn / w) | 0) / PANEL_H) | 0;
+  const arkPanelY = Math.max(1, panelY - 1);
+  const x0 = panelX * PANEL_W;
+  const y0 = arkPanelY * PANEL_H;
 
-  for (let y = 2; y < limit; y++) {
-    for (let x = 3; x < w - 3; x++) {
-      const i = y * w + x;
-      if (onPanelEdge(x, y) || isWorldRim(x, y, w, h)) continue;
-      if (plan[i] === Tile.Water || plan[i] === Tile.Cliff) continue;
-      const centrality = 1 - Math.abs(x - cx) / cx;
-      const score = elev[i] + centrality * 18;
-      if (score > bestScore) {
-        bestScore = score;
-        best = i;
-      }
+  // The platform: twelve by seven out of sixteen by eleven, sitting low and
+  // central, which leaves a walkable margin on three sides so the panel is a
+  // place you pass through rather than a cul-de-sac.
+  const px0 = 2;
+  const px1 = 13;
+  const py0 = 3;
+  const py1 = 9;
+  const stairA = 7;
+  const stairB = 8;
+
+  let peak = 0;
+  for (let py = 0; py < PANEL_H; py++) {
+    for (let px = 0; px < PANEL_W; px++) {
+      const x = x0 + px;
+      const y = y0 + py;
+      if (x >= w || y >= h) continue;
+      const e = elev[y * w + x];
+      if (e > peak) peak = e;
     }
   }
-  return best >= 0 ? best : (Math.floor(h / 6) * w + ((w / 2) | 0));
+
+  let arkIndex = -1;
+  for (let py = 0; py < PANEL_H; py++) {
+    for (let px = 0; px < PANEL_W; px++) {
+      const x = x0 + px;
+      const y = y0 + py;
+      if (x >= w || y >= h) continue;
+      if (isWorldRim(x, y, w, h)) continue;
+      const i = y * w + x;
+
+      const onPlatform = px >= px0 && px <= px1 && py >= py0 && py <= py1;
+      if (!onPlatform) {
+        // Level approach ground, so the panel reads as a terrace rather than
+        // as whatever hillside the generator happened to leave here. It keeps
+        // the biome's own ground: paving the whole screen made the last place
+        // in the world look like a dungeon floor.
+        elev[i] = peak;
+        const stair = py === py1 + 1 && (px === stairA || px === stairB);
+        overwrite(plan, i, stair ? Tile.Steps : carveTo(biome[i] as Biome));
+        continue;
+      }
+
+      // Raised, so it is the last ground in the world to go under.
+      elev[i] = Math.min(255, peak + ARK_PLATFORM_RISE);
+      const edge = px === px0 || px === px1 || py === py0 || py === py1;
+      const doorway = py === py1 && (px === stairA || px === stairB);
+      if (doorway) overwrite(plan, i, Tile.Steps);
+      else if (edge) overwrite(plan, i, Tile.Cliff);
+      else overwrite(plan, i, Tile.StoneGround);
+    }
+  }
+
+  const ax = x0 + ((px0 + px1) >> 1);
+  const ay = y0 + ((py0 + py1) >> 1);
+  if (ax < w && ay < h) {
+    arkIndex = ay * w + ax;
+    overwrite(plan, arkIndex, Tile.ArkSite);
+  }
+
+  return arkIndex >= 0 ? arkIndex : y0 * w + x0;
 }
 
 /**
- * A raised platform you climb stairs onto, dominating its panel. Appearance
- * of the hull itself is a runtime overlay of what's been delivered; worldgen
- * only lays the yard.
+ * How far the ark platform stands above its own panel.
+ *
+ * Over the renderer's step threshold on purpose, so the platform draws a real
+ * cliff face down its south side instead of sitting flush with the ground it
+ * is supposed to tower over.
  */
-function stampArkPlatform(
-  plan: Uint8Array,
-  elev: Uint8Array,
-  w: number,
-  h: number,
-  ark: number,
-): void {
-  const ax = ark % w;
-  const ay = (ark / w) | 0;
-  for (let dy = -3; dy <= 1; dy++) {
-    for (let dx = -3; dx <= 3; dx++) {
-      const x = ax + dx;
-      const y = ay + dy;
-      if (x <= 1 || y <= 1 || x >= w - 2 || y >= h - 3) continue;
-      const i = y * w + x;
-      const raised = elev[i] + 18;
-      elev[i] = raised > 255 ? 255 : raised;
-      if (dy === 1) stamp(plan, i, Tile.Steps);
-      else stamp(plan, i, Tile.StoneGround);
-    }
-  }
-  overwrite(plan, ark, Tile.ArkSite);
-}
+const ARK_PLATFORM_RISE = 48;
 
+/**
+ * Where the run starts: the high north, with a clear panel to the north of it
+ * for the ark.
+ *
+ * Panel row 2 or lower is the floor, so the ark's panel is never the world
+ * rim. The panel above must also be free of gorge and lake, because the ark
+ * panel overwrites everything in it and severing the river there would be
+ * both ugly and a real loss — the channel is the skiff's road.
+ */
 function pickSpawn(
   rng: Rng,
   plan: Uint8Array,
   elev: Uint8Array,
   w: number,
   h: number,
-  arkIndex: number,
 ): number {
   const until = Math.max(4, Math.floor(h * 0.2));
-  const arkX = arkIndex % w;
-  const arkY = (arkIndex / w) | 0;
   const candidates: number[] = [];
 
-  for (let y = 2; y < until; y++) {
+  for (let y = PANEL_H * 2; y < until; y++) {
     for (let x = 2; x < w - 2; x++) {
       const i = y * w + x;
       if (onPanelEdge(x, y)) continue;
-      if (plan[i] === Tile.Water || plan[i] === Tile.Cliff || plan[i] === Tile.ArkSite) continue;
-      const dx = x - arkX;
-      const dy = y - arkY;
-      if (dx * dx + dy * dy < 14 * 14) continue;
+      if (plan[i] === Tile.Water || plan[i] === Tile.Cliff) continue;
+      if (!panelAboveIsClear(plan, w, h, x, y)) continue;
       candidates.push(i);
     }
   }
-  if (candidates.length === 0) {
-    return clampIndex(arkIndex + 16, plan.length);
+  const pool = candidates.length > 0 ? candidates : fallbackSpawns(plan, w, until);
+  if (pool.length === 0) return PANEL_H * 2 * w + ((w / 2) | 0);
+
+  pool.sort((a, b) => elev[a] - elev[b]);
+  const lo = Math.floor(pool.length * 0.25);
+  const hi = Math.max(lo + 1, Math.floor(pool.length * 0.55));
+  const band = pool.slice(lo, hi);
+  return band[Math.floor(rng() * band.length)];
+}
+
+/** True if the panel one north of (x, y) has no water or gorge to destroy. */
+function panelAboveIsClear(
+  plan: Uint8Array,
+  w: number,
+  h: number,
+  x: number,
+  y: number,
+): boolean {
+  const panelX = (x / PANEL_W) | 0;
+  const panelY = (y / PANEL_H) | 0;
+  if (panelY < 2) return false;
+  const x0 = panelX * PANEL_W;
+  const y0 = (panelY - 1) * PANEL_H;
+  for (let py = 0; py < PANEL_H; py++) {
+    for (let px = 0; px < PANEL_W; px++) {
+      const cx = x0 + px;
+      const cy = y0 + py;
+      if (cx >= w || cy >= h) continue;
+      const t = plan[cy * w + cx];
+      if (t === Tile.Water || t === Tile.Gorge || t === Tile.Bridge) return false;
+    }
   }
-  candidates.sort((a, b) => elev[a] - elev[b]);
-  const lo = Math.floor(candidates.length * 0.25);
-  const hi = Math.max(lo + 1, Math.floor(candidates.length * 0.55));
-  const pool = candidates.slice(lo, hi);
-  return pool[Math.floor(rng() * pool.length)];
+  return true;
+}
+
+/** Any northern ground with a panel above it, when the strict pass finds none. */
+function fallbackSpawns(plan: Uint8Array, w: number, until: number): number[] {
+  const pool: number[] = [];
+  for (let y = PANEL_H * 2; y < until; y++) {
+    for (let x = 2; x < w - 2; x++) {
+      const i = y * w + x;
+      if (onPanelEdge(x, y)) continue;
+      if (plan[i] === Tile.Water || plan[i] === Tile.Cliff) continue;
+      pool.push(i);
+    }
+  }
+  return pool;
 }
 
 function stampCamp(plan: Uint8Array, w: number, h: number, spawn: number): void {
@@ -361,10 +454,4 @@ function farFrom(i: number, taken: Set<number>, w: number, minDist: number): boo
 
 function toPoint(i: number, w: number): Point {
   return { x: i % w, y: (i / w) | 0 };
-}
-
-function clampIndex(i: number, n: number): number {
-  if (i < 0) return 0;
-  if (i >= n) return n - 1;
-  return i;
 }

@@ -66,6 +66,21 @@ export const BIOME_REWARD: Record<number, RewardKind> = {
   3: RewardKind.SerpentRod,
 };
 
+/**
+ * The Rod tier that parts a dungeon's seal of pitch, or none.
+ *
+ * The overworld mouths sit near their own biome, and the mountain one ends up
+ * a short walk from where you wake — so its reward, the best tool in the game,
+ * was free on day one. A seal gates it behind the whole Rod ladder without
+ * charging pitch for it: pitch is the one resource a dungeon must never eat,
+ * because losing it strands the run.
+ */
+export const REWARD_SEAL: Record<RewardKind, number | null> = {
+  [RewardKind.HeartContainer]: null,
+  [RewardKind.BuddingRod]: null,
+  [RewardKind.SerpentRod]: Resource.Pitch,
+};
+
 /** What clearing an obstacle costs. Pitch is never spendable. */
 export const OBSTACLE_COST: Record<number, { resource: Resource; amount: number }> = {
   [Tile.Chasm]: { resource: Resource.Wood, amount: 2 },
@@ -218,6 +233,9 @@ export function generateDungeon(
   };
 }
 
+/** Row the seal spans in a one-room dungeon: between the chest and the key. */
+const SEAL_ROW = 4;
+
 /**
  * One panel, walls, a chest, and stairs. The overworld mouth warps here;
  * walking onto the stairs warps back. Enough cave to feel like a place
@@ -245,6 +263,13 @@ export function generateDungeonRoom(
   planes.tiles[stairs.y * w + stairs.x] = Tile.Stairs;
   planes.tiles[chest.y * w + chest.x] = Tile.Chest;
   planes.tiles[key.y * w + key.x] = Tile.Key;
+
+  // Seal the vault off from the rest of the room, north of the key so the key
+  // stays reachable and the seal is the only thing between you and the chest.
+  const reward = BIOME_REWARD[biome] ?? RewardKind.HeartContainer;
+  if (REWARD_SEAL[reward] !== null) {
+    for (let x = 1; x < w - 1; x++) planes.tiles[SEAL_ROW * w + x] = Tile.PitchSeal;
+  }
 
   return {
     id,

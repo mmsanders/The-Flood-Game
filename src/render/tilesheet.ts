@@ -247,6 +247,34 @@ const TILE_PAINTERS: Record<number, Painter> = {
     px(c, 11, 7, 2, 9, '#2a2620');
   },
 
+  /**
+   * A dry channel seen from above: lit rims on both sides, shadow between,
+   * a gravel bed down the middle. It should read as a hole in the ground
+   * rather than as dark terrain you could walk across.
+   */
+  [Tile.Gorge]: (c) => {
+    base(c, PALETTE.gorge);
+    px(c, 0, 0, TILE_PX, 3, PALETTE.gorgeWall);
+    px(c, 0, 3, TILE_PX, 1, '#2a251f');
+    px(c, 0, TILE_PX - 3, TILE_PX, 3, PALETTE.gorgeWall);
+    px(c, 0, TILE_PX - 4, TILE_PX, 1, '#2a251f');
+    px(c, 3, 7, 4, 2, PALETTE.gorgeBed);
+    px(c, 9, 9, 4, 2, PALETTE.gorgeBed);
+  },
+
+  /** Tar welling out of the rock: glossy, black, and obviously not a wall. */
+  [Tile.PitchSeal]: (c) => {
+    base(c, PALETTE.pitch);
+    px(c, 0, 0, TILE_PX, 2, '#0d0b09');
+    px(c, 0, TILE_PX - 2, TILE_PX, 2, '#0d0b09');
+    c.fillStyle = '#3d332a';
+    c.fillRect(2, 4, 5, 2);
+    c.fillRect(9, 9, 4, 2);
+    c.fillStyle = '#5a4a38';
+    c.fillRect(3, 4, 2, 1);
+    c.fillRect(10, 9, 2, 1);
+  },
+
   [Tile.Water]: (c) => {
     base(c, PALETTE.water);
     px(c, 0, 0, TILE_PX, 4, PALETTE.waterDeep);
