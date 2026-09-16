@@ -53,7 +53,7 @@ export interface WorldParams {
   /** Per-biome density of harvestable resource nodes, 0..1. */
   resourceDensity: [number, number, number, number];
 
-  /** Roughly how many heart containers to scatter across the map. */
+  /** Field hearts. Wave 2: earned only — keep at 0 so worldgen places none. */
   heartContainers: number;
 
   /** Reserved dungeon entrances, one per biome (entered in a later milestone). */
@@ -95,7 +95,7 @@ export const DEFAULT_PARAMS: WorldParams = {
   // still under 7x, so pitch stays the thing you go north for.
   resourceDensity: [0.012, 0.017, 0.012, 0.009],
 
-  heartContainers: 6,
+  heartContainers: 0,
   dungeonsPerBiome: 1,
 
   // 40 days x 180s = a two-hour run. Doubled so the descent-then-climb and
