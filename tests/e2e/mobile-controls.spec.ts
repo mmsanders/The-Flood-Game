@@ -1,6 +1,12 @@
 import { expect, test } from '@playwright/test';
+import { mkdir } from 'node:fs/promises';
 
 const SEED = '20260830';
+const OUT = 'screenshots';
+
+test.beforeAll(async () => {
+  await mkdir(OUT, { recursive: true });
+});
 
 async function expectInsideViewport(page: import('@playwright/test').Page, selectors: string[]): Promise<void> {
   const result = await page.evaluate((items) => {
@@ -46,10 +52,13 @@ test.describe('mobile game controls', () => {
       '#restart-button',
     ]);
 
+    await page.screenshot({ path: `${OUT}/game-mobile-portrait-small.png` });
+
     const originalSeed = new URL(page.url()).searchParams.get('seed');
     await page.locator('#restart-button').click();
     await expect(page.locator('#restart-dialog')).toBeVisible();
     await expect(page.locator('#restart-confirm')).toHaveText('YES, REALLY RESTART');
+    await page.screenshot({ path: `${OUT}/game-mobile-restart-confirm.png` });
 
     await page.locator('#restart-cancel').click();
     await expect(page.locator('#restart-dialog')).toBeHidden();
@@ -83,5 +92,6 @@ test.describe('mobile game controls', () => {
 
     expect(layout.dpadBeforeScreen).toBe(true);
     expect(layout.actionsAfterScreen).toBe(true);
+    await page.screenshot({ path: `${OUT}/game-mobile-landscape-small.png` });
   });
 });
