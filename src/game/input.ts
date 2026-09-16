@@ -2,15 +2,16 @@
  * Input.
  *
  * An intent layer rather than a key-code layer: the rest of the game asks for
- * `moveX`/`attack`, never for "is KeyZ down". Touch controls can be added later
- * by feeding the same intents without any change to the game code.
+ * `moveX`/`attack`, never for "is KeyZ down". Keyboard and touch controls feed
+ * the same intents, so the simulation never needs to care where an input came
+ * from.
  */
 
 export interface Intents {
   moveX: number;
   moveY: number;
   attack: boolean;
-  /** True only on the frame the key went down. */
+  /** True only on the frame the key or virtual button went down. */
   attackPressed: boolean;
   interactPressed: boolean;
   restartPressed: boolean;
@@ -19,6 +20,9 @@ export interface Intents {
   /** Toggles the frame-time overlay. */
   perfPressed: boolean;
 }
+
+/** Actions the on-screen controls are allowed to feed into the game. */
+export type VirtualAction = 'up' | 'down' | 'left' | 'right' | 'attack' | 'interact' | 'bestiary';
 
 const KEYS = {
   up: ['ArrowUp', 'KeyW'],
@@ -36,6 +40,8 @@ const KEYS = {
 export class Input {
   private down = new Set<string>();
   private pressed = new Set<string>();
+  private virtualDown = new Set<VirtualAction>();
+  private virtualPressed = new Set<VirtualAction>();
   private readonly intents: Intents = {
     moveX: 0,
     moveY: 0,
@@ -68,11 +74,35 @@ export class Input {
     };
 
     // Releasing focus mid-hold would otherwise leave the player walking.
-    this.onBlur = () => this.down.clear();
+    this.onBlur = () => this.releaseAll();
 
     target.addEventListener('keydown', this.onKeyDown);
     target.addEventListener('keyup', this.onKeyUp);
     if (typeof window !== 'undefined') window.addEventListener('blur', this.onBlur);
+  }
+
+  /**
+   * Feed one on-screen control into the same intent layer as the keyboard.
+   *
+   * A quick tap can go down and back up between two animation frames. The
+   * `virtualPressed` set deliberately survives that release until `endFrame`,
+   * so taps are never lost even on a busy phone.
+   */
+  setVirtual(action: VirtualAction, isDown: boolean): void {
+    if (isDown) {
+      if (!this.virtualDown.has(action)) this.virtualPressed.add(action);
+      this.virtualDown.add(action);
+    } else {
+      this.virtualDown.delete(action);
+    }
+  }
+
+  /** Release every held key/button. Used for blur, dialogs, and HMR swaps. */
+  releaseAll(): void {
+    this.down.clear();
+    this.pressed.clear();
+    this.virtualDown.clear();
+    this.virtualPressed.clear();
   }
 
   /** Drop listeners so an HMR swap cannot leave a ghost Input walking the player. */
@@ -80,8 +110,7 @@ export class Input {
     this.target.removeEventListener('keydown', this.onKeyDown);
     this.target.removeEventListener('keyup', this.onKeyUp);
     if (typeof window !== 'undefined') window.removeEventListener('blur', this.onBlur);
-    this.down.clear();
-    this.pressed.clear();
+    this.releaseAll();
   }
 
   /**
@@ -94,13 +123,15 @@ export class Input {
    */
   read(): Intents {
     const i = this.intents;
-    i.moveX = (this.held(KEYS.right) ? 1 : 0) - (this.held(KEYS.left) ? 1 : 0);
-    i.moveY = (this.held(KEYS.down) ? 1 : 0) - (this.held(KEYS.up) ? 1 : 0);
-    i.attack = this.held(KEYS.attack);
-    i.attackPressed = this.hit(KEYS.attack);
-    i.interactPressed = this.hit(KEYS.interact);
+    i.moveX = (this.held(KEYS.right) || this.virtualDown.has('right') ? 1 : 0)
+      - (this.held(KEYS.left) || this.virtualDown.has('left') ? 1 : 0);
+    i.moveY = (this.held(KEYS.down) || this.virtualDown.has('down') ? 1 : 0)
+      - (this.held(KEYS.up) || this.virtualDown.has('up') ? 1 : 0);
+    i.attack = this.held(KEYS.attack) || this.virtualDown.has('attack');
+    i.attackPressed = this.hit(KEYS.attack) || this.virtualPressed.has('attack');
+    i.interactPressed = this.hit(KEYS.interact) || this.virtualPressed.has('interact');
     i.restartPressed = this.hit(KEYS.restart);
-    i.bestiaryPressed = this.hit(KEYS.bestiary);
+    i.bestiaryPressed = this.hit(KEYS.bestiary) || this.virtualPressed.has('bestiary');
     i.fastForward = this.held(KEYS.fast);
     i.perfPressed = this.hit(KEYS.perf);
     return i;
@@ -123,6 +154,7 @@ export class Input {
   /** Call once per frame, after reading, to clear edge-triggered state. */
   endFrame(): void {
     this.pressed.clear();
+    this.virtualPressed.clear();
   }
 }
 
