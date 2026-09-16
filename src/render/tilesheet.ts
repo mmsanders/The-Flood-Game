@@ -393,6 +393,18 @@ const TILE_PAINTERS: Record<number, Painter> = {
     paintPedestal(c);
   },
 
+  [Tile.Skiff]: (c) => {
+    base(c, PALETTE.grass);
+    specks(c, PALETTE.grassAlt, SPARSE);
+    // Straight-on little hull, low enough to read as something set on land.
+    px(c, 2, 8, 12, 4, '#6a3e18');
+    px(c, 3, 7, 10, 2, '#c48a48');
+    px(c, 4, 10, 8, 2, '#3a220c');
+    px(c, 1, 8, 2, 2, '#8a5a28');
+    px(c, 13, 8, 2, 2, '#8a5a28');
+    px(c, 7, 5, 2, 3, '#d2a05a');
+  },
+
   // -- dungeon terrain ------------------------------------------------------
   [Tile.DungeonFloor]: (c) => {
     base(c, PALETTE.dungeonFloor);

@@ -13,13 +13,16 @@ import {
   REWARD_NAMES,
   RewardKind,
 } from '../core/dungeon.js';
-
-/**
- * Rod tier that parts a seal of pitch — the full ladder, up to and including
- * the scrub shrine that teaches the Rod to take pitch at all.
- */
-const SEAL_TIER = Resource.Pitch;
 import { gorgeDepthAt, waterDepth, waterLevelAtSeconds } from '../core/flood.js';
+import {
+  AXE_DURABILITY,
+  ITEM_COST,
+  ITEM_NAMES,
+  ItemKind,
+  PICKAXE_DURABILITY,
+  SHOP_STOCK,
+  marketAmount,
+} from '../core/items.js';
 import { ARK_RECIPE, NODE_YIELD, PLAYER_TILES_PER_SEC, SHRINE_COST, canRodHarvest } from '../core/resources.js';
 import { panelsHigh, panelsWide, type TileMap } from '../core/tilemap.js';
 import {
@@ -32,9 +35,10 @@ import {
   isWalkable,
   resourceOf,
 } from '../core/tiles.js';
-import type { Point, World } from '../core/world.js';
+import { PoiKind, type Point, type World } from '../core/world.js';
 import {
   ANIMAL_DEFS,
+  AnimalKind,
   AnimalStatus,
   animalDef,
   animalOverlaps,
@@ -43,12 +47,23 @@ import {
   type FlockScore,
 } from '../core/animals.js';
 import {
+  BASE_BOAT_DEPTH,
   BOAT_COST_FIBER,
   BOAT_COST_WOOD,
+  BOAT_PITCH_COST,
+  BOAT_PORTAGE_SPEED_SCALE,
+  BOAT_RECAULK_FIBER,
   BOAT_SPEED_SCALE,
+  PITCHED_BOAT_DEPTH,
+  boatDestroyedAtDepth,
   canAffordBoat,
+  canAffordPitching,
   payForBoat,
+  payForPitching,
 } from '../core/boat.js';
+
+/** Rod tier that parts a seal of pitch. */
+const SEAL_TIER = Resource.Pitch;
 
 export const enum Dir {
   Down = 0,
@@ -78,11 +93,7 @@ export interface Player {
   /** Top-left of the hitbox, in world pixels. */
   x: number;
   y: number;
-  /**
-   * Position at the start of the current simulation step, so the renderer can
-   * draw between the last two states instead of snapping to the newest one.
-   * A teleport calls `syncInterpolation` so nothing smears across the map.
-   */
+  /** Position at the start of the current simulation step. */
   prevX: number;
   prevY: number;
   dir: Dir;
@@ -141,43 +152,47 @@ export interface GameState {
   harvestYield: number;
   /** Swing reach in tiles, and how many floods deep the Rod can dredge. */
   rodReach: number;
-  /**
-   * How far the Rod has been imbued. 0 = fiber only; 1 = wood; 2 = stone;
-   * 3 = pitch; 4 = crowned at the mountain shrine.
-   */
+  /** 0 = fiber only; 1 = wood; 2 = stone; 3 = pitch; 4 = crowned. */
   rodTier: number;
   dungeonsCleared: boolean[];
-  /** Crafted at the valley slipway. Once you have it, any shore will do. */
+
+  /** Wave-two traversal gear. */
+  hasGaloshes: boolean;
+  hasAxe: boolean;
+  axeDurability: number;
+  hasPickaxe: boolean;
+  pickaxeDurability: number;
+  hasSoundingLine: boolean;
+  /** One market heart may be bought per settlement biome. */
+  shopHeartMask: number;
+  hermitHeartClaimed: boolean;
+
+  /** At least one skiff has been built this run. */
   hasBoat: boolean;
   /** Currently sailing. Blocks drowning and lets you occupy floodwater. */
   inBoat: boolean;
-  /**
-   * Overworld panels the player has stood on, row-major 0/1, length
-   * `panelsX * panelsY`. The HUD map draws only these, recentred, so an
-   * unvisited world never leaks its shape.
-   */
+  /** A beached skiff is being lugged overland. */
+  haulingBoat: boolean;
+  /** Deepest water the currently tracked hull may enter: 2 ordinary, 3 pitched. */
+  boatDepth: number;
+  /** Tile coordinate of the set-down skiff, or -1 while carried/sailed. */
+  boatX: number;
+  boatY: number;
+  /** Tile restored when the tracked skiff is picked back up. */
+  boatUnderTile: number;
+
+  /** Explored overworld panels, row-major 0/1. */
   exploredOverworld: Uint8Array;
-  /** Same packing, one grid per dungeon, sized `roomsX * roomsY`. */
+  /** Same packing, one grid per dungeon. */
   exploredDungeons: Uint8Array[];
-  /**
-   * Panel-row at the top of the HUD map when the square-tile strip is
-   * taller than the well. Follows the player with a north/south dead zone.
-   */
   minimapViewY: number;
-  /**
-   * Once the player has stood on the world's south row, the HUD map stays
-   * filled top-to-bottom instead of opening the black buffer again.
-   */
   minimapFilledSouth: boolean;
-  /**
-   * Bumped whenever a tile changes under play — a harvested node, a taken
-   * heart, a bridged chasm. The HUD map caches its raster and watches this
-   * to know when the terrain it painted is stale.
-   */
+  /** Bumped whenever terrain changes under play. */
   mapRevision: number;
 }
 
 export function createGame(world: World): GameState {
+  retireLooseHearts(world);
   const state: GameState = {
     world,
     location: { kind: 'overworld', dungeonId: -1, returnTo: null },
@@ -218,8 +233,21 @@ export function createGame(world: World): GameState {
     rodReach: 1,
     rodTier: 0,
     dungeonsCleared: world.dungeons.map(() => false),
+    hasGaloshes: false,
+    hasAxe: false,
+    axeDurability: 0,
+    hasPickaxe: false,
+    pickaxeDurability: 0,
+    hasSoundingLine: false,
+    shopHeartMask: 0,
+    hermitHeartClaimed: false,
     hasBoat: false,
     inBoat: false,
+    haulingBoat: false,
+    boatDepth: BASE_BOAT_DEPTH,
+    boatX: -1,
+    boatY: -1,
+    boatUnderTile: Tile.Grass,
     exploredOverworld: new Uint8Array(world.params.panelsX * world.params.panelsY),
     exploredDungeons: world.dungeons.map((d) => new Uint8Array(d.roomsX * d.roomsY)),
     minimapViewY: 0,
@@ -228,6 +256,20 @@ export function createGame(world: World): GameState {
   };
   markExplored(state);
   return state;
+}
+
+/** Wave two removes free overworld hearts; dungeons, barter and the hermit earn them. */
+function retireLooseHearts(world: World): void {
+  let changed = false;
+  for (const poi of world.pois) {
+    if (poi.kind !== PoiKind.Heart) continue;
+    const i = poi.y * world.w + poi.x;
+    if (world.tiles[i] === Tile.HeartContainer) {
+      world.tiles[i] = carveTo(world.biome[i]);
+      changed = true;
+    }
+  }
+  if (changed) world.pois = world.pois.filter((poi) => poi.kind !== PoiKind.Heart);
 }
 
 /** Record the panel the camera is on as visited. Cheap and idempotent. */
@@ -248,13 +290,7 @@ export function markExplored(state: GameState): void {
   if (i < state.exploredOverworld.length) state.exploredOverworld[i] = 1;
 }
 
-/**
- * Rebind a live run onto a freshly loaded rules module.
- *
- * HMR re-executes this file, which would otherwise drop the player. Copy the
- * running state onto a newly created shape so fields added since the run
- * started get their defaults, then write back anything the run already had.
- */
+/** Rebind a live run onto a freshly loaded rules module. */
 export function adoptHotState(running: GameState): GameState {
   const next = createGame(running.world);
   const merged: GameState = {
@@ -305,13 +341,7 @@ function padFlags(values: boolean[] | undefined, len: number): boolean[] {
   return out;
 }
 
-/**
- * The map the player is standing on.
- *
- * Movement, collision, harvesting and rendering all read this rather than
- * `state.world`, which is what lets a dungeon be a whole separate map without
- * a single "am I underground" branch in any of them.
- */
+/** The map the player is standing on. */
 export function activeMap(state: GameState): TileMap {
   return state.location.kind === 'dungeon'
     ? state.world.dungeons[state.location.dungeonId]
@@ -336,15 +366,13 @@ export interface StepInput {
   moveX: number;
   moveY: number;
   attackPressed: boolean;
-  /** Enter a dungeon, climb out, or pay to clear the obstacle in front. */
+  /** Enter a dungeon, climb out, barter, portage, or clear an obstacle. */
   interactPressed?: boolean;
 }
 
 export function step(state: GameState, input: StepInput, dt: number): void {
   if (state.phase !== 'playing') return;
 
-  // Everything the renderer interpolates is snapshotted here, before the step
-  // moves it. Animals snapshot themselves inside `stepAnimals`.
   state.player.prevX = state.player.x;
   state.player.prevY = state.player.y;
   state.camera.prevScroll = state.camera.scroll;
@@ -359,6 +387,7 @@ export function step(state: GameState, input: StepInput, dt: number): void {
     state.messageTimer -= dt;
     if (state.messageTimer <= 0) state.message = null;
   }
+  checkStrandedBoat(state);
 
   // Panel transitions lock input, Zelda-style: the screen slides, you wait.
   if (state.camera.scroll > 0) {
@@ -395,7 +424,6 @@ function movePlayer(state: GameState, input: StepInput, dt: number): void {
   let dy = input.moveY;
 
   if (dx !== 0 && dy !== 0) {
-    // Normalise so diagonals aren't faster than the cardinals.
     const inv = Math.SQRT1_2;
     dx *= inv;
     dy *= inv;
@@ -404,7 +432,6 @@ function movePlayer(state: GameState, input: StepInput, dt: number): void {
   p.moving = dx !== 0 || dy !== 0;
   if (p.moving) {
     p.animTime += dt;
-    // Face the dominant axis, favouring horizontal so strafing reads clearly.
     if (Math.abs(input.moveX) >= Math.abs(input.moveY)) {
       if (input.moveX > 0) p.dir = Dir.Right;
       else if (input.moveX < 0) p.dir = Dir.Left;
@@ -413,10 +440,15 @@ function movePlayer(state: GameState, input: StepInput, dt: number): void {
   }
 
   const wading = !state.inBoat && hitboxInWater(state, p.x, p.y);
-  const speed =
-    SPEED_PX * (state.inBoat ? BOAT_SPEED_SCALE : wading ? WADE_SPEED_SCALE : 1) * dt;
+  const scale = state.inBoat
+    ? BOAT_SPEED_SCALE
+    : state.haulingBoat
+      ? BOAT_PORTAGE_SPEED_SCALE
+      : wading
+        ? WADE_SPEED_SCALE
+        : 1;
+  const speed = SPEED_PX * scale * dt;
 
-  // Resolve axes separately so sliding along a wall works.
   moveAxis(state, dx * speed, 0);
   moveAxis(state, 0, dy * speed);
 }
@@ -436,7 +468,6 @@ function moveAxis(state: GameState, dx: number, dy: number): void {
 
   if (tryShoveOff(state, nx, ny)) return;
 
-  // Blocked: step up to the obstruction rather than stopping short of it.
   const steps = 4;
   for (let i = steps - 1; i > 0; i--) {
     const tx = p.x + (dx * i) / steps;
@@ -449,36 +480,19 @@ function moveAxis(state: GameState, dx: number, dy: number): void {
   }
 }
 
-/**
- * Can the hitbox sit here? Checks the four corners against terrain.
- *
- * Impassable tiles cannot be stepped *onto*, but if you already overlap one
- * (heart pickup, a seam, a refused warp) you can still occupy that same tile
- * so you can walk *off*. Floodwater is the same idea: you cannot enter it,
- * but a hitbox already in the water can leave onto dry ground.
- */
+/** Can the hitbox sit here? Checks the four corners against terrain. */
 function canOccupy(state: GameState, x: number, y: number): boolean {
-  const alreadyWading = hitboxInWater(state, state.player.x, state.player.y);
   const sailing = state.inBoat && state.location.kind === 'overworld';
-
-  // The four corners, walked without building an array for them. This runs
-  // twice per simulation step, so it is on the hottest path in the game.
   return (
-    cornerClear(state, x, y, sailing, alreadyWading) &&
-    cornerClear(state, x + PLAYER_W - 1, y, sailing, alreadyWading) &&
-    cornerClear(state, x, y + PLAYER_H - 1, sailing, alreadyWading) &&
-    cornerClear(state, x + PLAYER_W - 1, y + PLAYER_H - 1, sailing, alreadyWading)
+    cornerClear(state, x, y, sailing) &&
+    cornerClear(state, x + PLAYER_W - 1, y, sailing) &&
+    cornerClear(state, x, y + PLAYER_H - 1, sailing) &&
+    cornerClear(state, x + PLAYER_W - 1, y + PLAYER_H - 1, sailing)
   );
 }
 
 /** One corner of the hitbox against terrain and floodwater. */
-function cornerClear(
-  state: GameState,
-  cx: number,
-  cy: number,
-  sailing: boolean,
-  alreadyWading: boolean,
-): boolean {
+function cornerClear(state: GameState, cx: number, cy: number, sailing: boolean): boolean {
   const map = activeMap(state);
   const tx = Math.floor(cx / TILE_PX);
   const ty = Math.floor(cy / TILE_PX);
@@ -486,7 +500,8 @@ function cornerClear(
 
   const i = ty * map.w + tx;
   const tile = map.tiles[i];
-  const flooded = depthAt(state, tx, ty) > 0;
+  const depth = depthAt(state, tx, ty);
+  const flooded = depth > 0;
   const alreadyOn = hitboxOverlapsTile(state.player.x, state.player.y, tx, ty);
 
   if (sailing && isBoatableTile(state, tx, ty)) return true;
@@ -494,8 +509,19 @@ function cornerClear(
     if (flooded && !sailing) return alreadyOn;
     return canStepOnEntrance(state, tx, ty) || alreadyOn;
   }
+
+  // Depth one is the galoshes rung. The gorge is normally impassable terrain,
+  // but once its bed is covered ankle-deep the boots can take it deliberately.
+  if (flooded && !sailing) {
+    if (state.hasGaloshes && depth === 1 && (isWalkable(tile) || tile === Tile.Gorge)) {
+      return true;
+    }
+    // If the flood rose under Noah, let him move within that tile to escape,
+    // but never advance from one unsafe flooded tile into another.
+    return alreadyOn;
+  }
+
   if (!isWalkable(tile)) return alreadyOn;
-  if (flooded && !sailing && !alreadyWading) return false;
   return true;
 }
 
@@ -510,12 +536,7 @@ function hitboxOverlapsTile(px: number, py: number, tx: number, ty: number): boo
   return x1 >= tx0 && px <= tx1 && y1 >= ty0 && py <= ty1;
 }
 
-/**
- * Standing water on a tile of the active map, 0 (dry) to 4 (the deep).
- *
- * Everything that cares about water asks this, so wading, sailing, beaching
- * and dredging cannot disagree. Dungeons do not flood, so they answer 0.
- */
+/** Standing water on a tile of the active map. */
 export function depthAt(state: GameState, tx: number, ty: number): number {
   const map = activeMap(state);
   if (!map.floods) return 0;
@@ -524,44 +545,33 @@ export function depthAt(state: GameState, tx: number, ty: number): number {
   return waterDepth(map.tiles[i], map.elev[i], waterLevel(state), gorgeRunoff(state, ty));
 }
 
-/**
- * How deep the gorge runs at a given row right now.
- *
- * Per row, not per world: the runoff front starts at the top of the map and
- * travels south, so the channel is a river in the north while it is still a
- * dry ditch in the south.
- */
+/** How deep the gorge runs at a given row right now. */
 export function gorgeRunoff(state: GameState, ty: number): number {
   return gorgeDepthAt(currentDay(state), ty, activeMap(state).h);
 }
 
 /**
- * Can the skiff float here?
- *
- * Anything with water in it, including over a rock or a tree the flood has
- * covered: past the point where a boulder is a couple of feet under, you sail
- * over it rather than round it. Below that the terrain still blocks, so
- * shallow water keeps the shape of the land it covered.
+ * Can the skiff float here? Ordinary hulls stop at depth 2, pitched hulls at
+ * depth 3, and depth 4+ belongs to the ark alone.
  */
 export function isBoatableTile(state: GameState, tx: number, ty: number): boolean {
   const map = activeMap(state);
   if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return false;
   const depth = depthAt(state, tx, ty);
-  if (depth <= 0) return false;
+  const maxDepth = state.boatDepth ?? BASE_BOAT_DEPTH;
+  if (depth <= 0 || depth >= 4 || depth > maxDepth) return false;
   return isWalkable(map.tiles[tx + ty * map.w]) || depth >= FLOAT_OVER_DEPTH;
 }
 
-/**
- * Water deep enough to sail over something you could not walk through.
- *
- * Depth 2 is already over a person's head, so it is comfortably over a
- * boulder's. Below it the drowned landscape still steers you.
- */
+/** Depth 2 floats over drowned blocking scenery. */
 const FLOAT_OVER_DEPTH = 2;
 
-/** Step from shore onto water/flood and become the skiff. */
+/** Step from shore into reachable water and become the skiff. */
 function tryShoveOff(state: GameState, x: number, y: number): boolean {
   if (!state.hasBoat || state.inBoat || state.location.kind !== 'overworld') return false;
+  // A set-down skiff elsewhere is not magically in Noah's pocket. Old hot
+  // states have boatX=-1, so they retain the old launch behaviour safely.
+  if (!state.haulingBoat && state.boatX >= 0) return false;
 
   for (let c = 0; c < 4; c++) {
     const cx = c & 1 ? x + PLAYER_W - 1 : x;
@@ -573,6 +583,9 @@ function tryShoveOff(state: GameState, x: number, y: number): boolean {
     state.player.y = ty * TILE_PX + (TILE_PX - PLAYER_H) / 2;
     syncInterpolation(state);
     state.inBoat = true;
+    state.haulingBoat = false;
+    state.boatX = -1;
+    state.boatY = -1;
     say(state, 'You shove off.');
     return true;
   }
@@ -589,7 +602,8 @@ function maybeBeach(state: GameState): void {
   if (depthAt(state, tx, ty) > 0) return;
   if (!isWalkable(map.tiles[i])) return;
   state.inBoat = false;
-  say(state, 'You beach the skiff.');
+  state.haulingBoat = true;
+  say(state, 'You beach the skiff and take the painter.');
 }
 
 /** True if any part of the hitbox is standing in floodwater. */
@@ -607,28 +621,29 @@ function isSubmergedAt(state: GameState, pxX: number, pxY: number): boolean {
   return depthAt(state, Math.floor(pxX / TILE_PX), Math.floor(pxY / TILE_PX)) > 0;
 }
 
-// ---------------------------------------------------------------- the rod
+// ---------------------------------------------------------------- the rod + tools
 
-/**
- * The Rod of Aaron is weapon and tool at once: the same swing that will fight
- * things later is what harvests a resource node now.
- */
+/** The Rod is weapon and default harvesting tool; hand tools are emergency alternatives. */
 function swingRod(state: GameState): void {
   const p = state.player;
   const cx = p.x + PLAYER_W / 2;
   const cy = p.y + PLAYER_H / 2;
 
-  // Closest node first so extra reach never skips the tile you are standing
-  // next to (the Serpent Rod used to harvest *only* the far tile).
   for (let d = 1; d <= state.rodReach; d++) {
     const tx = Math.floor((cx + dirX(p.dir) * TILE_PX * d) / TILE_PX);
     const ty = Math.floor((cy + dirY(p.dir) * TILE_PX * d) / TILE_PX);
-    if (harvestAt(state, tx, ty)) return;
+    if (harvestAt(state, tx, ty, d === 1)) return;
   }
+
+  // Scenery is not a Rod target at all. Axe/pickaxe give the adjacent swing a
+  // second meaning without making every ordinary tree a permanent resource.
+  const tx = Math.floor((cx + dirX(p.dir) * TILE_PX) / TILE_PX);
+  const ty = Math.floor((cy + dirY(p.dir) * TILE_PX) / TILE_PX);
+  tryToolHarvest(state, tx, ty);
 }
 
 /** True if a resource node was targeted, harvested or not. */
-function harvestAt(state: GameState, tx: number, ty: number): boolean {
+function harvestAt(state: GameState, tx: number, ty: number, allowTool: boolean): boolean {
   const map = activeMap(state);
   if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return false;
 
@@ -637,6 +652,7 @@ function harvestAt(state: GameState, tx: number, ty: number): boolean {
   if (res === null) return false;
 
   if (!canRodHarvest(state.rodTier, res)) {
+    if (allowTool && tryToolHarvest(state, tx, ty)) return true;
     say(state, `The Rod does not yet know ${RESOURCE_LABEL[res]}. Seek a shrine.`);
     return true;
   }
@@ -656,10 +672,87 @@ function harvestAt(state: GameState, tx: number, ty: number): boolean {
   state.mapRevision++;
   state.carried[res] += state.harvestYield;
   state.harvested += state.harvestYield;
-  if (submerged) {
-    say(state, `Dredged +${state.harvestYield} ${RESOURCE_LABEL[res]}.`);
+  if (submerged) say(state, `Dredged +${state.harvestYield} ${RESOURCE_LABEL[res]}.`);
+  else say(state, `+${state.harvestYield} ${RESOURCE_LABEL[res]}`);
+  return true;
+}
+
+/**
+ * A normal resource node costs one durability; ordinary blocking scenery costs
+ * more but still yields one ark-grade unit. That makes tools rescue a route or
+ * a drowned progression gate without replacing the Rod as the efficient loop.
+ */
+function tryToolHarvest(state: GameState, tx: number, ty: number): boolean {
+  const map = activeMap(state);
+  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return false;
+  const i = ty * map.w + tx;
+  const tile = map.tiles[i] as Tile;
+
+  let resource: Resource;
+  let durability: number;
+  let tool: 'axe' | 'pickaxe';
+
+  switch (tile) {
+    case Tile.GopherTree:
+      resource = Resource.Wood;
+      durability = 1;
+      tool = 'axe';
+      break;
+    case Tile.Tree:
+      resource = Resource.Wood;
+      durability = 3;
+      tool = 'axe';
+      break;
+    case Tile.Shrub:
+      resource = Resource.Fiber;
+      durability = 2;
+      tool = 'axe';
+      break;
+    case Tile.StoneNode:
+      resource = Resource.Stone;
+      durability = 1;
+      tool = 'pickaxe';
+      break;
+    case Tile.Rock:
+      resource = Resource.Stone;
+      durability = 3;
+      tool = 'pickaxe';
+      break;
+    default:
+      return false;
+  }
+
+  if (tool === 'axe' && !state.hasAxe) return false;
+  if (tool === 'pickaxe' && !state.hasPickaxe) return false;
+  if (depthAt(state, tx, ty) > 0) {
+    say(state, `The ${tool} cannot work under water.`);
+    return true;
+  }
+
+  map.tiles[i] = carveTo(map.biome[i]);
+  state.mapRevision++;
+  state.carried[resource] += 1;
+  state.harvested += 1;
+
+  if (tool === 'axe') {
+    state.axeDurability = Math.max(0, state.axeDurability - durability);
+    if (state.axeDurability === 0) {
+      state.hasAxe = false;
+      say(state, `+1 ${RESOURCE_LABEL[resource]}. The axe breaks.`);
+    } else {
+      say(state, `+1 ${RESOURCE_LABEL[resource]} — axe ${state.axeDurability}/${AXE_DURABILITY}.`);
+    }
   } else {
-    say(state, `+${state.harvestYield} ${RESOURCE_LABEL[res]}`);
+    state.pickaxeDurability = Math.max(0, state.pickaxeDurability - durability);
+    if (state.pickaxeDurability === 0) {
+      state.hasPickaxe = false;
+      say(state, `+1 ${RESOURCE_LABEL[resource]}. The pickaxe breaks.`);
+    } else {
+      say(
+        state,
+        `+1 ${RESOURCE_LABEL[resource]} — pickaxe ${state.pickaxeDurability}/${PICKAXE_DURABILITY}.`,
+      );
+    }
   }
   return true;
 }
@@ -686,6 +779,8 @@ function stepTileEffects(state: GameState): void {
   const i = ty * map.w + tx;
 
   switch (map.tiles[i]) {
+    // Kept for tests/hand-authored spaces; generated overworld hearts are
+    // stripped by createGame, so live hearts are now earned rather than found.
     case Tile.HeartContainer: {
       map.tiles[i] = Tile.Pedestal;
       state.mapRevision++;
@@ -695,29 +790,23 @@ function stepTileEffects(state: GameState): void {
       say(state, 'A heart container! Thy vessel is enlarged.');
       break;
     }
-    case Tile.ArkSite: {
+    case Tile.ArkSite:
       deliverToArk(state);
       break;
-    }
-    case Tile.Key: {
+    case Tile.Key:
       map.tiles[i] = Tile.DungeonFloor;
       state.mapRevision++;
       state.keysHeld++;
       say(state, 'A key. Something here is locked.');
       break;
-    }
-    case Tile.Chest: {
+    case Tile.Chest:
       map.tiles[i] = Tile.DungeonFloor;
       state.mapRevision++;
       openChest(state);
       break;
-    }
-    case Tile.Pit: {
+    case Tile.Pit:
       fallInPit(state);
       break;
-    }
-    // Stairs and dungeon doors are entered deliberately, never by walking
-    // over them — otherwise arriving would immediately bounce you back out.
     default:
       break;
   }
@@ -728,7 +817,6 @@ function fallInPit(state: GameState): void {
   const p = state.player;
   const before = p.invuln;
   damage(state, 1);
-  // Invulnerability frames would otherwise let a player walk a pit for free.
   if (before > 0) return;
 
   if (state.safeSpot) {
@@ -773,7 +861,7 @@ function tileUnder(state: GameState): { map: TileMap; tx: number; ty: number; i:
   return { map, tx, ty, i: ty * map.w + tx };
 }
 
-/** Tile the player is facing, within the rod's reach. */
+/** Tile the player is facing, within the Rod's near reach. */
 export function facingTile(state: GameState): { map: TileMap; tx: number; ty: number } {
   const map = activeMap(state);
   const p = state.player;
@@ -788,13 +876,7 @@ export interface ObstaclePrompt {
   affordable: boolean;
 }
 
-/**
- * What the player could pay for right now, if anything.
- *
- * The HUD renders this verbatim. Making the price and your balance visible at
- * the moment of the decision is the whole point of the mechanic — a cost you
- * discover only after paying it isn't a trade, it's a surprise.
- */
+/** What the player could pay for right now, if anything. */
 export function obstacleInFront(state: GameState): ObstaclePrompt | null {
   const { map, tx, ty } = facingTile(state);
   if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return null;
@@ -833,34 +915,41 @@ export function obstacleInFront(state: GameState): ObstaclePrompt | null {
   };
 }
 
-/**
- * Craft / launch / dredge prompts, then the dungeon trade. The HUD renders
- * this verbatim so the price is visible at the moment of the decision.
- */
+/** Context action rendered by the HUD. */
 export function actionPrompt(state: GameState): ObstaclePrompt | null {
   if (state.phase !== 'playing') return null;
 
   if (state.location.kind === 'overworld') {
     const { map, i } = tileUnder(state);
-    if (map.tiles[i] === Tile.Shrine) {
-      return shrinePrompt(state, map.biome[i] as Biome);
+    const standing = map.tiles[i] as Tile;
+    const biome = map.biome[i] as Biome;
+
+    if (standing === Tile.Shrine) return shrinePrompt(state, biome);
+    if (standing === Tile.TownDoor) return settlementPrompt(state, biome);
+    if (standing === Tile.Skiff && !state.haulingBoat && !state.inBoat) {
+      return { tile: Tile.Skiff, label: 'Take hold of the skiff', affordable: true };
     }
-    if (map.tiles[i] === Tile.BoatYard && !state.hasBoat) {
-      const wood = state.carried[Resource.Wood];
-      const fiber = state.carried[Resource.Fiber];
-      return {
-        tile: Tile.BoatYard,
-        label: `Frame a skiff — ${BOAT_COST_WOOD} wood, ${BOAT_COST_FIBER} fiber (you have ${wood}, ${fiber})`,
-        affordable: canAffordBoat(state.carried),
-      };
+    if (standing === Tile.BoatYard) {
+      const prompt = boatYardPrompt(state, biome);
+      if (prompt) return prompt;
     }
-    if (state.hasBoat && !state.inBoat && hasAdjacentBoatable(state)) {
+
+    if (state.hasBoat && !state.inBoat && (state.haulingBoat || state.boatX < 0) && hasAdjacentBoatable(state)) {
       return {
         tile: Tile.Water,
-        label: 'Walk into the water to launch the skiff  [E]',
+        label: `Launch the skiff — depth limit ${state.boatDepth}`,
         affordable: true,
       };
     }
+
+    if (state.haulingBoat) {
+      return {
+        tile: Tile.Skiff,
+        label: canSetBoatHere(state) ? 'Set down the skiff' : 'Carry the skiff onto clear dry ground',
+        affordable: canSetBoatHere(state),
+      };
+    }
+
     if (state.inBoat) {
       const facing = facingTile(state);
       if (
@@ -870,15 +959,21 @@ export function actionPrompt(state: GameState): ObstaclePrompt | null {
         facing.ty < facing.map.h
       ) {
         const fi = facing.ty * facing.map.w + facing.tx;
-        if (
-          resourceOf(facing.map.tiles[fi]) !== null &&
-          facing.map.floods &&
-          depthAt(state, facing.tx, facing.ty) > 0
-        ) {
+        const res = resourceOf(facing.map.tiles[fi]);
+        const depth = depthAt(state, facing.tx, facing.ty);
+        if (res !== null && facing.map.floods && depth > 0) {
+          const reachable = depth <= state.rodReach;
+          if (state.hasSoundingLine) {
+            return {
+              tile: facing.map.tiles[fi] as Tile,
+              label: `Sounding line: depth ${Math.min(4, depth)} — ${RESOURCE_NAMES[res]} below${reachable ? '; swing to dredge' : '; beyond the Rod'}`,
+              affordable: reachable,
+            };
+          }
           return {
             tile: facing.map.tiles[fi] as Tile,
-            label: 'Dredge the deep — swing the Rod',
-            affordable: true,
+            label: reachable ? 'Dredge the deep — swing the Rod' : 'Something lies below, beyond the Rod',
+            affordable: reachable,
           };
         }
       }
@@ -889,21 +984,28 @@ export function actionPrompt(state: GameState): ObstaclePrompt | null {
 }
 
 function handleInteract(state: GameState): void {
-  const { map, i } = tileUnder(state);
-  const standing = map.tiles[i];
+  const { map, tx, ty, i } = tileUnder(state);
+  const standing = map.tiles[i] as Tile;
+  const biome = map.biome[i] as Biome;
 
   if (standing === Tile.Shrine) {
-    tryImbueRod(state, map.biome[i] as Biome);
+    tryImbueRod(state, biome);
     return;
   }
-  if (standing === Tile.BoatYard && !state.hasBoat) {
-    tryCraftBoat(state);
+  if (standing === Tile.TownDoor) {
+    interactSettlement(state, biome);
     return;
   }
+  if (standing === Tile.Skiff && !state.inBoat && !state.haulingBoat) {
+    pickUpBoat(state, tx, ty, i);
+    return;
+  }
+  if (standing === Tile.BoatYard && handleBoatYard(state, biome)) return;
   if (tryLaunchBoat(state)) return;
+  if (state.haulingBoat && trySetDownBoat(state)) return;
 
-  const { tx, ty } = facingTile(state);
-  tryClear(state, tx, ty);
+  const facing = facingTile(state);
+  tryClear(state, facing.tx, facing.ty);
 }
 
 function shrinePrompt(state: GameState, biome: Biome): ObstaclePrompt {
@@ -920,7 +1022,8 @@ function shrinePrompt(state: GameState, biome: Biome): ObstaclePrompt {
       affordable: false,
     };
   }
-  const next = biome < Biome.Mountain ? RESOURCE_NAMES[(biome + 1) as Resource] : 'a budding harvest';
+  const next =
+    biome < Biome.Mountain ? RESOURCE_NAMES[(biome + 1) as Resource] : 'a budding harvest';
   return {
     tile: Tile.Shrine,
     label: `Imbue the Rod — ${cost} ${RESOURCE_LABEL[res]} → ${next} (you have ${held})`,
@@ -954,30 +1057,166 @@ function tryImbueRod(state: GameState, biome: Biome): void {
   say(state, `The Rod drinks. It will take ${unlocked}.`);
 }
 
+// ----------------------------------------------------------- skiff lifecycle
+
+function checkStrandedBoat(state: GameState): void {
+  if (
+    !state.hasBoat ||
+    state.inBoat ||
+    state.haulingBoat ||
+    state.boatX < 0 ||
+    state.boatY < 0
+  ) {
+    return;
+  }
+
+  const world = state.world;
+  const tx = state.boatX;
+  const ty = state.boatY;
+  if (tx >= world.w || ty >= world.h) return;
+
+  const i = ty * world.w + tx;
+  const runoff = gorgeDepthAt(currentDay(state), ty, world.h);
+  const depth = waterDepth(world.tiles[i], world.elev[i], waterLevel(state), runoff);
+  if (!boatDestroyedAtDepth(state.boatDepth, depth)) return;
+
+  if (world.tiles[i] === Tile.Skiff) world.tiles[i] = state.boatUnderTile;
+  state.hasBoat = false;
+  state.inBoat = false;
+  state.haulingBoat = false;
+  state.boatDepth = BASE_BOAT_DEPTH;
+  state.boatX = -1;
+  state.boatY = -1;
+  state.mapRevision++;
+  say(state, 'The deep took the skiff you left behind.');
+}
+
+function boatYardPrompt(state: GameState, biome: Biome): ObstaclePrompt | null {
+  if (state.haulingBoat && state.boatDepth < PITCHED_BOAT_DEPTH && biome >= Biome.Scrub) {
+    return {
+      tile: Tile.BoatYard,
+      label: `Recaulk for depth 3 — ${BOAT_PITCH_COST} pitch + ${BOAT_RECAULK_FIBER} fiber`,
+      affordable: canAffordPitching(state.carried),
+    };
+  }
+  if (!state.inBoat && !state.haulingBoat) {
+    const wood = state.carried[Resource.Wood];
+    const fiber = state.carried[Resource.Fiber];
+    return {
+      tile: Tile.BoatYard,
+      label: `Frame a skiff — ${BOAT_COST_WOOD} wood, ${BOAT_COST_FIBER} fiber (you have ${wood}, ${fiber})`,
+      affordable: canAffordBoat(state.carried),
+    };
+  }
+  return null;
+}
+
+function handleBoatYard(state: GameState, biome: Biome): boolean {
+  if (state.haulingBoat && state.boatDepth < PITCHED_BOAT_DEPTH && biome >= Biome.Scrub) {
+    tryPitchBoat(state);
+    return true;
+  }
+  if (!state.inBoat && !state.haulingBoat) {
+    tryCraftBoat(state);
+    return true;
+  }
+  return false;
+}
+
 function tryCraftBoat(state: GameState): void {
-  if (state.hasBoat) return;
   if (!canAffordBoat(state.carried)) {
-    say(
-      state,
-      `The slipway wants ${BOAT_COST_WOOD} gopher wood and ${BOAT_COST_FIBER} fiber.`,
-    );
+    say(state, `The slipway wants ${BOAT_COST_WOOD} gopher wood and ${BOAT_COST_FIBER} fiber.`);
     return;
   }
   payForBoat(state.carried);
   state.hasBoat = true;
-  say(state, 'A skiff of gopher wood. Take it onto the waters.');
+  state.inBoat = false;
+  state.haulingBoat = true;
+  state.boatDepth = BASE_BOAT_DEPTH;
+  state.boatX = -1;
+  state.boatY = -1;
+  say(state, 'A skiff of gopher wood. It is yours to sail — and to carry.');
+}
+
+function tryPitchBoat(state: GameState): void {
+  if (!canAffordPitching(state.carried)) {
+    say(state, `The higher yard wants ${BOAT_PITCH_COST} pitch and ${BOAT_RECAULK_FIBER} fiber.`);
+    return;
+  }
+  payForPitching(state.carried);
+  state.boatDepth = PITCHED_BOAT_DEPTH;
+  say(state, 'Fresh pitch in every seam. The skiff will take depth three.');
 }
 
 function tryLaunchBoat(state: GameState): boolean {
   if (!state.hasBoat || state.inBoat || state.location.kind !== 'overworld') return false;
+  if (!state.haulingBoat && state.boatX >= 0) return false;
   const dest = firstAdjacentBoatable(state);
   if (!dest) return false;
   state.player.x = dest.x * TILE_PX + (TILE_PX - PLAYER_W) / 2;
   state.player.y = dest.y * TILE_PX + (TILE_PX - PLAYER_H) / 2;
   syncInterpolation(state);
   state.inBoat = true;
+  state.haulingBoat = false;
+  state.boatX = -1;
+  state.boatY = -1;
   say(state, 'The skiff takes the water.');
   return true;
+}
+
+function canSetBoatHere(state: GameState): boolean {
+  if (!state.haulingBoat || state.inBoat || state.location.kind !== 'overworld') return false;
+  const { map, tx, ty, i } = tileUnder(state);
+  if (depthAt(state, tx, ty) > 0) return false;
+  return isBoatGround(map.tiles[i]);
+}
+
+function trySetDownBoat(state: GameState): boolean {
+  if (!state.haulingBoat || state.inBoat || state.location.kind !== 'overworld') return false;
+  const { map, tx, ty, i } = tileUnder(state);
+  if (!canSetBoatHere(state)) {
+    say(state, 'Set the skiff down on clear dry ground.');
+    return true;
+  }
+  state.boatUnderTile = map.tiles[i];
+  map.tiles[i] = Tile.Skiff;
+  state.boatX = tx;
+  state.boatY = ty;
+  state.haulingBoat = false;
+  state.mapRevision++;
+  say(state, 'You set the skiff down. The flood can strand it here.');
+  return true;
+}
+
+function pickUpBoat(state: GameState, tx: number, ty: number, i: number): void {
+  const map = activeMap(state);
+  const tracked = state.boatX === tx && state.boatY === ty;
+  map.tiles[i] = tracked ? state.boatUnderTile : carveTo(map.biome[i]);
+  if (!tracked) state.boatDepth = BASE_BOAT_DEPTH;
+  state.hasBoat = true;
+  state.inBoat = false;
+  state.haulingBoat = true;
+  state.boatX = -1;
+  state.boatY = -1;
+  state.mapRevision++;
+  say(state, 'You take hold of the skiff.');
+}
+
+function isBoatGround(tile: number): boolean {
+  return (
+    tile === Tile.Grass ||
+    tile === Tile.Dirt ||
+    tile === Tile.Sand ||
+    tile === Tile.TallGrass ||
+    tile === Tile.Crop ||
+    tile === Tile.Path ||
+    tile === Tile.Gravel ||
+    tile === Tile.StoneGround ||
+    tile === Tile.Snow ||
+    tile === Tile.Reed ||
+    tile === Tile.Road ||
+    tile === Tile.Steps
+  );
 }
 
 function hasAdjacentBoatable(state: GameState): boolean {
@@ -1003,10 +1242,157 @@ function firstAdjacentBoatable(state: GameState): Point | null {
   return null;
 }
 
-/**
- * Cave mouths are solid from the west, north and east. You step in from the
- * south, the way a Zelda cave reads as a hole in a cliff face.
- */
+// --------------------------------------------------------------- barter/items
+
+function settlementPrompt(state: GameState, biome: Biome): ObstaclePrompt {
+  if (biome === Biome.Mountain) return hermitPrompt(state);
+  const item = nextShopItem(state, biome);
+  if (item === null) {
+    return { tile: Tile.TownDoor, label: 'The market has nothing more you need.', affordable: false };
+  }
+  return {
+    tile: Tile.TownDoor,
+    label: `Market: ${ITEM_NAMES[item]} — ${priceLabel(state, item)}`,
+    affordable: canAffordItem(state, item),
+  };
+}
+
+function interactSettlement(state: GameState, biome: Biome): void {
+  if (biome === Biome.Mountain) {
+    tradeWithHermit(state);
+    return;
+  }
+  const item = nextShopItem(state, biome);
+  if (item === null) {
+    say(state, 'The market has nothing more you need.');
+    return;
+  }
+  buyItem(state, biome, item);
+}
+
+function nextShopItem(state: GameState, biome: Biome): ItemKind | null {
+  for (const item of SHOP_STOCK[biome]) {
+    if (!ownsMarketItem(state, biome, item)) return item;
+  }
+  return null;
+}
+
+function ownsMarketItem(state: GameState, biome: Biome, item: ItemKind): boolean {
+  switch (item) {
+    case ItemKind.Galoshes:
+      return state.hasGaloshes;
+    case ItemKind.Axe:
+      return state.hasAxe;
+    case ItemKind.Pickaxe:
+      return state.hasPickaxe;
+    case ItemKind.SoundingLine:
+      return state.hasSoundingLine;
+    case ItemKind.HeartContainer:
+      return (state.shopHeartMask & (1 << biome)) !== 0;
+  }
+}
+
+function priceLabel(state: GameState, item: ItemKind): string {
+  const day = currentDay(state);
+  let text = '';
+  const parts = ITEM_COST[item];
+  for (let n = 0; n < parts.length; n++) {
+    const part = parts[n];
+    const amount = marketAmount(part.resource, part.amount, day);
+    if (n > 0) text += ' + ';
+    text += `${amount} ${RESOURCE_LABEL[part.resource]}`;
+  }
+  return text;
+}
+
+function canAffordItem(state: GameState, item: ItemKind): boolean {
+  const day = currentDay(state);
+  for (const part of ITEM_COST[item]) {
+    if (state.carried[part.resource] < marketAmount(part.resource, part.amount, day)) return false;
+  }
+  return true;
+}
+
+function buyItem(state: GameState, biome: Biome, item: ItemKind): void {
+  if (!canAffordItem(state, item)) {
+    say(state, `The barter is ${priceLabel(state, item)}. The flood has no mercy on prices.`);
+    return;
+  }
+  const day = currentDay(state);
+  for (const part of ITEM_COST[item]) {
+    state.carried[part.resource] -= marketAmount(part.resource, part.amount, day);
+  }
+
+  switch (item) {
+    case ItemKind.Galoshes:
+      state.hasGaloshes = true;
+      say(state, 'Galoshes. Depth one is ground again, though slow ground.');
+      break;
+    case ItemKind.Axe:
+      state.hasAxe = true;
+      state.axeDurability = AXE_DURABILITY;
+      say(state, `An axe, ${AXE_DURABILITY} durability. Ordinary timber is costly to cut.`);
+      break;
+    case ItemKind.Pickaxe:
+      state.hasPickaxe = true;
+      state.pickaxeDurability = PICKAXE_DURABILITY;
+      say(state, `A pickaxe, ${PICKAXE_DURABILITY} durability. Rock is costly to break.`);
+      break;
+    case ItemKind.SoundingLine:
+      state.hasSoundingLine = true;
+      say(state, 'A sounding line. From the skiff, drowned resources name themselves.');
+      break;
+    case ItemKind.HeartContainer:
+      state.shopHeartMask |= 1 << biome;
+      state.player.maxHearts++;
+      state.player.hearts = state.player.maxHearts;
+      state.heartsFound++;
+      say(state, 'A painful bargain, but thy vessel is enlarged.');
+      break;
+  }
+}
+
+function hermitPrompt(state: GameState): ObstaclePrompt {
+  if (state.hermitHeartClaimed) {
+    return { tile: Tile.TownDoor, label: 'The hermit has already kept his bargain.', affordable: false };
+  }
+  const sheep = boardedSheep(state);
+  return {
+    tile: Tile.TownDoor,
+    label: `Hermit: one rescued sheep → Heart Container (${sheep} aboard)`,
+    affordable: sheep > 0,
+  };
+}
+
+function boardedSheep(state: GameState): number {
+  let count = 0;
+  for (const animal of state.world.animals) {
+    if (animal.kind === AnimalKind.Sheep && animal.status === AnimalStatus.Boarded) count++;
+  }
+  return count;
+}
+
+function tradeWithHermit(state: GameState): void {
+  if (state.hermitHeartClaimed) {
+    say(state, 'The hermit has already kept his bargain.');
+    return;
+  }
+  const index = state.world.animals.findIndex(
+    (animal) => animal.kind === AnimalKind.Sheep && animal.status === AnimalStatus.Boarded,
+  );
+  if (index < 0) {
+    say(state, 'The hermit asks for a sheep you have rescued.');
+    return;
+  }
+  state.world.animals.splice(index, 1);
+  state.hermitHeartClaimed = true;
+  state.player.maxHearts++;
+  state.player.hearts = state.player.maxHearts;
+  state.heartsFound++;
+  say(state, 'The hermit takes the sheep and gives a heart container. A life for strength.');
+}
+
+/** Cave mouths are solid from west, north and east. You step in from the south. */
 function canStepOnEntrance(state: GameState, tx: number, ty: number): boolean {
   const cx = Math.floor((state.player.x + PLAYER_W / 2) / TILE_PX);
   const cy = Math.floor((state.player.y + PLAYER_H / 2) / TILE_PX);
@@ -1014,14 +1400,7 @@ function canStepOnEntrance(state: GameState, tx: number, ty: number): boolean {
   return cy > ty;
 }
 
-/**
- * Tiles the hitbox actually covers — the whole overworld cave sprite, not just
- * the feet.
- *
- * Fills a shared buffer with distinct tile indices and returns how many it
- * wrote. This runs every simulation step; the array-of-objects-plus-a-Set
- * version it replaces allocated eight times a step for six small integers.
- */
+/** Distinct tiles covered by the player hitbox, without allocating. */
 const HITBOX_SAMPLES = 6;
 const hitboxScratch = new Int32Array(HITBOX_SAMPLES);
 
@@ -1083,28 +1462,26 @@ function maybeDungeonWarp(state: GameState): void {
 
 function enterDungeonAt(state: GameState, tx: number, ty: number): void {
   if (state.location.kind === 'dungeon') return;
+  if (state.haulingBoat) {
+    say(state, 'The skiff will not fit below. Set it down first.');
+    return;
+  }
 
   const dungeon = state.world.dungeons.find(
     (d) => d.overworldEntrance.x === tx && d.overworldEntrance.y === ty,
   );
   if (!dungeon) return;
 
-  // Once the water reaches the mouth, that dungeon is gone for the run. This
-  // is what makes a low-lying dungeon a decision about when, not whether.
-  if (depthAt(state, tx, ty) > 0) {
-    return;
-  }
+  if (depthAt(state, tx, ty) > 0) return;
 
   state.location = {
     kind: 'dungeon',
     dungeonId: dungeon.id,
     returnTo: { x: tx, y: ty },
   };
-  // Keys never travel between dungeons: each lock is opened by its own key.
   state.keysHeld = 0;
   state.safeSpot = null;
   state.inBoat = false;
-  // Stand just inside, north of the stairs, so we do not immediately walk out.
   placeOn(state, { x: dungeon.stairs.x, y: Math.max(1, dungeon.stairs.y - 1) });
   state.player.dir = Dir.Up;
   say(state, 'Down into the dark. The water does not wait.');
@@ -1141,12 +1518,7 @@ function exitSpot(state: GameState, entrance: Point): Point {
   return { x: entrance.x, y: entrance.y + 1 };
 }
 
-/**
- * Collapse the interpolation window onto the current state.
- *
- * Anything that moves the player discontinuously has to call this, or the
- * renderer will draw a frame of them sliding across the map to get there.
- */
+/** Collapse interpolation onto the current state after a teleport. */
 export function syncInterpolation(state: GameState): void {
   state.player.prevX = state.player.x;
   state.player.prevY = state.player.y;
@@ -1161,12 +1533,7 @@ function placeOn(state: GameState, tile: Point): void {
   syncInterpolation(state);
 }
 
-/**
- * Put the camera on the player's panel with no transition.
- *
- * Any teleport has to do this. A scroll left running would swallow the next
- * frame's input entirely, since panel transitions deliberately lock control.
- */
+/** Put the camera on the player's panel with no transition. */
 export function snapCamera(state: GameState): void {
   const panelX = Math.floor((state.player.x + PLAYER_W / 2) / PANEL_PX_W);
   const panelY = Math.floor((state.player.y + PLAYER_H / 2) / PANEL_PX_H);
@@ -1178,10 +1545,7 @@ export function snapCamera(state: GameState): void {
   markExplored(state);
 }
 
-/**
- * Pay to cross. Costs come out of the same stock the ark needs, which is the
- * entire reason dungeons are interesting rather than just long.
- */
+/** Pay to cross. Costs come out of the same stock the ark needs. */
 function tryClear(state: GameState, tx: number, ty: number): void {
   const map = activeMap(state);
   if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return;
@@ -1228,12 +1592,7 @@ function tryClear(state: GameState, tx: number, ty: number): void {
   say(state, `${cost.amount} ${name} spent. The ark will notice.`);
 }
 
-/**
- * Convert a whole obstacle band in one payment.
- *
- * An obstacle spans both sides of a doorway, so charging per tile would bill
- * the player several times for one crossing.
- */
+/** Convert a whole obstacle band in one payment. */
 function convertConnected(map: TileMap, tx: number, ty: number, from: Tile, to: Tile): void {
   const queue = [ty * map.w + tx];
   let converted = 0;
@@ -1284,9 +1643,11 @@ function applyFlood(state: GameState, dt: number): void {
     p.drownTimer = 0;
     return;
   }
-  const submerged = isSubmergedAt(state, p.x + PLAYER_W / 2, p.y + PLAYER_H / 2);
+  const tx = Math.floor((p.x + PLAYER_W / 2) / TILE_PX);
+  const ty = Math.floor((p.y + PLAYER_H / 2) / TILE_PX);
+  const depth = depthAt(state, tx, ty);
 
-  if (!submerged) {
+  if (depth <= 0 || (state.hasGaloshes && depth === 1)) {
     p.drownTimer = 0;
     return;
   }
@@ -1381,11 +1742,8 @@ function tickFlock(state: GameState, dt: number): void {
     const score = flockScoreOf(map.animals);
     const def = ANIMAL_DEFS[a.kind];
     const have = score.boarded[a.kind];
-    if (have >= 2) {
-      say(state, `A pair of ${def.plural}. Two of every kind.`);
-    } else {
-      say(state, `A ${def.name} comes aboard. (${have}/2)`);
-    }
+    if (have >= 2) say(state, `A pair of ${def.plural}. Two of every kind.`);
+    else say(state, `A ${def.name} comes aboard. (${have}/2)`);
     break;
   }
 }
