@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_PX, withParams } from '../src/core/config.js';
 import { AnimalKind, AnimalStatus } from '../src/core/animals.js';
-import { BASE_BOAT_DEPTH, PITCHED_BOAT_DEPTH } from '../src/core/boat.js';
+import { BASE_BOAT_DEPTH, PITCHED_BOAT_DEPTH, boatDestroyedAtDepth } from '../src/core/boat.js';
 import { FLOOD_RISE_PER_DAY } from '../src/core/flood.js';
 import { marketAmount } from '../src/core/items.js';
 import { Biome, Resource, Tile } from '../src/core/tiles.js';
@@ -132,6 +132,37 @@ describe('wave 2: the physical skiff', () => {
     const normalDistance = plain.player.x - px;
     const haulDistance = hauled.player.x - hx;
     expect(haulDistance).toBeCloseTo(normalDistance * 0.5, 0);
+  });
+
+  it('is lost when water deeper than the hull closes around a set-down skiff', () => {
+    const state = createGame(generateWorld(4242, SMALL));
+    const { spawn } = state.world;
+    clearArea(state, spawn.x, spawn.y, 3);
+    placeAt(state, spawn.x, spawn.y);
+    state.hasBoat = true;
+    state.haulingBoat = true;
+    state.boatDepth = BASE_BOAT_DEPTH;
+
+    step(state, INTERACT, 1 / 60);
+    expect(state.world.tiles[spawn.y * state.world.w + spawn.x]).toBe(Tile.Skiff);
+    expect(state.boatX).toBe(spawn.x);
+
+    // Flood the beached tile past what an unpitched hull can take.
+    state.elapsed = state.world.params.secondsPerDay * 20;
+    const i = spawn.y * state.world.w + spawn.x;
+    const level = waterLevel(state);
+    state.world.elev[i] = Math.max(0, Math.floor(level - 2.5 * FLOOD_RISE_PER_DAY));
+    expect(depthAt(state, spawn.x, spawn.y)).toBe(3);
+    expect(boatDestroyedAtDepth(state.boatDepth, 3)).toBe(true);
+
+    // Walk away so the check runs while Noah is not aboard or hauling.
+    placeAt(state, spawn.x + 1, spawn.y);
+    step(state, IDLE, 1 / 60);
+
+    expect(state.hasBoat).toBe(false);
+    expect(state.boatX).toBe(-1);
+    expect(state.world.tiles[i]).not.toBe(Tile.Skiff);
+    expect(state.message).toMatch(/deep took the skiff/i);
   });
 
   it('recaulks the carried hull at a high dock for depth three', () => {
