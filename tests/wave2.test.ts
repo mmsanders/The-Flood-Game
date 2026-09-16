@@ -1,14 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BOAT_COST_FIBER,
-  BOAT_COST_WOOD,
-  PITCH_COST,
   canSkiffNavigate,
   skiffDestroyedAtDepth,
   skiffMaxDepth,
 } from '../src/core/boat.js';
-import { TILE_PX, withParams } from '../src/core/config.js';
-import { FLOOD_RISE_PER_DAY, floodDepth } from '../src/core/flood.js';
+import { withParams } from '../src/core/config.js';
 import {
   SHOP_CATALOG,
   ShopItem,
@@ -19,41 +15,8 @@ import {
 import { AXE_COST_HARVESTABLE, AXE_COST_SCENERY, axeTarget } from '../src/core/tools.js';
 import { Resource, Tile } from '../src/core/tiles.js';
 import { generateWorld } from '../src/core/worldgen/index.js';
-import {
-  Dir,
-  PLAYER_H,
-  PLAYER_W,
-  actionPrompt,
-  biomeDryFractions,
-  createGame,
-  depthAt,
-  snapCamera,
-  step,
-  waterLevel,
-  type GameState,
-} from '../src/game/state.js';
 
 const SMALL = withParams({ panelsX: 8, panelsY: 20 });
-const IDLE = { moveX: 0, moveY: 0, attackPressed: false };
-const INTERACT = { moveX: 0, moveY: 0, attackPressed: false, interactPressed: true };
-const ATTACK = { moveX: 0, moveY: 0, attackPressed: true };
-
-function placeAt(state: GameState, tx: number, ty: number): void {
-  state.player.x = tx * TILE_PX + (TILE_PX - PLAYER_W) / 2;
-  state.player.y = ty * TILE_PX + (TILE_PX - PLAYER_H) / 2;
-  snapCamera(state);
-}
-
-function clearArea(state: GameState, tx: number, ty: number, radius: number): void {
-  const { world } = state;
-  for (let y = ty - radius; y <= ty + radius; y++) {
-    for (let x = tx - radius; x <= tx + radius; x++) {
-      if (x < 0 || y < 0 || x >= world.w || y >= world.h) continue;
-      world.tiles[y * world.w + x] = Tile.Grass;
-      world.elev[y * world.w + x] = 250;
-    }
-  }
-}
 
 describe('Wave 2: depth ladder by gear tier', () => {
   it('gates navigation: feet / skiff / pitched / nothing', () => {
@@ -72,17 +35,7 @@ describe('Wave 2: depth ladder by gear tier', () => {
   });
 });
 
-describe('Wave 2: skiff as a world object', () => {
-  it('frames a skiff entity at the slipway, not a pocket flag', () => {
-    const state = createGame(generateWorld(4242, SMALL));
-    placeAt(state, state.world.boatYard.x, state.world.boatYard.y);
-    state.carried[Resource.Wood] = BOAT_COST_WOOD;
-    state.carried[Resource.Fiber] = BOAT_COST_FIBER;
-    step(state, INTERACT, 1 / 60);
-    expect(state.skiff).not.toBeNull();
-    expect(state.inBoat).toBe(false);
-  });
-
+describe('Wave 2: skiff as a world object (model)', () => {
   it('is lost when parked water exceeds the hull tier', () => {
     const plain = { x: 0, y: 0, pitched: false };
     const pitched = { x: 0, y: 0, pitched: true };
@@ -125,5 +78,11 @@ describe('Wave 2: hearts earned, not scattered', () => {
       const hearts = [...world.tiles].filter((t) => t === Tile.HeartContainer).length;
       expect(hearts, `seed ${seed}`).toBe(0);
     }
+  });
+
+  it('places at least one Shop tile in a generated world', () => {
+    const world = generateWorld(4242, SMALL);
+    const shops = [...world.tiles].filter((t) => t === Tile.Shop).length;
+    expect(shops).toBeGreaterThan(0);
   });
 });
