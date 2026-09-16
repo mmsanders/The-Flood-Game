@@ -258,6 +258,7 @@ if (import.meta.hot) {
     live.SCREEN_W = mod.SCREEN_W;
     live.SCREEN_H = mod.SCREEN_H;
     mod.invalidateMiniMap();
+    mod.invalidateArk();
     applyCanvasSize();
     fitCanvas();
     flashHotfix('look');

@@ -9,7 +9,7 @@
  */
 
 import { PANEL_H, PANEL_W } from '../core/config.js';
-import { floodDepth } from '../core/flood.js';
+import { floodDepth, gorgeDepthAt } from '../core/flood.js';
 import { panelsHigh, panelsWide, type TileMap } from '../core/tilemap.js';
 import { Biome, Tile } from '../core/tiles.js';
 import { PoiKind, type Poi, type World } from '../core/world.js';
@@ -332,6 +332,7 @@ export function sampleMinimapInto(
   u: number,
   v: number,
   waterLevel: number,
+  day: number,
   out: Uint8ClampedArray,
   o: number,
 ): void {
@@ -355,7 +356,13 @@ export function sampleMinimapInto(
   let b = TILE_RGB[c + 2];
 
   if (map.floods) {
-    const depth = floodDepth(map.elev[i], waterLevel);
+    // The gorge runs before the sea arrives, so the HUD map shows the river
+    // filling in from the north — which is the clearest signal the rain has
+    // actually started.
+    const flood = floodDepth(map.elev[i], waterLevel);
+    const runoff =
+      map.tiles[i] === Tile.Gorge ? gorgeDepthAt(day, ty, map.h) : 0;
+    const depth = runoff > flood ? runoff : flood;
     if (depth > 0) {
       const wet = depth >= 3 ? DEEP : SHALLOW;
       const t = depth === 1 ? 0.28 : depth === 2 ? 0.52 : depth === 3 ? 0.78 : 1;

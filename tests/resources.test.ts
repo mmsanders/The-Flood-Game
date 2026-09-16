@@ -7,9 +7,11 @@ import {
   buildProgress,
   checkSolvable,
   recipeMet,
+  requiredFor,
 } from '../src/core/resources.js';
-import { RESOURCE_COUNT, Resource } from '../src/core/tiles.js';
-import { generateWorld } from '../src/core/worldgen/index.js';
+import { Biome, RESOURCE_COUNT, Resource } from '../src/core/tiles.js';
+import { generateValidWorld, generateWorld } from '../src/core/worldgen/index.js';
+import { PoiKind } from '../src/core/world.js';
 
 const SMALL = withParams({ panelsX: 8, panelsY: 20 });
 const SEEDS = Array.from({ length: 20 }, (_, i) => i * 4517 + 3);
@@ -56,9 +58,15 @@ describe('resources: the ark recipe', () => {
 });
 
 describe('resources: solvability', () => {
-  it.each(SEEDS)('seed %i generates a winnable world', (seed) => {
-    const world = generateWorld(seed, SHIPPING);
+  // `generateValidWorld` is what the game calls: a world that fails the
+  // supply check is re-rolled rather than handed to the player. Asserting on
+  // a single raw attempt tests a world nobody would ever be given — and the
+  // retry loop is the mechanism, so the guarantee belongs to it.
+  it.each(SEEDS)('seed %i yields a winnable world', (seed) => {
+    const { world, attempts } = generateValidWorld(seed, SHIPPING);
     expect(world.stats.solvable, world.stats.problems.join('; ')).toBe(true);
+    // If a seed routinely needs most of its budget, the generator is limping.
+    expect(attempts, `seed ${seed} needed ${attempts} attempts`).toBeLessThan(5);
   });
 
   it('finds every resource kind present on the map', () => {
@@ -160,10 +168,12 @@ describe('resources: the full-size map', () => {
 
   it('keeps enough supply headroom that a real run has slack', () => {
     // The check measures availability, not an optimal route, so comfortable
-    // headroom here is what stands in for a player's backtracking.
+    // headroom here is what stands in for a player's backtracking. Measured
+    // against what a run really spends — the hull *and* the Rod ladder — not
+    // against the hull alone.
     const world = generateWorld(20260830, DEFAULT_PARAMS);
     for (let r = 0; r < RESOURCE_COUNT; r++) {
-      const ratio = world.stats.reachableResources[r] / ARK_RECIPE[r as Resource];
+      const ratio = world.stats.reachableResources[r] / requiredFor(r as Resource);
       expect(ratio, `resource ${r} supply ratio`).toBeGreaterThan(2.5);
     }
   });
@@ -174,3 +184,60 @@ function totalRequired(): number {
   for (let r = 0; r < RESOURCE_COUNT; r++) n += ARK_RECIPE[r as Resource];
   return n;
 }
+
+describe('resources: the Rod ladder', () => {
+  it('reports the day each shrine drowns and the day it can be reached', () => {
+    const world = generateWorld(20260830, DEFAULT_PARAMS);
+    expect(world.stats.problems).not.toContainEqual(
+      expect.stringContaining('Rod ladder'),
+    );
+  });
+
+  it('rejects a world whose valley shrine drowns before you could afford it', () => {
+    // The Rod takes nothing but fiber until a shrine says otherwise, so a
+    // lower shrine that goes under early ends the run silently — and reaching
+    // it was never the constraint, since the map is half a day wide. Sink one
+    // and check the generator notices.
+    const world = generateWorld(20260830, DEFAULT_PARAMS);
+    const shrine = world.pois.find((p) => p.kind === PoiKind.Shrine && p.biome === Biome.Valley);
+    expect(shrine).toBeDefined();
+    if (!shrine) return;
+
+    const i = shrine.y * world.w + shrine.x;
+    world.elev[i] = 0; // underwater almost as soon as the rain starts
+
+    const report = checkSolvable(
+      world.tiles,
+      world.elev,
+      world.w,
+      world.h,
+      world.spawn,
+      DEFAULT_PARAMS,
+      world.pois.filter((p) => p.kind === PoiKind.Shrine),
+    );
+    expect(report.solvable).toBe(false);
+    expect(report.problems.join('; ')).toContain('Rod ladder');
+  });
+
+  it('does not fail a world over the mountain shrine, which is optional', () => {
+    const world = generateWorld(20260830, DEFAULT_PARAMS);
+    const shrine = world.pois.find(
+      (p) => p.kind === PoiKind.Shrine && p.biome === Biome.Mountain,
+    );
+    if (!shrine) return;
+
+    world.elev[shrine.y * world.w + shrine.x] = 0;
+    const report = checkSolvable(
+      world.tiles,
+      world.elev,
+      world.w,
+      world.h,
+      world.spawn,
+      DEFAULT_PARAMS,
+      world.pois.filter((p) => p.kind === PoiKind.Shrine),
+    );
+    // It only buds the harvest: a run without it is poorer, not stuck.
+    expect(report.problems.join('; ')).not.toContain('Rod ladder');
+    expect(report.ladder.length).toBeGreaterThan(0);
+  });
+});

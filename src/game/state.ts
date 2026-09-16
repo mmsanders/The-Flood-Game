@@ -13,7 +13,13 @@ import {
   REWARD_NAMES,
   RewardKind,
 } from '../core/dungeon.js';
-import { floodDepth, waterLevelAtSeconds } from '../core/flood.js';
+
+/**
+ * Rod tier that parts a seal of pitch — the full ladder, up to and including
+ * the scrub shrine that teaches the Rod to take pitch at all.
+ */
+const SEAL_TIER = Resource.Pitch;
+import { gorgeDepthAt, waterDepth, waterLevelAtSeconds } from '../core/flood.js';
 import { ARK_RECIPE, NODE_YIELD, PLAYER_TILES_PER_SEC, SHRINE_COST, canRodHarvest } from '../core/resources.js';
 import { panelsHigh, panelsWide, type TileMap } from '../core/tilemap.js';
 import {
@@ -480,10 +486,10 @@ function cornerClear(
 
   const i = ty * map.w + tx;
   const tile = map.tiles[i];
-  const flooded = map.floods && map.elev[i] < waterLevel(state);
+  const flooded = depthAt(state, tx, ty) > 0;
   const alreadyOn = hitboxOverlapsTile(state.player.x, state.player.y, tx, ty);
 
-  if (sailing && tile === Tile.Water) return true;
+  if (sailing && isBoatableTile(state, tx, ty)) return true;
   if (tile === Tile.DungeonEntrance) {
     if (flooded && !sailing) return alreadyOn;
     return canStepOnEntrance(state, tx, ty) || alreadyOn;
@@ -504,13 +510,54 @@ function hitboxOverlapsTile(px: number, py: number, tx: number, ty: number): boo
   return x1 >= tx0 && px <= tx1 && y1 >= ty0 && py <= ty1;
 }
 
-function isBoatableTile(state: GameState, tx: number, ty: number): boolean {
+/**
+ * Standing water on a tile of the active map, 0 (dry) to 4 (the deep).
+ *
+ * Everything that cares about water asks this, so wading, sailing, beaching
+ * and dredging cannot disagree. Dungeons do not flood, so they answer 0.
+ */
+export function depthAt(state: GameState, tx: number, ty: number): number {
+  const map = activeMap(state);
+  if (!map.floods) return 0;
+  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return 0;
+  const i = ty * map.w + tx;
+  return waterDepth(map.tiles[i], map.elev[i], waterLevel(state), gorgeRunoff(state, ty));
+}
+
+/**
+ * How deep the gorge runs at a given row right now.
+ *
+ * Per row, not per world: the runoff front starts at the top of the map and
+ * travels south, so the channel is a river in the north while it is still a
+ * dry ditch in the south.
+ */
+export function gorgeRunoff(state: GameState, ty: number): number {
+  return gorgeDepthAt(currentDay(state), ty, activeMap(state).h);
+}
+
+/**
+ * Can the skiff float here?
+ *
+ * Anything with water in it, including over a rock or a tree the flood has
+ * covered: past the point where a boulder is a couple of feet under, you sail
+ * over it rather than round it. Below that the terrain still blocks, so
+ * shallow water keeps the shape of the land it covered.
+ */
+export function isBoatableTile(state: GameState, tx: number, ty: number): boolean {
   const map = activeMap(state);
   if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return false;
-  const i = ty * map.w + tx;
-  if (map.tiles[i] === Tile.Water) return true;
-  return isWalkable(map.tiles[i]) && map.floods && map.elev[i] < waterLevel(state);
+  const depth = depthAt(state, tx, ty);
+  if (depth <= 0) return false;
+  return isWalkable(map.tiles[tx + ty * map.w]) || depth >= FLOAT_OVER_DEPTH;
 }
+
+/**
+ * Water deep enough to sail over something you could not walk through.
+ *
+ * Depth 2 is already over a person's head, so it is comfortably over a
+ * boulder's. Below it the drowned landscape still steers you.
+ */
+const FLOAT_OVER_DEPTH = 2;
 
 /** Step from shore onto water/flood and become the skiff. */
 function tryShoveOff(state: GameState, x: number, y: number): boolean {
@@ -539,8 +586,7 @@ function maybeBeach(state: GameState): void {
   const ty = Math.floor((state.player.y + PLAYER_H / 2) / TILE_PX);
   if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return;
   const i = ty * map.w + tx;
-  if (map.tiles[i] === Tile.Water) return;
-  if (map.floods && map.elev[i] < waterLevel(state)) return;
+  if (depthAt(state, tx, ty) > 0) return;
   if (!isWalkable(map.tiles[i])) return;
   state.inBoat = false;
   say(state, 'You beach the skiff.');
@@ -558,12 +604,7 @@ function hitboxInWater(state: GameState, x: number, y: number): boolean {
 }
 
 function isSubmergedAt(state: GameState, pxX: number, pxY: number): boolean {
-  const map = activeMap(state);
-  if (!map.floods) return false;
-  const tx = Math.floor(pxX / TILE_PX);
-  const ty = Math.floor(pxY / TILE_PX);
-  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return false;
-  return map.elev[ty * map.w + tx] < waterLevel(state);
+  return depthAt(state, Math.floor(pxX / TILE_PX), Math.floor(pxY / TILE_PX)) > 0;
 }
 
 // ---------------------------------------------------------------- the rod
@@ -600,12 +641,13 @@ function harvestAt(state: GameState, tx: number, ty: number): boolean {
     return true;
   }
 
-  const submerged = map.floods && map.elev[i] < waterLevel(state);
+  const depth = depthAt(state, tx, ty);
+  const submerged = depth > 0;
   if (submerged && !state.inBoat) {
     say(state, 'The waters cover it. You would need a boat.');
     return true;
   }
-  if (submerged && floodDepth(map.elev[i], waterLevel(state)) > state.rodReach) {
+  if (submerged && depth > state.rodReach) {
     say(state, 'Too deep for the Rod. You would need to fish.');
     return true;
   }
@@ -768,6 +810,17 @@ export function obstacleInFront(state: GameState): ObstaclePrompt | null {
     };
   }
 
+  if (tile === Tile.PitchSeal) {
+    const ready = state.rodTier >= SEAL_TIER;
+    return {
+      tile,
+      label: ready
+        ? 'Part the seal — the Rod knows pitch'
+        : 'A seal of pitch. The Rod is not ready for this.',
+      affordable: ready,
+    };
+  }
+
   const cost = OBSTACLE_COST[tile];
   if (!cost) return null;
 
@@ -820,7 +873,7 @@ export function actionPrompt(state: GameState): ObstaclePrompt | null {
         if (
           resourceOf(facing.map.tiles[fi]) !== null &&
           facing.map.floods &&
-          facing.map.elev[fi] < waterLevel(state)
+          depthAt(state, facing.tx, facing.ty) > 0
         ) {
           return {
             tile: facing.map.tiles[fi] as Tile,
@@ -1038,7 +1091,7 @@ function enterDungeonAt(state: GameState, tx: number, ty: number): void {
 
   // Once the water reaches the mouth, that dungeon is gone for the run. This
   // is what makes a low-lying dungeon a decision about when, not whether.
-  if (state.world.elev[ty * state.world.w + tx] < waterLevel(state)) {
+  if (depthAt(state, tx, ty) > 0) {
     return;
   }
 
@@ -1145,6 +1198,17 @@ function tryClear(state: GameState, tx: number, ty: number): void {
     convertConnected(map, tx, ty, tile, Tile.DoorOpen);
     state.mapRevision++;
     say(state, 'The key turns.');
+    return;
+  }
+
+  if (tile === Tile.PitchSeal) {
+    if (state.rodTier < SEAL_TIER) {
+      say(state, 'The seal holds. Imbue the Rod with pitch and return.');
+      return;
+    }
+    convertConnected(map, tx, ty, tile, Tile.DungeonFloor);
+    state.mapRevision++;
+    say(state, 'The Rod drinks the pitch. The seal parts.');
     return;
   }
 

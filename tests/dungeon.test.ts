@@ -11,7 +11,7 @@ import {
 } from '../src/core/dungeon.js';
 import { BIOME_COUNT, Biome, Tile, isWalkable } from '../src/core/tiles.js';
 import { PoiKind } from '../src/core/world.js';
-import { generateWorld } from '../src/core/worldgen/index.js';
+import { generateValidWorld, generateWorld } from '../src/core/worldgen/index.js';
 
 const SEEDS = Array.from({ length: 24 }, (_, i) => i * 3121 + 11);
 const SMALL = withParams({ panelsX: 8, panelsY: 20 });
@@ -235,7 +235,7 @@ describe('dungeon: attached to the world', () => {
     // Dungeons are optional. The solvability check must never come to depend
     // on them, or the run stops being winnable by ordinary play.
     for (const seed of [1, 2, 3, 4, 5]) {
-      const world = generateWorld(seed, DEFAULT_PARAMS);
+      const { world } = generateValidWorld(seed, DEFAULT_PARAMS);
       expect(world.stats.solvable, world.stats.problems.join('; ')).toBe(true);
     }
   });

@@ -8,7 +8,14 @@
 
 import { FLOOD_DAYS, type WorldParams } from './config.js';
 import { drownDayForElev } from './flood.js';
-import { RESOURCE_COUNT, Resource, isWalkable, resourceOf } from './tiles.js';
+import {
+  BIOME_NAMES,
+  Biome,
+  RESOURCE_COUNT,
+  Resource,
+  isWalkable,
+  resourceOf,
+} from './tiles.js';
 import type { Point } from './world.js';
 
 /** Units required to launch. Genesis 6:14-16, loosely costed. */
@@ -52,8 +59,32 @@ export const PLAYER_TILES_PER_SEC = 4;
  */
 const SUPPLY_MARGIN = 2.0;
 
+/**
+ * What a run actually has to gather of each resource, not just what the hull
+ * costs.
+ *
+ * The Rod ladder is not optional: you cannot harvest wood until the valley
+ * shrine has taken its fiber, or stone until the forest shrine has taken its
+ * wood. Those costs were small enough to ignore when they were 6/8/5; at
+ * 18/24/15 they are a real slice of the map's supply, and validating against
+ * the hull alone let through worlds that could build the ark *or* climb the
+ * ladder but not both.
+ *
+ * The mountain shrine is left out on purpose — it only buds the harvest, so a
+ * run that cannot afford it is poorer, not stuck.
+ */
+export function requiredFor(r: Resource): number {
+  const ladder = r < Resource.Pitch ? (SHRINE_COST[r] ?? 0) : 0;
+  return ARK_RECIPE[r] + ladder;
+}
+
 export interface SolvabilityReport {
   solvable: boolean;
+  /**
+   * Shrines the Rod ladder depends on, with the day each drowns and the
+   * earliest day the player could stand on it.
+   */
+  ladder: { biome: Biome; drownsOn: number; reachableOn: number }[];
   /** Nodes of each resource reachable before they submerge. */
   reachable: number[];
   /** Total nodes of each resource on the map, reachable or not. */
@@ -127,6 +158,7 @@ export function checkSolvable(
   h: number,
   spawn: Point,
   params: WorldParams,
+  shrines: readonly { x: number; y: number; biome: Biome }[] = [],
 ): SolvabilityReport {
   const arrival = arrivalTimes(tiles, elev, w, h, spawn, params);
 
@@ -153,7 +185,7 @@ export function checkSolvable(
 
   const problems: string[] = [];
   for (let r = 0; r < RESOURCE_COUNT; r++) {
-    const need = ARK_RECIPE[r as Resource] * SUPPLY_MARGIN;
+    const need = requiredFor(r as Resource) * SUPPLY_MARGIN;
     if (reachable[r] < need) {
       problems.push(
         `${RESOURCE_LABEL[r]}: ${reachable[r]} reachable, needs ${Math.ceil(need)}`,
@@ -161,7 +193,78 @@ export function checkSolvable(
     }
   }
 
-  return { solvable: problems.length === 0, reachable, total, problems };
+  const ladder = checkLadder(elev, w, arrival, shrines, problems);
+
+  return { solvable: problems.length === 0, reachable, total, ladder, problems };
+}
+
+/**
+ * How long each required shrine must survive to be affordable.
+ *
+ * Not a guess about walking time — the whole map is about half an in-game day
+ * across — but about gathering. The valley shrine wants fiber you have to find
+ * and swing for while also learning the world, and it is the gate on every
+ * other resource in the game, so it gets the most generous margin relative to
+ * when it would otherwise drown.
+ */
+const SHRINE_GRACE_DAYS: readonly number[] = [7, 12, 16, 0];
+
+/**
+ * Can the Rod ladder actually be climbed before it goes under?
+ *
+ * The Rod harvests fiber and nothing else until a shrine teaches it otherwise,
+ * so the three lower shrines are not optional scenery — they are the gate on
+ * every resource above fiber. A valley shrine that drowns on day six ends the
+ * run on day six, and nothing on screen says so.
+ *
+ * This is a *necessary* condition, not a sufficient one: it asks whether each
+ * shrine could be stood on at all before it submerges, given a straight walk
+ * from spawn. It does not model the detours to afford each one. A world that
+ * fails this is definitely unwinnable; one that passes is merely not
+ * unwinnable for this reason.
+ */
+function checkLadder(
+  elev: Uint8Array,
+  w: number,
+  arrival: Float64Array,
+  shrines: readonly { x: number; y: number; biome: Biome }[],
+  problems: string[],
+): SolvabilityReport['ladder'] {
+  const ladder: SolvabilityReport['ladder'] = [];
+
+  for (const shrine of shrines) {
+    // The mountain shrine only buds the harvest. Losing it is a poorer run,
+    // not a stuck one, so it is reported but never fails a world.
+    const required = shrine.biome < Biome.Mountain;
+    const i = shrine.y * w + shrine.x;
+    const drownsOn = drownDayForElev(elev[i]);
+    const reachableOn = arrival[i];
+    ladder.push({ biome: shrine.biome, drownsOn, reachableOn });
+
+    if (!required) continue;
+
+    if (reachableOn >= drownsOn) {
+      problems.push(
+        `Rod ladder: the ${BIOME_NAMES[shrine.biome]} shrine drowns on day ` +
+          `${drownsOn.toFixed(1)} but cannot be reached before day ` +
+          `${Number.isFinite(reachableOn) ? reachableOn.toFixed(1) : 'ever'}`,
+      );
+      continue;
+    }
+
+    // Reaching it is not the constraint — the map is only about half a day
+    // wide at walking pace. Affording it is. Each shrine has to survive long
+    // enough to find its resource, harvest its price and carry it there.
+    const grace = SHRINE_GRACE_DAYS[shrine.biome] ?? 0;
+    if (drownsOn < grace) {
+      problems.push(
+        `Rod ladder: the ${BIOME_NAMES[shrine.biome]} shrine drowns on day ` +
+          `${drownsOn.toFixed(1)}, too early to have afforded its price`,
+      );
+    }
+  }
+
+  return ladder;
 }
 
 const RESOURCE_LABEL = ['Fiber', 'Wood', 'Stone', 'Pitch'];

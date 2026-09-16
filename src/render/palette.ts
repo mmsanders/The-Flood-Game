@@ -30,6 +30,10 @@ export const PALETTE = {
   rockShade: '#4e4840',
   cliff: '#6e675c',
   cliffShade: '#39342e',
+  /** The dry gorge: shadowed rock walls over a gravel bed. */
+  gorge: '#3b342c',
+  gorgeWall: '#5c5348',
+  gorgeBed: '#6f6659',
   tent: '#c8b070',
   house: '#8a5a38',
   stoneWall: '#5a5850',
@@ -99,6 +103,7 @@ export const TILE_COLOR: Record<number, string> = {
   0x12: PALETTE.rock,
   0x13: PALETTE.cliff,
   0x14: PALETTE.water,
+  0x19: PALETTE.gorge,
   0x15: PALETTE.treeTrunk,
   0x16: PALETTE.tent,
   0x17: PALETTE.house,
@@ -128,6 +133,7 @@ export const TILE_COLOR: Record<number, string> = {
   0x51: PALETTE.ledge,
   0x52: PALETTE.doorLocked,
   0x53: PALETTE.pit,
+  0x54: PALETTE.pitch,
 
   0x60: PALETTE.key,
   0x61: PALETTE.chest,
