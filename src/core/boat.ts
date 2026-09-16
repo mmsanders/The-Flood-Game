@@ -50,3 +50,12 @@ export function payForPitching(carried: number[]): void {
   carried[Resource.Pitch] -= BOAT_PITCH_COST;
   carried[Resource.Fiber] -= BOAT_RECAULK_FIBER;
 }
+
+/**
+ * A set-down skiff is lost once the water under it exceeds what the hull can
+ * answer — or once depth 4 arrives, which nothing short of the ark can take.
+ */
+export function boatDestroyedAtDepth(boatDepth: number, depth: number): boolean {
+  if (depth <= 0) return false;
+  return depth > boatDepth || depth >= 4;
+}
