@@ -9,12 +9,56 @@
     <link rel="stylesheet" href="./src/game/game.css" />
   </head>
   <body>
-    <div class="frame">
-      <canvas id="screen" width="256" height="176" aria-label="Game screen"></canvas>
-      <div class="live-badge" id="live-badge" hidden>LIVE</div>
-      <div class="hotfix" id="hotfix" aria-live="polite"></div>
-      <div class="overlay" id="overlay"></div>
+    <main class="game-shell" id="game-shell">
+      <div class="frame">
+        <canvas id="screen" width="256" height="224" aria-label="Game screen"></canvas>
+        <div class="live-badge" id="live-badge" hidden>LIVE</div>
+        <div class="hotfix" id="hotfix" aria-live="polite"></div>
+        <div class="overlay" id="overlay"></div>
+      </div>
+
+      <div class="dpad touch-control" id="dpad" role="group" aria-label="Movement pad">
+        <span class="dpad-key dpad-up" data-dir="up" aria-hidden="true">▲</span>
+        <span class="dpad-key dpad-left" data-dir="left" aria-hidden="true">◀</span>
+        <span class="dpad-center" aria-hidden="true"></span>
+        <span class="dpad-key dpad-right" data-dir="right" aria-hidden="true">▶</span>
+        <span class="dpad-key dpad-down" data-dir="down" aria-hidden="true">▼</span>
+      </div>
+
+      <div class="utility-controls touch-control" id="utility-controls">
+        <button class="utility-button touch-button" id="flock-button" type="button" data-virtual-action="bestiary">
+          FLOCK
+        </button>
+      </div>
+
+      <div class="action-cluster touch-control" id="action-cluster" aria-label="Action buttons">
+        <button class="action-button action-b touch-button" id="action-b" type="button" data-virtual-action="interact" aria-label="B: use or interact">
+          <span class="button-letter">B</span>
+          <span class="button-caption">USE</span>
+        </button>
+        <button class="action-button action-a touch-button" id="action-a" type="button" data-virtual-action="attack" aria-label="A: swing the Rod">
+          <span class="button-letter">A</span>
+          <span class="button-caption">ROD</span>
+        </button>
+      </div>
+
+      <button class="restart-button touch-control" id="restart-button" type="button" aria-haspopup="dialog">
+        ↻ RESTART
+      </button>
+    </main>
+
+    <div class="restart-dialog" id="restart-dialog" role="dialog" aria-modal="true" aria-labelledby="restart-title" hidden>
+      <div class="restart-card">
+        <div class="restart-kicker">NEW WORLD</div>
+        <h1 id="restart-title">Really restart?</h1>
+        <p>This abandons the current run and generates a new world.</p>
+        <div class="restart-actions">
+          <button class="restart-cancel" id="restart-cancel" type="button">NO — KEEP PLAYING</button>
+          <button class="restart-confirm" id="restart-confirm" type="button">YES, REALLY RESTART</button>
+        </div>
+      </div>
     </div>
+
     <script type="module" src="./src/game/main.ts"></script>
   </body>
 </html>

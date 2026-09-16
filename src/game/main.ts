@@ -7,7 +7,7 @@
  * The loop always calls through `live` bindings. Vite HMR replaces those
  * bindings without dropping the run, so a hotfix lands on the next frame
  * while you are still walking. Worldgen is the exception: it only runs when
- * a world is created, so those edits apply the next time you press R.
+ * a world is created, so those edits apply the next time you restart.
  */
 
 import { DEFAULT_PARAMS, type WorldParams } from '../core/config.js';
@@ -15,6 +15,7 @@ import { parseSeed, randomSeed } from '../core/rng.js';
 import { generateValidWorld } from '../core/worldgen/index.js';
 import { flashHotfix, markLive } from './hot.js';
 import { Input } from './input.js';
+import { RestartDialog, TouchControls } from './mobile.js';
 import { PerfMonitor } from './perf.js';
 import { considerBestFlock, loadBestFlock, type BestFlock } from './persist.js';
 import { SCREEN_H, SCREEN_W, render } from './render.js';
@@ -95,6 +96,7 @@ let showPerf = Boolean(import.meta.hot?.data.showPerf);
 let bestiary = Boolean(import.meta.hot?.data.bestiary);
 let best: BestFlock = loadBestFlock();
 let state = bootState();
+let accumulator = (import.meta.hot?.data.accumulator as number | undefined) ?? 0;
 
 function bootState(): GameState {
   const carried = import.meta.hot?.data.state as GameState | undefined;
@@ -115,21 +117,63 @@ function newRun(seed: number): GameState {
   return next;
 }
 
-/** Integer-scale the back buffer to fill the window without blurring. */
+const touchControls = new TouchControls(() => input);
+const restartDialog = new RestartDialog(
+  () => {
+    state = newRun(live.randomSeed());
+    accumulator = 0;
+    perf.reset();
+  },
+  () => {
+    // A dialog appearing under a held thumb must not leave Noah walking when
+    // it closes. This also clears keyboard state if R was pressed mid-stride.
+    touchControls.release();
+    input.releaseAll();
+  },
+);
+
+/**
+ * Scale the back buffer to the available play area.
+ *
+ * Desktop remains integer-scaled. Phones use 1/8 steps: a 256px-wide buffer
+ * at 1x is needlessly tiny on a 320–390px phone, while arbitrary scaling makes
+ * pixel widths shimmer. Eighth steps use the screen well without sacrificing
+ * the deliberately chunky look.
+ */
 function fitCanvas(): void {
-  const scale = Math.max(
-    1,
-    Math.floor(Math.min(window.innerWidth / live.SCREEN_W, window.innerHeight / live.SCREEN_H)),
-  );
+  const vv = window.visualViewport;
+  const viewportW = Math.max(1, vv?.width ?? window.innerWidth);
+  const viewportH = Math.max(1, vv?.height ?? window.innerHeight);
+
+  let scale: number;
+  if (touchControls.enabled) {
+    const measure = touchControls.measure();
+    const landscape = viewportW > viewportH;
+    const maxW = landscape
+      ? viewportW - measure.leftWidth - measure.rightWidth - 12
+      : viewportW - 18;
+    const maxH = landscape
+      ? viewportH - 12
+      : viewportH - measure.bottomHeight - 42;
+    const raw = Math.max(0.125, Math.min(maxW / live.SCREEN_W, maxH / live.SCREEN_H));
+    scale = Math.max(0.125, Math.floor(raw * 8) / 8);
+  } else {
+    scale = Math.max(
+      1,
+      Math.floor(Math.min(viewportW / live.SCREEN_W, viewportH / live.SCREEN_H)),
+    );
+  }
+
   canvas.style.width = `${live.SCREEN_W * scale}px`;
   canvas.style.height = `${live.SCREEN_H * scale}px`;
 }
 
 window.addEventListener('resize', fitCanvas);
+window.addEventListener('orientationchange', fitCanvas);
+window.visualViewport?.addEventListener('resize', fitCanvas);
 fitCanvas();
 
 let last = performance.now();
-let accumulator = (import.meta.hot?.data.accumulator as number | undefined) ?? 0;
 let raf = 0;
 
 /** Reused every frame; see the note on allocations in `perf.ts`. */
@@ -148,17 +192,15 @@ function frame(now: number): void {
 
   const intents = input.read();
 
-  if (intents.restartPressed) {
-    state = newRun(live.randomSeed());
-    accumulator = 0;
-    perf.reset();
+  if (intents.restartPressed && !restartDialog.isOpen) restartDialog.open();
+
+  if (!restartDialog.isOpen) {
+    if (intents.bestiaryPressed) bestiary = !bestiary;
+    if (intents.perfPressed) showPerf = !showPerf;
   }
 
-  if (intents.bestiaryPressed) bestiary = !bestiary;
-  if (intents.perfPressed) showPerf = !showPerf;
-
   let steps = 0;
-  if (!bestiary) {
+  if (!bestiary && !restartDialog.isOpen) {
     const scale = timeScale * (intents.fastForward ? 8 : 1);
     accumulator += elapsed * scale;
 
@@ -185,6 +227,8 @@ function frame(now: number): void {
     // remainder is kept: it is exactly the render interpolation alpha.
     if (accumulator >= STEP) accumulator %= STEP;
   } else {
+    // Menus pause the flood as well as Noah. Restart confirmation in particular
+    // must not cost in-game time while the player decides.
     accumulator = 0;
   }
 
@@ -218,6 +262,9 @@ Object.assign(window as unknown as Record<string, unknown>, {
     get best() {
       return best;
     },
+    get touchControls() {
+      return touchControls.enabled;
+    },
     newRun: (seed: number) => {
       state = newRun(seed);
     },
@@ -231,7 +278,7 @@ Object.assign(window as unknown as Record<string, unknown>, {
 function patchWorldParams(params: WorldParams): void {
   live.params = params;
   // Terrain is already generated; only runtime-visible knobs can take effect
-  // on this run. Press R to rebuild the world from the rest.
+  // on this run. Restart to rebuild the world from the rest.
   state.world.params = {
     ...state.world.params,
     secondsPerDay: params.secondsPerDay,
@@ -269,6 +316,7 @@ if (import.meta.hot) {
     live.Input = mod.Input;
     input.dispose();
     input = new live.Input();
+    touchControls.release();
     flashHotfix('controls');
   });
 
@@ -285,13 +333,13 @@ if (import.meta.hot) {
   import.meta.hot.accept('../core/config.js', (mod) => {
     if (!mod) return;
     patchWorldParams(mod.DEFAULT_PARAMS);
-    flashHotfix('params · press R for a new world');
+    flashHotfix('params · restart for a new world');
   });
 
   import.meta.hot.accept('../core/worldgen/index.js', (mod) => {
     if (!mod) return;
     live.generateValidWorld = mod.generateValidWorld;
-    flashHotfix('worldgen · press R for a new world');
+    flashHotfix('worldgen · restart for a new world');
   });
 
   import.meta.hot.accept('../core/rng.js', (mod) => {
@@ -306,8 +354,12 @@ if (import.meta.hot) {
     data.bestiary = bestiary;
     data.showPerf = showPerf;
     cancelAnimationFrame(raf);
+    restartDialog.dispose();
+    touchControls.dispose();
     input.dispose();
     window.removeEventListener('resize', fitCanvas);
+    window.removeEventListener('orientationchange', fitCanvas);
+    window.visualViewport?.removeEventListener('resize', fitCanvas);
   });
 
   // Self-accept so edits to this file re-bind the loop without a full reload.
