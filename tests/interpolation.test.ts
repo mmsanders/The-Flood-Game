@@ -101,7 +101,11 @@ describe('render interpolation', () => {
     const spawn = state.world.spawn;
 
     placeAt(state, spawn.x, spawn.y);
-    state.hasBoat = true;
+    state.skiff = {
+      x: Math.floor((state.player.x + PLAYER_W / 2) / TILE_PX),
+      y: Math.floor((state.player.y + PLAYER_H / 2) / TILE_PX),
+      pitched: false,
+    };
     map.tiles[spawn.y * map.w + spawn.x + 1] = Tile.Water;
 
     step(state, { moveX: 0, moveY: 0, attackPressed: false, interactPressed: true }, 1 / 60);
