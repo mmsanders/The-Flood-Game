@@ -302,7 +302,7 @@ written down.
 | 9 | The elevation lines aren't working | They were a 3px translucent smear on the *upper* tile, which read as a seam rather than a drop. Replaced with a real six-pixel cliff face drawn onto the tile below — lit lip, rock face, contact shadow. |
 | 11 | No blockers in front of stairs | Swept, after the connectivity repair rather than before, because that pass cuts stairs of its own. Seam-aware, so clearing one side of a panel boundary cannot leave an invisible wall on the other. |
 | 14 (half) | Float over drowned obstacles | Depth 2 or more and you sail over a boulder instead of round it. The *other* half is deliberately held — see below. |
-| 16 | The river should be wet by day 10 | The gorge carries its own runoff from the first day of rain, independent of sea level, deepening a step every ten days. It is rain off the mountain, not the sea arriving, and it is now the first thing on the map that tells you the weather has turned. |
+| 16 | The river should be wet by day 10 | The gorge carries runoff, arriving at the northern spring on day one and running south over about a day — a front, not a rising level, so the north is a river while the south is still a dry ditch. It is rain off the mountain, not the sea arriving, and it is now the first thing on the map that tells you the weather has turned. |
 | 17 | Normal water is too deep to wade | Natural water is depth 2 whatever the sea is doing. It looks exactly as it did. |
 
 Note 5's "off the road" half shipped too — mountain dwellings get a south-facing doorstep
@@ -505,9 +505,10 @@ Unchanged from round one in substance: a dry prologue with the water pinned at z
 to the same day 40. Forty days stays load-bearing; only the curve changes.
 
 Round two adds one thing: **the gorge already does this**, and shipping it early was
-accidental good luck. It runs from the first day of rain, so the channel filling from the
-north is already the signal that the weather has turned. The prologue just has to hold it
-at zero for longer and then let it go.
+accidental good luck. The runoff front starts at the top of the map on day one and sweeps
+south over a day, so the channel filling from the north is already the signal that the
+weather has turned. The prologue just has to hold that front back until the rain actually
+starts and then let it go — one constant, `GORGE_FILL_DAYS`, and the day it begins.
 
 The dungeon flood (note 13, round one) and animals-as-logistics (note 16, round one) stay
 in this wave and stay as written: room row as depth, and animals led in strings rather than
