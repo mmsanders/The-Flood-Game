@@ -20,6 +20,7 @@ import {
   snapCamera,
   step,
   syncInterpolation,
+  waterLevel,
 } from '../src/game/state.js';
 
 const SMALL = withParams({ panelsX: 8, panelsY: 20 });
@@ -166,17 +167,32 @@ describe('the skiff and the drowned landscape', () => {
     const tx = i % map.w;
     const ty = (i / map.w) | 0;
     map.tiles[i] = Tile.Rock;
-    map.elev[i] = 0;
 
     // Shallow: the drowned landscape still steers you.
     state.elapsed = state.world.params.secondsPerDay * (FLOOD_GRACE_DAYS + 0.2);
+    map.elev[i] = Math.max(0, Math.floor(waterLevel(state)) - 1);
     expect(depthAt(state, tx, ty)).toBe(1);
     expect(isBoatableTile(state, tx, ty)).toBe(false);
 
-    // Deep: you sail straight over it.
-    state.elapsed = state.world.params.secondsPerDay * 20;
-    expect(depthAt(state, tx, ty)).toBeGreaterThanOrEqual(2);
+    // Over your head (depth 2), not the deep: sail straight over the rock.
+    // elev is a byte plane — pin it by probing until floodDepth says 2.
+    state.elapsed = state.world.params.secondsPerDay * 12;
+    const level = waterLevel(state);
+    map.elev[i] = 0;
+    for (let e = Math.floor(level); e >= 0; e--) {
+      if (floodDepth(e, level) === 2) {
+        map.elev[i] = e;
+        break;
+      }
+    }
+    expect(depthAt(state, tx, ty)).toBe(2);
     expect(isBoatableTile(state, tx, ty)).toBe(true);
+
+    // The deep (4) is impassable even to a skiff.
+    map.elev[i] = 0;
+    state.elapsed = state.world.params.secondsPerDay * 30;
+    expect(depthAt(state, tx, ty)).toBeGreaterThanOrEqual(4);
+    expect(isBoatableTile(state, tx, ty)).toBe(false);
   });
 
   it('beaches the moment there is no water left under it', () => {
@@ -184,12 +200,17 @@ describe('the skiff and the drowned landscape', () => {
     const map = state.world;
     const i = map.tiles.indexOf(Tile.Grass);
     map.elev[i] = 255;
-    state.hasBoat = true;
-    state.inBoat = true;
     placeAt(state, i % map.w, (i / map.w) | 0);
+    state.skiff = {
+      x: i % map.w,
+      y: (i / map.w) | 0,
+      pitched: false,
+    };
+    state.inBoat = true;
 
     step(state, IDLE, 1 / 60);
     // Standing on the highest ground in the world: there is nothing to sail on.
     expect(depthAt(state, i % map.w, (i / map.w) | 0)).toBe(0);
+    expect(state.inBoat).toBe(false);
   });
 });
