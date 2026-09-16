@@ -61,12 +61,25 @@ export function isSubmergedElev(elev: number, waterLevel: number): boolean {
 export const FLOOD_RISE_PER_DAY = MAX_ELEV / (FLOOD_DAYS - FLOOD_GRACE_DAYS);
 
 /**
- * How many days of water sit on this elevation. 0 is dry. 1 is just under
- * (still readable). 4 or more is the deep — opaque water.
+ * Gameplay depth, derived from how many flood-days the water has stood above
+ * this elevation.
+ *
+ * Depth 1 stays exactly as before: the first flood-day underwater. The deeper
+ * bands are intentionally wider so a much larger share of the drowned world
+ * remains navigable by skiff:
+ *
+ * - raw flood-day 1      -> depth 1
+ * - raw flood-days 2..3 -> depth 2
+ * - raw flood-days 4..6 -> depth 3
+ * - raw flood-day 7+    -> depth 4 (the deep)
  */
 export function floodDepth(elev: number, waterLevel: number): number {
   if (waterLevel <= elev) return 0;
-  return Math.max(1, Math.ceil((waterLevel - elev) / FLOOD_RISE_PER_DAY));
+  const floodDays = Math.max(1, Math.ceil((waterLevel - elev) / FLOOD_RISE_PER_DAY));
+  if (floodDays === 1) return 1;
+  if (floodDays <= 3) return 2;
+  if (floodDays <= 6) return 3;
+  return 4;
 }
 
 /**
