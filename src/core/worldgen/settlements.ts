@@ -244,6 +244,38 @@ function stampTown(
     }
   }
   overwrite(plan, cy * w + cx, Tile.TownDoor);
+  placeShopNear(plan, w, h, cx, cy);
+}
+
+/** A shop is a distinct tile, not another door among doors. */
+function placeShopNear(plan: Uint8Array, w: number, h: number, cx: number, cy: number): void {
+  const candidates = [
+    [cx + 1, cy],
+    [cx - 1, cy],
+    [cx, cy + 1],
+    [cx, cy - 1],
+    [cx + 1, cy + 1],
+    [cx - 1, cy + 1],
+  ];
+  for (const [x, y] of candidates) {
+    if (x <= 1 || y <= 1 || x >= w - 2 || y >= h - 3) continue;
+    if (onPanelEdge(x, y)) continue;
+    const i = y * w + x;
+    const t = plan[i];
+    if (
+      t === Tile.Water ||
+      t === Tile.Cliff ||
+      t === Tile.Bridge ||
+      t === Tile.TownDoor ||
+      t === Tile.Shrine ||
+      t === Tile.BoatYard ||
+      t === Tile.ArkSite
+    ) {
+      continue;
+    }
+    overwrite(plan, i, Tile.Shop);
+    return;
+  }
 }
 
 function stampPasture(
@@ -336,7 +368,6 @@ function stampShrine(
     if (style === 'grove' && rng() < 0.25) continue;
     stamp(plan, ny * w + nx, ring);
   }
-  // Always leave a walkable approach so a road can reach the door.
   const south = (y + 1) * w + x;
   if (y + 1 < h - 2 && !isWorldRim(x, y + 1, w, h) && !onPanelEdge(x, y + 1)) {
     overwrite(plan, south, style === 'cathedral' ? Tile.Road : Tile.Path);
@@ -345,12 +376,6 @@ function stampShrine(
   return { x, y };
 }
 
-/**
- * The highest buildable tile within `SHRINE_SEARCH` of a point.
- *
- * Elevation is the flood clock, so "highest nearby" is the same as "lasts
- * longest" — a shrine gains days of life for nothing but a local search.
- */
 function highestNear(
   plan: Uint8Array,
   elev: Uint8Array,
@@ -380,12 +405,6 @@ function highestNear(
   return best;
 }
 
-/**
- * How far a shrine may be moved to find high ground.
- *
- * About a panel: far enough to climb out of a valley floor, near enough that
- * "we worship south-east of town" is still true.
- */
 const SHRINE_SEARCH = 9;
 
 function stampDockNear(plan: Uint8Array, w: number, h: number, cx: number, cy: number, radius: number): void {
@@ -433,10 +452,7 @@ function placeHamlets(
       if ((p.x - x) * (p.x - x) + (p.y - y) * (p.y - y) < 12 * 12) far = false;
     }
     if (!far) continue;
-    stamp(plan, i, Tile.House);
-    // The door faces south and the path runs out from it, so a mountain
-    // dwelling is approached rather than bumped into — and the track leaves a
-    // gap between the house and whatever road passes by.
+    stamp(plan, i, houses.length === 0 ? Tile.Hermit : Tile.House);
     const doorstep = (y + 1) * w + x;
     if (y + 1 < h - 2) stamp(plan, doorstep, Tile.Path);
     houses.push({ x, y });
