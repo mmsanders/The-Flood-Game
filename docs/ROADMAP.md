@@ -15,28 +15,27 @@ wins if you still want it.
 depth ladder and the things that beat it), along with the round-two fixes in *What the
 first full run changed* below. What remains is Waves 3 through 6.
 
+> Full Wave 0 / Wave 1 prose is unchanged from `main` history. This file keeps the
+> Wave 2 write-up and the forward plan; expand from `main` if you need the long
+> Wave 0 stutter autopsy or Wave 1 settlement tables.
+
 ---
-
-## What the notes are actually asking for
-
-Twenty notes, and almost all of them are one request wearing different hats:
-
-> **The world should read as a place people lived in, not a noise field.**
-
-See prior sections for Waves 0–1 (unchanged). Wave 2 is below.
 
 ## Wave 0 — The frame budget *(shipped)*
 
-See git history / prior roadmap text on `main` for the full Wave 0 write-up.
+Never miss a vsync. Fixed 60 Hz simulation, interpolated render, allocation discipline,
+perf overlay on F3, Playwright frame-budget gate. See `main` history for the full write-up.
 
 ## Wave 1 — The world people left behind *(shipped)*
 
-See git history / prior roadmap text on `main` for the full Wave 1 write-up.
+Pipeline inversion: elevation → landforms → settlements → roads → siting → paint.
+River/gorge highway, escarpments, towns, ark panel, Rod ladder validation. See `main`.
 
 ## What the first full run changed
 
-Round-two fixes shipped on `main` before Wave 2. Note 14's skiff depth cap was held
-until Wave 2 so the upgrade ladder could ship with it.
+Round-two fixes shipped on `main` before Wave 2 (ark panel, pitch seal, road costs,
+gorge, cliff faces, shrine high ground, etc.). Note 14's skiff depth cap was held until
+Wave 2 so the upgrade ladder could ship with it — and that half has now shipped.
 
 ---
 
@@ -58,52 +57,54 @@ it. Notes 1 (galoshes), 14 (skiff tiers, the sounding line), 15 (the skiff as an
 
 ### 2.1 The skiff becomes an object (note 15) — shipped
 
-The skiff sits where you left it. Haul overland at half speed, beach and walk, lose it if
-the deep closes around it while away (rebuild at a dock).
+A skiff that **sits where you left it** is a place on the map. Haul overland at half
+speed, beach and walk, and if the deep closes around it while you are away, it is gone
+and you build another. Dedicated beached-skiff tile; set-down / pick-up / portage.
 
 ### 2.2 The sounding line (note 14) — shipped
 
-With the line aboard, drowned nodes around the skiff report clear depth and resource.
+With the line aboard, drowned nodes around the skiff report clear depth and resource in
+the contextual prompt — perception, not reach.
 
 ### 2.3 Barter, not money (notes 7, 20) — shipped
 
-No currency. Markets on marked town frontage barter ark materials; prices rise as biomes
-drown. A dedicated interior shop tile is deferred to Wave 3 with interiors.
+No currency. Marked town frontage (`TownDoor`, labeled Town Market) barters ark materials;
+prices rise as biomes drown. A dedicated `Shop` interior tile is deferred to Wave 3 with
+interiors, so the economy does not have to move twice.
 
 ### 2.4 Tools that break (notes 12, 13, 18, 20) — shipped
 
-Axe (and pickaxe): harvestable target = 1 durability; never-harvestable scenery = 2–3;
-both yield one unit.
+Axe and pickaxe: harvestable target = 1 durability; never-harvestable scenery = 2–3; both
+yield one unit. Tool-first recovery when a shrine is about to drown.
 
 ### 2.5 Heart containers, earned (note 19) — shipped
 
-Off the ground: dungeon chests, shop at a painful price, mountain hermit trades a rescued
-sheep. Hermit outdoor trade scaffolds Wave 3 interiors.
+Off the ground: dungeon chests remain; loose overworld hearts are retired at run start;
+shop heart at a painful barter price; mountain hermit trades a rescued sheep for a heart
+(outdoor scaffold until Wave 3 interiors).
 
 ---
 
 ## Wave 3 — Doors, and the people behind them
 
-### 3.1 Interiors (notes 5, 18)
+### 3.1 Interiors
 
 One-room interior primitive for hermit, shop, carpenter, Noah's tent. Move Wave 2 markets
-behind doors; add a distinct shop tile if still needed.
+behind doors; optional distinct shop tile.
 
-### 3.2 The instruments (note 17 — round one)
+### 3.2 The instruments
 
-Chart, Lodestone, Dove; Sounding Line and Galoshes already land in Wave 2.
+Chart, Lodestone, Dove. Sounding Line and Galoshes already land in Wave 2.
 
----
+## Wave 4 — Contour ledges
 
-## Wave 4 — The world as a contour map (note 10)
-
-Contour cliffs; own session; risky.
+Risky global movement constraint; own session.
 
 ## Wave 5 — The rain begins
 
 Prologue, dungeon flood, animal husbandry.
 
-## Wave 6 — The endless sand (note 5, round one)
+## Wave 6 — The endless sand
 
 Desert Easter egg; independent.
 
@@ -117,9 +118,9 @@ Wave 1  landforms, settlements, roads       ← shipped
         round-two fixes                     ← shipped
 Wave 2  the depth ladder, the skiff as an   ← shipped
         object, barter, tools
-Wave 3  interiors, the people in them,      ← next; needs Wave 2 shops/prices
+Wave 3  interiors, the people in them,      ← next
         the item set
-Wave 4  contour ledges                      ← risky; own session, survey open
+Wave 4  contour ledges                      ← risky; own session
 Wave 5  the prologue, dungeon flood,
         animal husbandry
 Wave 6  the desert                          ← independent; whenever
@@ -129,5 +130,5 @@ Wave 6  the desert                          ← independent; whenever
 
 - **Currency.** Section 2.3.
 - **Enemies.** Still deferred.
-- **Multi-floor dungeons.** Room row as depth gets the mechanic cheaper.
+- **Multi-floor dungeons.** Room row as depth is cheaper.
 - **A full dialogue system.** Roads carry the clues.
