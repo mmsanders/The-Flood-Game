@@ -9,11 +9,11 @@
 
 import { PANEL_H, PANEL_PX_H, PANEL_PX_W, PANEL_W, TILE_PX } from '../core/config.js';
 import { ANIMAL_DEFS, ANIMAL_H, ANIMAL_W, AnimalDir, AnimalStatus, FLOCK_TOTAL } from '../core/animals.js';
-import { floodDepth, floodOverlayFill } from '../core/flood.js';
+import { floodDepth, floodOverlayFill, gorgeDepthAt } from '../core/flood.js';
 import { panelsHigh, panelsWide, type TileMap } from '../core/tilemap.js';
 import { Biome, RESOURCE_COUNT, Resource, Tile, carveTo } from '../core/tiles.js';
 import { PALETTE } from '../render/palette.js';
-import { getTilesheet, tileSheetX, tileSheetY } from '../render/tilesheet.js';
+import { type Canvas, getTilesheet, tileSheetX, tileSheetY } from '../render/tilesheet.js';
 import {
   MINIMAP_H,
   MINI_POI_COLOR,
@@ -207,6 +207,7 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
   const cam = cameraOrigin(state);
   const sheet = getTilesheet();
   const level = waterLevel(state);
+  const day = map.floods ? currentDay(state) : 0;
 
   const x0 = Math.floor(cam.x / TILE_PX);
   const y0 = Math.floor(cam.y / TILE_PX);
@@ -216,6 +217,8 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
   let shadowLen = 0;
 
   for (let ty = y0; ty <= y1; ty++) {
+    // The runoff front runs north to south, so it is a property of the row.
+    const runoff = map.floods ? gorgeDepthAt(day, ty, map.h) : 0;
     for (let tx = x0; tx <= x1; tx++) {
       const sx = Math.round(tx * TILE_PX - cam.x);
       const sy = Math.round(ty * TILE_PX - cam.y);
@@ -232,19 +235,28 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
       if (tile === Tile.HeartContainer || tile === Tile.Pedestal) {
         blitTile(ctx, sheet, carveTo(map.biome[i] as Biome), sx, sy);
       }
-      blitTile(ctx, sheet, tile, sx, sy);
+      // A gorge with water in it is a river, and should look like one. Dry,
+      // it is a hole in the ground you cannot climb into.
+      const wetGorge = tile === Tile.Gorge && runoff > 0;
+      blitTile(ctx, sheet, wetGorge ? Tile.Water : tile, sx, sy);
 
       if (ty + 1 < map.h && shadowLen + 2 <= shadowScratch.length) {
         const south = i + map.w;
         if (map.biome[i] > map.biome[south] || map.elev[i] - map.elev[south] >= 40) {
+          // Recorded against the tile *below* the step: the face belongs to
+          // the ground the drop looks down on, not to the ground on top.
           shadowScratch[shadowLen] = sx;
-          shadowScratch[shadowLen + 1] = sy;
+          shadowScratch[shadowLen + 1] = sy + TILE_PX;
           shadowLen += 2;
         }
       }
 
       if (map.floods && floodLen + 3 <= floodScratch.length) {
-        const d = floodDepth(map.elev[i], level);
+        // Natural water keeps exactly the look it always had — the overlay is
+        // the *flood* arriving, not the fact that a pond is deep. The gorge is
+        // the one tile that carries its own water before the sea gets there.
+        const flood = floodDepth(map.elev[i], level);
+        const d = wetGorge && runoff > flood ? runoff : flood;
         if (d > 0) {
           floodScratch[floodLen] = sx;
           floodScratch[floodLen + 1] = sy;
@@ -255,10 +267,7 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
     }
   }
 
-  ctx.fillStyle = 'rgba(12, 10, 8, 0.42)';
-  for (let i = 0; i < shadowLen; i += 2) {
-    ctx.fillRect(shadowScratch[i], shadowScratch[i + 1] + TILE_PX - 3, TILE_PX, 3);
-  }
+  drawElevationFaces(ctx, shadowLen);
 
   // Four fillStyles instead of one per tile — the overlay colours are discrete.
   for (let depth = 1; depth <= 4; depth++) {
@@ -278,75 +287,400 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
  * pitch, grown from whatever has been delivered. Size is a pure function of
  * progress so you can read the meter from the next panel over.
  */
+/**
+ * The ark, growing on its platform.
+ *
+ * Drawn to read as a *boat* at every stage, which the earlier version did not:
+ * a keel with an upswept stem and stern goes down first, so the silhouette is
+ * a hull from about ten percent, and the planking, decks, roof and gangway
+ * fill into that outline rather than assembling a box that only becomes a ship
+ * at the end.
+ *
+ * Cached to an offscreen canvas and redrawn only when the stage changes. The
+ * finished ark is a couple of hundred rectangles and it is on screen every
+ * frame you spend at the platform; the frame budget is not the place to pay
+ * for that sixty times a second.
+ */
 function drawArkMonument(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (state.location.kind !== 'overworld') return;
+
   const cam = cameraOrigin(state);
   const cx = Math.round(state.world.ark.x * TILE_PX + TILE_PX / 2 - cam.x);
   const cy = Math.round(state.world.ark.y * TILE_PX + TILE_PX - cam.y);
-  const progress = arkProgress(state);
-  const hullW = 40 + Math.round(progress * 152);
-  const hullH = 18 + Math.round(progress * 92);
-  if (cx + hullW < -8 || cx - hullW > SCREEN_W + 8) return;
-  if (cy + 16 < -8 || cy - hullH > PANEL_PX_H + 8) return;
 
-  const x = cx - (hullW >> 1);
-  const y = cy - hullH + 6;
-  const wood = progress < 0.15 ? '#7a4a1e' : PALETTE.ark;
-  const shade = '#6a3a14';
-  const pitch = state.delivered[Resource.Pitch] > 0;
+  const sprite = arkSprite(arkProgress(state), state.delivered[Resource.Pitch] > 0);
+  const x = cx - (sprite.width >> 1);
+  const y = cy - sprite.height + ARK_SIT;
+  if (x + sprite.width < -8 || x > SCREEN_W + 8) return;
+  if (y + sprite.height < -8 || y > PANEL_PX_H + 8) return;
 
-  // Keel.
-  ctx.fillStyle = shade;
-  ctx.fillRect(x + 4, y + hullH - 6, hullW - 8, 4);
-  ctx.fillStyle = wood;
-  ctx.fillRect(x + 6, y + hullH - 7, hullW - 12, 3);
+  ctx.drawImage(sprite, x, y);
+}
 
-  if (progress < 0.12) return;
+/** How far the hull sits into the platform, so it is moored rather than perched. */
+const ARK_SIT = 10;
 
-  // Ribs.
-  ctx.fillStyle = shade;
-  const ribs = 3 + Math.round(progress * 5);
-  for (let i = 1; i < ribs; i++) {
-    const rx = x + Math.round((i * hullW) / ribs);
-    ctx.fillRect(rx, y + 8, 2, hullH - 14);
+/** Full size of the finished ark, in back-buffer pixels — most of the screen. */
+const ARK_W = 208;
+/**
+ * Tall enough to dominate the panel, short enough to fit inside it. The ark
+ * tile sits 112px down its own screen, so a sprite past about 122 loses its
+ * roof off the top.
+ */
+const ARK_H = 120;
+
+interface ArkCache {
+  canvas: Canvas | null;
+  bucket: number;
+  pitch: boolean;
+}
+
+const arkCache: ArkCache = { canvas: null, bucket: -1, pitch: false };
+
+/** Drop the cached hull. Called when the renderer is hot-swapped. */
+export function invalidateArk(): void {
+  arkCache.canvas = null;
+  arkCache.bucket = -1;
+}
+
+function arkSprite(progress: number, pitch: boolean): Canvas {
+  // Quantised, so delivering one more plank does not repaint the whole ship.
+  const bucket = Math.min(ARK_BUCKETS, Math.max(0, Math.round(progress * ARK_BUCKETS)));
+  if (arkCache.canvas && arkCache.bucket === bucket && arkCache.pitch === pitch) {
+    return arkCache.canvas;
+  }
+  const canvas = arkCache.canvas ?? makeArkCanvas();
+  const c = canvas.getContext('2d') as CanvasRenderingContext2D;
+  c.clearRect(0, 0, ARK_W, ARK_H);
+  paintArk(c, bucket / ARK_BUCKETS, pitch);
+  arkCache.canvas = canvas;
+  arkCache.bucket = bucket;
+  arkCache.pitch = pitch;
+  return canvas;
+}
+
+const ARK_BUCKETS = 48;
+
+function makeArkCanvas(): Canvas {
+  if (typeof document !== 'undefined') {
+    const el = document.createElement('canvas');
+    el.width = ARK_W;
+    el.height = ARK_H;
+    return el;
+  }
+  return new OffscreenCanvas(ARK_W, ARK_H);
+}
+
+// Timber, light to dark. Pitch swaps the whole set for tar.
+const ARK_LIT = '#b3803f';
+const ARK_WOOD = '#8a5a2e';
+const ARK_DARK = '#6a4020';
+const ARK_LINE = '#5b381a';
+const ARK_SHADOW = '#2b1a0c';
+/** The deckhouse wall sits a shade lighter than the hull, as in the reference. */
+const ARK_WALL = '#9a6533';
+const ARK_ROOF = '#a06c38';
+const ARK_ROOF_DARK = '#7a4c26';
+const PITCH_WOOD = '#38322c';
+const PITCH_DARK = '#28231e';
+
+/**
+ * Paint the ark at a given completeness, 0..1, into its own canvas.
+ *
+ * Stages are deliberately front-loaded on *shape*: keel and posts first, then
+ * the hull skin, then the things that make it a building — decks, windows,
+ * roof, cabin, gangway. Half-built it should look like a ship under
+ * construction, not like scaffolding.
+ */
+function paintArk(c: CanvasRenderingContext2D, p: number, pitch: boolean): void {
+  // Pitch tars the *hull* — "inside and out", but the part that meets the
+  // water is what shows. Painting the whole ship black lost every line that
+  // made it read as a ship, so the decks and roof stay timber.
+  const lit = ARK_LIT;
+  const wood = pitch ? PITCH_WOOD : ARK_WOOD;
+  const dark = pitch ? PITCH_DARK : ARK_DARK;
+
+  // A partial ark is shorter as well as lower, so the hull grows lengthways.
+  const grow = 0.45 + 0.55 * p;
+  const hullW = Math.round((ARK_W - 10) * grow);
+  const x0 = (ARK_W - hullW) >> 1;
+  const x1 = x0 + hullW;
+  const mid = (x0 + x1) / 2;
+  const half = hullW / 2;
+
+  const keelY = ARK_H - 8;
+  const hullH = Math.round(36 + 18 * p);
+  const hullTop = keelY - hullH;
+
+  /**
+   * The sheer: how far the top edge of the hull rises above amidships at this
+   * column. This curve is the single thing that makes a shape read as a boat
+   * rather than a crate, so it goes in before any planking.
+   */
+  const sheer = (x: number): number => {
+    const t = Math.min(1, Math.abs(x - mid) / half);
+    return Math.round(t * t * SHEER_RISE);
+  };
+
+  /** The rocker: the underside lifting toward bow and stern. */
+  const rocker = (x: number): number => {
+    const t = Math.min(1, Math.abs(x - mid) / half);
+    return Math.round(t * t * t * ROCKER_RISE);
+  };
+
+  // How much of the hull's skin is on. Everything above rides on this, so the
+  // posts rise out of the planking that actually exists rather than hovering
+  // at the height the finished gunwale will one day reach.
+  const skin = Math.max(0, Math.min(1, (p - 0.08) / 0.3));
+  const built = Math.round(hullH * skin);
+  const topOf = (x: number): number => keelY - built - sheer(x) * skin;
+  const botOf = (x: number): number => keelY - rocker(x);
+
+  const postH = Math.round(12 + 10 * p);
+  /**
+   * Stem and stern, drawn last so they stand clear of the roof.
+   *
+   * Drawn first they were half-buried by the deckhouse and read as two horns
+   * poking out of its corners; a post is a timber rising past the
+   * superstructure, which is only true if it is in front of it.
+   */
+  const posts = (): void => {
+    drawPost(c, x0, topOf(x0), postH, -1, dark, lit);
+    drawPost(c, x1 - 6, topOf(x1), postH, 1, dark, lit);
+  };
+
+  if (p < 0.1) {
+    // Bare keel: a beam between the two posts.
+    c.fillStyle = dark;
+    c.fillRect(x0 + 4, keelY - 4, hullW - 8, 4);
+    posts();
+    return;
   }
 
-  if (progress < 0.32) return;
+  // -- the hull ------------------------------------------------------------
 
-  // Hull sides.
-  ctx.fillStyle = pitch ? PALETTE.pitch : wood;
-  ctx.fillRect(x + 2, y + Math.round(hullH * 0.35), 4, Math.round(hullH * 0.55));
-  ctx.fillRect(x + hullW - 6, y + Math.round(hullH * 0.35), 4, Math.round(hullH * 0.55));
-  ctx.fillStyle = pitch ? '#1a1612' : shade;
-  ctx.fillRect(x + 1, y + Math.round(hullH * 0.7), hullW - 2, 5);
+  // Column by column, between the sheer above and the rocker below.
+  //
+  // This was a filled path with the planking clipped to it, and the clip let
+  // the plank lines out over the top of the hull — they filled in the space
+  // the sheer had carved away and the whole thing read as a flat-topped slab
+  // with a gold curve painted across it. Drawing each column between two
+  // known y values cannot go wrong that way, and it is a handful of fillRects
+  // per column inside a sprite that is painted once per stage.
+  for (let x = x0; x <= x1; x++) {
+    const top = Math.round(topOf(x));
+    const bot = Math.round(botOf(x));
+    if (bot <= top) continue;
 
-  if (progress < 0.52) return;
+    c.fillStyle = wood;
+    c.fillRect(x, top, 1, bot - top);
 
-  // Deck.
-  ctx.fillStyle = pitch ? '#2a241c' : '#c48a48';
-  ctx.fillRect(x + 8, y + Math.round(hullH * 0.28), hullW - 16, 5);
-  ctx.fillStyle = shade;
-  ctx.fillRect(x + 8, y + Math.round(hullH * 0.28) + 5, hullW - 16, 1);
+    // Planking: one dark pixel every sixth row, measured up from the keel so
+    // the courses line up across the whole hull rather than per column.
+    c.fillStyle = ARK_LINE;
+    for (let y = bot - 6; y > top + 3; y -= 6) c.fillRect(x, y, 1, 1);
 
-  if (progress < 0.72) return;
+    // The turn of the bilge in shadow, so the hull rounds off.
+    if (bot - top > 12) {
+      c.fillStyle = dark;
+      c.fillRect(x, bot - 6, 1, 6);
+    }
 
-  // Roof / cabin.
-  const cabinW = Math.round(hullW * 0.42);
-  const cabinX = cx - (cabinW >> 1);
-  const cabinY = y + 4;
-  ctx.fillStyle = pitch ? PALETTE.pitch : '#8a4a20';
-  ctx.fillRect(cabinX, cabinY + 8, cabinW, Math.round(hullH * 0.22));
-  ctx.fillStyle = pitch ? '#1a1612' : '#6a3a14';
-  ctx.fillRect(cabinX - 2, cabinY + 4, cabinW + 4, 5);
-  ctx.fillRect(cabinX + 2, cabinY, cabinW - 4, 5);
+    if (skin >= 1) {
+      // Gunwale: the lit rail that makes the sheer read.
+      c.fillStyle = lit;
+      c.fillRect(x, top, 1, 3);
+      c.fillStyle = ARK_LINE;
+      c.fillRect(x, top + 3, 1, 1);
+    }
+  }
 
-  if (progress < 0.92) return;
+  if (p < 0.4) return posts();
 
-  // Stem and stern posts, the last of the timber.
-  ctx.fillStyle = pitch ? PALETTE.pitch : '#7a4a1e';
-  ctx.fillRect(x + 4, y + 2, 3, hullH - 8);
-  ctx.fillRect(x + hullW - 7, y + 2, 3, hullH - 8);
+  // -- door and the lower row of windows -----------------------------------
+  const doorW = 24;
+  const doorH = Math.round(hullH * 0.58);
+  const doorX = Math.round(mid) - (doorW >> 1);
+  const doorY = keelY - 2 - doorH;
+  c.fillStyle = ARK_SHADOW;
+  c.fillRect(doorX, doorY, doorW, doorH);
+  c.fillStyle = ARK_LINE;
+  c.fillRect(doorX - 1, doorY - 2, doorW + 2, 2);
+
+  windowRow(c, x0 + 14, x1 - 14, hullTop + Math.round(hullH * 0.34), doorX, doorW);
+
+  if (p < 0.56) return posts();
+
+  // -- the upper deck ------------------------------------------------------
+  const deckH = Math.round(14 + 6 * p);
+  /**
+   * How far the deckhouse stops short of the hull ends.
+   *
+   * Generous, so there is open deck at bow and stern for the posts to stand
+   * on. At a narrow inset the roof ran right up to them and the pair read as
+   * antlers hanging off its corners rather than timbers rising from the hull.
+   */
+  const inset = 18;
+  const deckBase = hullTop + 2;
+  const deckTop = deckBase - deckH;
+  c.fillStyle = ARK_WALL;
+  c.fillRect(x0 + inset, deckTop, hullW - inset * 2, deckH);
+  for (let y = deckTop + 5; y < deckBase; y += 6) {
+    c.fillStyle = ARK_LINE;
+    c.fillRect(x0 + inset, y, hullW - inset * 2, 1);
+  }
+  c.fillStyle = ARK_LINE;
+  c.fillRect(x0 + inset, deckTop, hullW - inset * 2, 1);
+  windowRow(c, x0 + inset + 10, x1 - inset - 10, deckTop + Math.round(deckH * 0.42), -1, 0);
+
+  if (p < 0.74) return posts();
+
+  // -- the roof: one long shallow gable, shingled ---------------------------
+  const roofH = 22;
+  const roofTop = deckTop - roofH;
+  const eaveX = x0 + inset - 5;
+  const eaveW = hullW - inset * 2 + 10;
+  for (let r = 0; r < roofH; r++) {
+    // Draws in toward the ridge, so the slope is visible from the front.
+    const draw = Math.round((r / roofH) * 13);
+    // Shingle courses: a dark line every fifth row, lighter toward the ridge.
+    const shingle = r % 5 === 4;
+    c.fillStyle = shingle ? ARK_ROOF_DARK : ARK_ROOF;
+    c.fillRect(eaveX + draw, roofTop + roofH - 1 - r, eaveW - draw * 2, 1);
+  }
+  // Ridge cap along the top, eave shadow along the bottom.
+  c.fillStyle = ARK_LIT;
+  c.fillRect(eaveX + 13, roofTop, eaveW - 26, 2);
+  c.fillStyle = ARK_SHADOW;
+  c.fillRect(eaveX, roofTop + roofH - 1, eaveW, 2);
+
+  if (p < 0.9) return posts();
+
+  // -- cabin and gangway: the last of the timber ---------------------------
+  const cabinW = 32;
+  const cabinH = 14;
+  const cabinX = x0 + Math.round(hullW * 0.16);
+  const cabinY = roofTop - cabinH + 4;
+  c.fillStyle = ARK_WALL;
+  c.fillRect(cabinX, cabinY + 7, cabinW, cabinH - 7);
+  c.fillStyle = ARK_LINE;
+  c.fillRect(cabinX, cabinY + 7, cabinW, 1);
+  for (let r = 0; r < 8; r++) {
+    c.fillStyle = ARK_ROOF_DARK;
+    c.fillRect(cabinX - 3 + r, cabinY + 7 - r, cabinW + 6 - r * 2, 1);
+  }
+  c.fillStyle = ARK_SHADOW;
+  c.fillRect(cabinX + (cabinW >> 1) - 2, cabinY + 10, 5, 6);
+
+  // The gangway down from the door.
+  const rampTop = doorY + doorH - 4;
+  const rampX = doorX + 2;
+  const rampLen = 34;
+  for (let r = 0; r < rampLen; r++) {
+    const yy = rampTop + Math.round(r * 0.62);
+    c.fillStyle = r % 7 === 6 ? ARK_LINE : lit;
+    c.fillRect(rampX + r, yy, 16, 3);
+  }
+  // Hand rails, top and bottom, so it reads as a gangway rather than a plank.
+  c.fillStyle = ARK_LIT;
+  c.fillRect(rampX, rampTop - 8, 2, 9);
+  c.fillRect(rampX + rampLen - 3, rampTop + Math.round(rampLen * 0.62) - 8, 2, 9);
+  c.fillStyle = ARK_LINE;
+  c.fillRect(rampX, rampTop - 8, rampLen, 2);
+
+  posts();
 }
+
+/** How far the hull's top edge lifts at bow and stern. The boat-ness dial. */
+const SHEER_RISE = 44;
+/** How far its underside lifts at the ends. */
+const ROCKER_RISE = 14;
+
+/**
+ * The stem or stern post standing above the sheer.
+ *
+ * Thick and near-upright with a small outward curl at the head. An earlier
+ * version leaned harder the higher it went, which drew two tusks hooking away
+ * from the boat rather than two posts rising out of it.
+ */
+function drawPost(
+  c: CanvasRenderingContext2D,
+  x: number,
+  top: number,
+  height: number,
+  dir: -1 | 1,
+  dark: string,
+  lit: string,
+): void {
+  for (let r = 0; r < height; r++) {
+    const t = r / height;
+    const lean = Math.round(t * t * t * 3) * dir;
+    c.fillStyle = r > height - 4 ? lit : dark;
+    c.fillRect(x + lean, top - r, 6, 1);
+    // A lit edge down the sunward side gives the timber some thickness.
+    c.fillStyle = ARK_LINE;
+    c.fillRect(x + lean + (dir > 0 ? 5 : 0), top - r, 1, 1);
+  }
+}
+
+/** A row of small dark windows, skipping a span if the door is in the way. */
+function windowRow(
+  c: CanvasRenderingContext2D,
+  from: number,
+  to: number,
+  y: number,
+  skipX: number,
+  skipW: number,
+): void {
+  const step = 24;
+  for (let wx = from; wx + 6 <= to; wx += step) {
+    if (skipX >= 0 && wx + 6 > skipX - 4 && wx < skipX + skipW + 4) continue;
+    c.fillStyle = ARK_SHADOW;
+    c.fillRect(wx, y, 7, 7);
+    c.fillStyle = ARK_LINE;
+    c.fillRect(wx - 1, y - 1, 9, 1);
+  }
+}
+
+/**
+ * Draw the drop where the ground steps down to the south.
+ *
+ * This used to be a single 3px translucent line along the *bottom of the upper
+ * tile*, which read as a seam between two flat tiles rather than as height —
+ * the ground looked smudged, not stepped.
+ *
+ * A step is a wall, so this draws one, onto the top of the tile below: a bright
+ * lip catching the light where the upper ground ends, a solid rock face under
+ * it, and a contact shadow where the face meets the lower ground. Three bands
+ * and a hard edge, which is how every 2D game from Zelda on has said "this is
+ * higher than that".
+ */
+function drawElevationFaces(ctx: CanvasRenderingContext2D, count: number): void {
+  // Lip first, so the whole run of steps shares one fillStyle each pass.
+  ctx.fillStyle = FACE_LIP;
+  for (let i = 0; i < count; i += 2) {
+    ctx.fillRect(shadowScratch[i], shadowScratch[i + 1], TILE_PX, 1);
+  }
+  ctx.fillStyle = FACE_ROCK;
+  for (let i = 0; i < count; i += 2) {
+    ctx.fillRect(shadowScratch[i], shadowScratch[i + 1] + 1, TILE_PX, FACE_H - 2);
+  }
+  ctx.fillStyle = FACE_FOOT;
+  for (let i = 0; i < count; i += 2) {
+    ctx.fillRect(shadowScratch[i], shadowScratch[i + 1] + FACE_H - 1, TILE_PX, 1);
+  }
+  // A short cast shadow on the ground below, so the face has somewhere to sit.
+  ctx.fillStyle = 'rgba(10, 8, 6, 0.30)';
+  for (let i = 0; i < count; i += 2) {
+    ctx.fillRect(shadowScratch[i], shadowScratch[i + 1] + FACE_H, TILE_PX, 2);
+  }
+}
+
+/** Height of a drawn drop, in pixels. Six of sixteen reads as a real step. */
+const FACE_H = 6;
+const FACE_LIP = '#9a917f';
+const FACE_ROCK = '#4a443b';
+const FACE_FOOT = '#26221c';
 
 function drawAnimals(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (state.location.kind !== 'overworld') return;
@@ -853,6 +1187,7 @@ function rasterizeMiniMap(
       ? mini.bits
       : ctx.createImageData(MINIMAP_W, MINIMAP_H);
 
+  const miniDay = map.floods ? currentDay(state) : 0;
   const data = bits.data;
   for (let i = 0; i < data.length; i += 4) {
     data[i] = 8;
@@ -899,6 +1234,7 @@ function rasterizeMiniMap(
             (px + 0.5) / rw,
             (py + 0.5) / rh,
             level,
+            miniDay,
             data,
             o,
           );

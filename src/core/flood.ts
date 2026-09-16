@@ -69,6 +69,74 @@ export function floodDepth(elev: number, waterLevel: number): number {
   return Math.max(1, Math.ceil((waterLevel - elev) / FLOOD_RISE_PER_DAY));
 }
 
+/**
+ * Days for the runoff front to travel the length of the map.
+ *
+ * The gorge does not fill like a bathtub. It is rain coming off the high
+ * ground, so the water arrives at the top of the channel and runs *down* it:
+ * a front sweeping from the northern spring to the southern mouth. One day,
+ * so it is something you watch happen on the first morning rather than a state
+ * the world was already in.
+ */
+export const GORGE_FILL_DAYS = 1;
+
+/** Depth the channel runs at once the front has gone past. */
+const GORGE_RUNNING_DEPTH = 2;
+
+/**
+ * Rows of shallower water at the leading edge, so the front reads as water
+ * arriving rather than as a line that teleports down the map.
+ */
+const GORGE_FRONT_ROWS = 10;
+
+/**
+ * How deep the gorge runs at a given row, on a given day.
+ *
+ * Starts at the top of the map on day one and reaches the mouth a day later.
+ * Sea level still applies on top: once the flood proper reaches the channel,
+ * whichever is deeper wins.
+ */
+export function gorgeDepthAt(day: number, y: number, mapHeight: number): number {
+  if (day <= 0) return 0;
+  const front = (day / GORGE_FILL_DAYS) * mapHeight;
+  if (y > front) return 0;
+  return front - y < GORGE_FRONT_ROWS ? 1 : GORGE_RUNNING_DEPTH;
+}
+
+/**
+ * Standing water on a tile, 0 (dry) to 4 (the deep).
+ *
+ * The one place that answers "how much water is here", so wading, sailing and
+ * dredging cannot disagree about it:
+ *
+ * - **Natural water** is never shallow. A pond is over your head — depth 2 —
+ *   whatever the sea is doing, which is what stops it being a shortcut you
+ *   paddle across.
+ * - **The gorge** carries runoff, which arrives at the top of the channel on
+ *   day one and runs down it — so `runoff` is the depth for *this row*, not a
+ *   single number for the whole channel.
+ * - **Everything else** is the flood: elevation against sea level.
+ */
+export function waterDepth(
+  tile: number,
+  elev: number,
+  waterLevel: number,
+  runoff: number,
+): number {
+  const flood = floodDepth(elev, waterLevel);
+  if (tile === Tile.Water) return flood > 2 ? flood : 2;
+  if (tile === Tile.Gorge) return flood > runoff ? flood : runoff;
+  return flood;
+}
+
+/**
+ * Depth past which a tile is too deep to stand in at all.
+ *
+ * Depth 1 is water you are standing in; 2 is over your head. Nothing wades
+ * past 1 today — galoshes are the first thing that will.
+ */
+export const WADE_DEPTH = 1;
+
 /** Overlay fill for a flooded tile, or null if dry. */
 export function floodOverlayFill(depth: number): string | null {
   if (depth <= 0) return null;

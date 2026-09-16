@@ -26,6 +26,7 @@ export interface SettlementPass {
 export function placeSettlements(
   seed: number,
   params: WorldParams,
+  elev: Uint8Array,
   biome: Uint8Array,
   plan: Uint8Array,
 ): SettlementPass {
@@ -56,6 +57,7 @@ export function placeSettlements(
     const shrine = stampShrine(
       rng,
       plan,
+      elev,
       w,
       h,
       tent.x + Math.max(6, Math.round(10 * scale)),
@@ -83,6 +85,7 @@ export function placeSettlements(
     const shrine = stampShrine(
       rng,
       plan,
+      elev,
       w,
       h,
       mill.x + Math.max(7, Math.round(12 * scale)),
@@ -107,12 +110,12 @@ export function placeSettlements(
     settlements,
   );
   if (city) {
-    const shrine = stampShrine(rng, plan, w, h, city.x, city.y - 2, 'cathedral');
+    const shrine = stampShrine(rng, plan, elev, w, h, city.x, city.y - 2, 'cathedral');
     city.shrine = shrine;
     stampDockNear(plan, w, h, city.x, city.y, 16);
   }
 
-  const hamlet = placeHamlets(rng, biome, plan, w, h, scale);
+  const hamlet = placeHamlets(rng, elev, biome, plan, w, h, scale);
   if (hamlet) settlements.push(hamlet);
 
   return { settlements, pastures };
@@ -283,17 +286,32 @@ function stampPasture(
   void rng;
 }
 
+/**
+ * Shrines stand on the high ground near their town.
+ *
+ * Not decoration: the Rod harvests nothing but fiber until the valley shrine
+ * says otherwise, so that shrine is the first gate in the game — and the
+ * valley is, by design, the first ground to go under. Sited on flat valley
+ * floor it drowned on a median of day 6, taking the whole Rod ladder and the
+ * run with it, before a player could realistically afford its price.
+ *
+ * Searching the neighbourhood for the highest walkable ground fixes that
+ * without moving a single town, and it is what people actually do with
+ * temples.
+ */
 function stampShrine(
   rng: Rng,
   plan: Uint8Array,
+  elev: Uint8Array,
   w: number,
   h: number,
   x: number,
   y: number,
   style: 'tent' | 'grove' | 'cathedral' | 'cairn',
 ): Point | null {
-  x = clamp(x, 4, w - 5);
-  y = clamp(y, 4, h - 5);
+  const high = highestNear(plan, elev, w, h, clamp(x, 4, w - 5), clamp(y, 4, h - 5));
+  x = high.x;
+  y = high.y;
   if (onPanelEdge(x, y)) {
     x += 1;
     y += 1;
@@ -327,6 +345,49 @@ function stampShrine(
   return { x, y };
 }
 
+/**
+ * The highest buildable tile within `SHRINE_SEARCH` of a point.
+ *
+ * Elevation is the flood clock, so "highest nearby" is the same as "lasts
+ * longest" — a shrine gains days of life for nothing but a local search.
+ */
+function highestNear(
+  plan: Uint8Array,
+  elev: Uint8Array,
+  w: number,
+  h: number,
+  cx: number,
+  cy: number,
+): Point {
+  let best = { x: cx, y: cy };
+  let bestElev = -1;
+  for (let dy = -SHRINE_SEARCH; dy <= SHRINE_SEARCH; dy++) {
+    for (let dx = -SHRINE_SEARCH; dx <= SHRINE_SEARCH; dx++) {
+      const x = cx + dx;
+      const y = cy + dy;
+      if (x < 4 || y < 4 || x >= w - 4 || y >= h - 5) continue;
+      if (isWorldRim(x, y, w, h) || onPanelEdge(x, y)) continue;
+      const i = y * w + x;
+      const t = plan[i];
+      if (t === Tile.Water || t === Tile.Gorge || t === Tile.Cliff || t === Tile.Bridge) continue;
+      if (t === Tile.TownDoor || t === Tile.ArkSite || t === Tile.Shrine) continue;
+      if (elev[i] > bestElev) {
+        bestElev = elev[i];
+        best = { x, y };
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * How far a shrine may be moved to find high ground.
+ *
+ * About a panel: far enough to climb out of a valley floor, near enough that
+ * "we worship south-east of town" is still true.
+ */
+const SHRINE_SEARCH = 9;
+
 function stampDockNear(plan: Uint8Array, w: number, h: number, cx: number, cy: number, radius: number): void {
   let best = -1;
   let bestD = Infinity;
@@ -351,6 +412,7 @@ function stampDockNear(plan: Uint8Array, w: number, h: number, cx: number, cy: n
 
 function placeHamlets(
   rng: Rng,
+  elev: Uint8Array,
   biome: Uint8Array,
   plan: Uint8Array,
   w: number,
@@ -372,11 +434,15 @@ function placeHamlets(
     }
     if (!far) continue;
     stamp(plan, i, Tile.House);
-    stamp(plan, i + 1 < plan.length ? i + 1 : i, Tile.Path);
+    // The door faces south and the path runs out from it, so a mountain
+    // dwelling is approached rather than bumped into — and the track leaves a
+    // gap between the house and whatever road passes by.
+    const doorstep = (y + 1) * w + x;
+    if (y + 1 < h - 2) stamp(plan, doorstep, Tile.Path);
     houses.push({ x, y });
   }
   if (houses.length === 0) return null;
-  const shrine = stampShrine(rng, plan, w, h, houses[0].x + 4, houses[0].y - 3, 'cairn');
+  const shrine = stampShrine(rng, plan, elev, w, h, houses[0].x + 4, houses[0].y - 3, 'cairn');
   return {
     kind: SettlementKind.Hamlet,
     biome: Biome.Mountain,

@@ -60,6 +60,13 @@ tests/         vitest over core + game; playwright for screenshots
 the flood. Because all three read the same field, the world reads as one landscape rather
 than three systems that happen to overlap.
 
+**Water has depth.** One function answers "how much water is on this tile", 0 to 4, so
+wading, sailing, beaching and dredging cannot disagree. A pond is over your head whatever
+the sea is doing. The gorge fills from the top down — runoff arrives at the northern spring
+on day one and a front runs it south over about a day, so the channel is a river in the
+north while it is still a dry ditch in the south. Past depth 2 the skiff sails over drowned
+boulders instead of round them.
+
 **The flood is a scalar, not a schedule.** Water is a single rising number compared against
 per-tile elevation: `submerged ⟺ elev < waterLevel(day)`. Rows still go under at roughly one
 per day, because elevation trends north-south — but hilltops in a drowned row survive as

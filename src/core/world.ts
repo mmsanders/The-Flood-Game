@@ -58,6 +58,8 @@ export interface WorldStats {
   connected: boolean;
   /** Is the ark recipe satisfiable before the world drowns? */
   solvable: boolean;
+  /** Per-shrine: the day it drowns, and the day it could first be reached. */
+  ladder: { biome: Biome; drownsOn: number; reachableOn: number }[];
   /** Human-readable reasons the world failed validation, if any. */
   problems: string[];
 }

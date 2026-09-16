@@ -34,6 +34,13 @@ export const enum Tile {
   Tent = 0x16,
   House = 0x17,
   StoneWall = 0x18,
+  /**
+   * The gorge floor: a dry channel too steep to climb down into, cut by the
+   * river long before the rain. Impassable on foot whether it is wet or dry.
+   * Once the rain starts it runs with water off the mountain and becomes the
+   * skiff's highway — see `gorgeDepthAt`.
+   */
+  Gorge = 0x19,
 
   // -- 0x20 resource nodes --------------------------------------------------
   Flax = 0x20,
@@ -73,6 +80,14 @@ export const enum Tile {
    * Step in one and it costs a heart and spits you back out.
    */
   Pit = 0x53,
+
+  /**
+   * A seam of pitch sealing a vault. Not bought — parted, and only by a Rod
+   * that has been imbued with pitch at the mountain shrine. It is the one
+   * obstacle in the game that asks what you have become rather than what you
+   * are carrying.
+   */
+  PitchSeal = 0x54,
 
   // -- 0x60 dungeon pickups -------------------------------------------------
   Key = 0x60,
@@ -157,6 +172,7 @@ const BLOCKING: readonly Tile[] = [
   Tile.Tent,
   Tile.House,
   Tile.StoneWall,
+  Tile.Gorge,
 
   Tile.Flax,
   Tile.GopherTree,
@@ -169,6 +185,7 @@ const BLOCKING: readonly Tile[] = [
   Tile.Chasm,
   Tile.Ledge,
   Tile.DoorLocked,
+  Tile.PitchSeal,
 ];
 
 /**
@@ -252,6 +269,7 @@ export const TILE_NAMES: Record<number, string> = {
   [Tile.Rock]: 'Rock',
   [Tile.Cliff]: 'Cliff',
   [Tile.Water]: 'Water',
+  [Tile.Gorge]: 'Gorge',
   [Tile.Fence]: 'Fence',
   [Tile.Tent]: 'Tent',
   [Tile.House]: 'House',
@@ -277,6 +295,7 @@ export const TILE_NAMES: Record<number, string> = {
   [Tile.Ledge]: 'Ledge',
   [Tile.DoorLocked]: 'Locked Door',
   [Tile.Pit]: 'Pit',
+  [Tile.PitchSeal]: 'Seal of Pitch',
   [Tile.Key]: 'Key',
   [Tile.Chest]: 'Chest',
 };

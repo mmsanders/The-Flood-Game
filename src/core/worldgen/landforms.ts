@@ -10,6 +10,7 @@
 import { type WorldParams, tileHeight, tileWidth } from '../config.js';
 import { randInt, stageRng, type Rng } from '../rng.js';
 import { BIOME_COUNT, Biome, Tile } from '../tiles.js';
+import { valueNoise2d } from '../noise.js';
 import { overwrite, stamp } from './plan.js';
 import { isWorldRim, onPanelEdge } from './seams.js';
 
@@ -108,7 +109,12 @@ function followDescent(
         const ny = y + dy;
         if (nx < 2 || nx >= w - 2 || ny < 1 || ny >= h - 1) continue;
         if (seen[ny * w + nx]) continue;
-        const score = elev[ny * w + nx] - dy * 10 + Math.abs(dx) * 4 + rng() * 5;
+        // Descent dominates, but the lateral penalty is light and a slow
+        // wander field pushes the channel off-axis for stretches at a time.
+        // With a heavy `|dx|` penalty this drew a straight line down the map.
+        const drift = wander(nx, ny) * 14;
+        const score =
+          elev[ny * w + nx] - dy * 9 + Math.abs(dx) * 1.5 - dx * drift + rng() * 5;
         if (score < best) {
           best = score;
           bestX = nx;
@@ -174,6 +180,15 @@ function followToward(
   return path;
 }
 
+/**
+ * Cut the channel as a dry gorge with its crossings already in place.
+ *
+ * A gorge is a landform, not a river: it is here before the rain, too steep to
+ * climb into, and it fills from the north once the water starts coming off the
+ * mountain. Fords are stamped as part of the cut rather than left to the
+ * connectivity pass, so the channel never divides the world in the first place
+ * — and a crossing you can see from a panel away is a landmark.
+ */
 function stampChannel(
   elev: Uint8Array,
   plan: Uint8Array,
@@ -189,17 +204,27 @@ function stampChannel(
     const y = (i / w) | 0;
     if (isWorldRim(x, y, w, h)) continue;
     dropChannel(elev, i);
-    const ford = fords && n > 8 && n % 12 === 0;
-    overwrite(plan, i, ford ? Tile.Bridge : Tile.Water);
+    const ford = fords && n > 8 && n % FORD_SPACING === 0;
+    overwrite(plan, i, ford ? Tile.Bridge : Tile.Gorge);
     const side = rng() < 0.5 ? -1 : 1;
     const nx = x + side;
     if (nx > 0 && nx < w - 1 && !isWorldRim(nx, y, w, h)) {
       const j = y * w + nx;
       dropChannel(elev, j);
-      stamp(plan, j, Tile.Water);
+      // A ford spans the full width, or it is not a crossing.
+      if (ford) overwrite(plan, j, Tile.Bridge);
+      else stamp(plan, j, Tile.Gorge);
     }
   }
 }
+
+/**
+ * Tiles of channel between crossings.
+ *
+ * Twelve is about three-quarters of a panel, so you are never more than a
+ * screen from a ford but you can still be on the wrong side of one.
+ */
+const FORD_SPACING = 12;
 
 function dropChannel(elev: Uint8Array, i: number): void {
   const next = elev[i] < 36 ? 0 : elev[i] - 36;
@@ -255,7 +280,7 @@ function pickLakeSite(
     const y = randInt(rng, 8, h - 10);
     const i = y * w + x;
     if (biome[i] !== want) continue;
-    if (plan[i] === Tile.Water) continue;
+    if (plan[i] === Tile.Water || plan[i] === Tile.Gorge) continue;
     if (onPanelEdge(x, y)) continue;
     const score = elev[i] + rng() * 8;
     if (score < bestScore) {
@@ -283,7 +308,7 @@ function cutEscarpments(
   for (let y = 2; y < h - 3; y++) {
     for (let x = 2; x < w - 2; x++) {
       const i = y * w + x;
-      if (plan[i] === Tile.Water || plan[i] === Tile.Bridge) continue;
+      if (plan[i] === Tile.Water || plan[i] === Tile.Gorge || plan[i] === Tile.Bridge) continue;
       const south = elev[i + w];
       if (elev[i] - south < drop && biome[i] <= biome[i + w]) continue;
       marks[i] = 1;
@@ -323,7 +348,7 @@ function cutEscarpments(
       const x = i % w;
       const y = (i / w) | 0;
       if (isWorldRim(x, y, w, h)) continue;
-      if (plan[i] === Tile.Water || plan[i] === Tile.Bridge) continue;
+      if (plan[i] === Tile.Water || plan[i] === Tile.Gorge || plan[i] === Tile.Bridge) continue;
       const isStair = (n + offset) % stride === 0;
       stamp(plan, i, isStair ? Tile.Steps : Tile.Cliff);
     }
@@ -433,6 +458,19 @@ function bridgeBetween(
     else stamp(plan, i, Tile.Bridge);
   }
 }
+
+/**
+ * A slow left/right bias in [-1, 1], sampled from a fixed low-frequency field.
+ *
+ * Long wavelength on purpose: it should lean the channel one way for twenty
+ * tiles at a time, which reads as a meander, rather than jittering per step,
+ * which reads as noise.
+ */
+function wander(x: number, y: number): number {
+  return valueNoise2d(WANDER_SEED, x / 26, y / 34) * 2 - 1;
+}
+
+const WANDER_SEED = 0x9e37;
 
 function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;

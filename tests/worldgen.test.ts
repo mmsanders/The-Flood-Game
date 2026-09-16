@@ -362,21 +362,74 @@ describe('worldgen: settlements', () => {
     }
   });
 
-  it('raises the ark on a platform you climb stairs onto', () => {
+  it('builds the ark on the panel directly north of spawn', () => {
+    for (const seed of SEEDS.slice(0, 6)) {
+      const world = generateWorld(seed, SMALL);
+      const spawnPanel = {
+        x: Math.floor(world.spawn.x / PANEL_W),
+        y: Math.floor(world.spawn.y / PANEL_H),
+      };
+      const arkPanel = {
+        x: Math.floor(world.ark.x / PANEL_W),
+        y: Math.floor(world.ark.y / PANEL_H),
+      };
+      expect(arkPanel, `seed ${seed}`).toEqual({ x: spawnPanel.x, y: spawnPanel.y - 1 });
+      // Never the world rim, or the panel would be half frame.
+      expect(arkPanel.y).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('walls the ark platform so the stairs are the only way up', () => {
     for (const seed of SEEDS.slice(0, 6)) {
       const world = generateWorld(seed, SMALL);
       const i = world.ark.y * world.w + world.ark.x;
       expect(world.tiles[i]).toBe(Tile.ArkSite);
+
+      // Flood-fill off the ark tile, refusing to walk through a stair. If the
+      // platform is properly walled this cannot escape it — which is the
+      // actual claim, rather than "there is a Steps tile somewhere nearby".
+      const seen = new Set<number>([i]);
+      const queue = [i];
+      let escaped = false;
+      while (queue.length > 0 && !escaped) {
+        const cur = queue.pop() as number;
+        const cx = cur % world.w;
+        const cy = (cur / world.w) | 0;
+        for (const [dx, dy] of [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+        ] as const) {
+          const nx = cx + dx;
+          const ny = cy + dy;
+          if (nx < 0 || ny < 0 || nx >= world.w || ny >= world.h) continue;
+          const n = ny * world.w + nx;
+          if (seen.has(n)) continue;
+          const tile = world.tiles[n];
+          if (tile === Tile.Steps) continue;
+          if (!isWalkable(tile)) continue;
+          // Leaving the ark's own panel without touching a stair is the bug.
+          if (Math.floor(ny / PANEL_H) !== Math.floor(world.ark.y / PANEL_H)) {
+            escaped = true;
+            break;
+          }
+          seen.add(n);
+          queue.push(n);
+        }
+      }
+      expect(escaped, `seed ${seed}: reached the ark without using the stairs`).toBe(false);
+
+      // And the stairs exist, so it is walled rather than sealed.
+      const panelY = Math.floor(world.ark.y / PANEL_H) * PANEL_H;
+      const panelX = Math.floor(world.ark.x / PANEL_W) * PANEL_W;
       let steps = 0;
-      for (let dy = -3; dy <= 2; dy++) {
-        for (let dx = -4; dx <= 4; dx++) {
-          const x = world.ark.x + dx;
-          const y = world.ark.y + dy;
-          if (x < 0 || y < 0 || x >= world.w || y >= world.h) continue;
+      for (let y = panelY; y < panelY + PANEL_H; y++) {
+        for (let x = panelX; x < panelX + PANEL_W; x++) {
           if (world.tiles[y * world.w + x] === Tile.Steps) steps++;
         }
       }
-      expect(steps, `seed ${seed} ark has no stairs`).toBeGreaterThan(0);
+      expect(steps, `seed ${seed} ark panel has no stairs`).toBeGreaterThan(0);
     }
   });
 });
