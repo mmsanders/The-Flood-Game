@@ -55,6 +55,7 @@ import {
   BOAT_RECAULK_FIBER,
   BOAT_SPEED_SCALE,
   PITCHED_BOAT_DEPTH,
+  boatDestroyedAtDepth,
   canAffordBoat,
   canAffordPitching,
   payForBoat,
@@ -386,6 +387,7 @@ export function step(state: GameState, input: StepInput, dt: number): void {
     state.messageTimer -= dt;
     if (state.messageTimer <= 0) state.message = null;
   }
+  checkStrandedBoat(state);
 
   // Panel transitions lock input, Zelda-style: the screen slides, you wait.
   if (state.camera.scroll > 0) {
@@ -1056,6 +1058,38 @@ function tryImbueRod(state: GameState, biome: Biome): void {
 }
 
 // ----------------------------------------------------------- skiff lifecycle
+
+function checkStrandedBoat(state: GameState): void {
+  if (
+    !state.hasBoat ||
+    state.inBoat ||
+    state.haulingBoat ||
+    state.boatX < 0 ||
+    state.boatY < 0
+  ) {
+    return;
+  }
+
+  const world = state.world;
+  const tx = state.boatX;
+  const ty = state.boatY;
+  if (tx >= world.w || ty >= world.h) return;
+
+  const i = ty * world.w + tx;
+  const runoff = gorgeDepthAt(currentDay(state), ty, world.h);
+  const depth = waterDepth(world.tiles[i], world.elev[i], waterLevel(state), runoff);
+  if (!boatDestroyedAtDepth(state.boatDepth, depth)) return;
+
+  if (world.tiles[i] === Tile.Skiff) world.tiles[i] = state.boatUnderTile;
+  state.hasBoat = false;
+  state.inBoat = false;
+  state.haulingBoat = false;
+  state.boatDepth = BASE_BOAT_DEPTH;
+  state.boatX = -1;
+  state.boatY = -1;
+  state.mapRevision++;
+  say(state, 'The deep took the skiff you left behind.');
+}
 
 function boatYardPrompt(state: GameState, biome: Biome): ObstaclePrompt | null {
   if (state.haulingBoat && state.boatDepth < PITCHED_BOAT_DEPTH && biome >= Biome.Scrub) {
