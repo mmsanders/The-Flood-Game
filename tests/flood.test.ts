@@ -47,12 +47,27 @@ describe('flood', () => {
     }
   });
 
-  it('counts flood depth in days of water, 1 through 4+', () => {
-    const level = waterLevelAtDay(10);
+  it('maps flood age into the widened four gameplay-depth bands', () => {
+    const level = waterLevelAtDay(12);
+    const elevForFloodDays = (days: number): number => level - FLOOD_RISE_PER_DAY * (days - 0.1);
+
     expect(floodDepth(level + 1, level)).toBe(0);
-    expect(floodDepth(level - 1, level)).toBe(1);
-    expect(floodDepth(level - FLOOD_RISE_PER_DAY * 2.1, level)).toBe(3);
-    expect(floodDepth(0, waterLevelAtDay(FLOOD_DAYS))).toBeGreaterThanOrEqual(4);
+
+    // Depth one is unchanged: only the first flood-day underwater.
+    expect(floodDepth(elevForFloodDays(1), level)).toBe(1);
+
+    // The ordinary skiff gets two raw flood-day bands: 2 and 3.
+    expect(floodDepth(elevForFloodDays(2), level)).toBe(2);
+    expect(floodDepth(elevForFloodDays(3), level)).toBe(2);
+
+    // The pitched skiff gets three more: 4, 5 and 6.
+    expect(floodDepth(elevForFloodDays(4), level)).toBe(3);
+    expect(floodDepth(elevForFloodDays(6), level)).toBe(3);
+
+    // Only seven or more flood-days underwater becomes the deep.
+    expect(floodDepth(elevForFloodDays(7), level)).toBe(4);
+    expect(floodDepth(0, waterLevelAtDay(FLOOD_DAYS))).toBe(4);
+
     expect(floodOverlayFill(0)).toBeNull();
     expect(floodOverlayFill(1)).toMatch(/0\.24/);
     expect(floodOverlayFill(4)).toBe('#1c4a80');
