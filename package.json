@@ -4,14 +4,14 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "node scripts/assemble-wave3.mjs && vite",
-    "build": "node scripts/assemble-wave3.mjs && tsc --noEmit && vite build",
+    "dev": "node scripts/restore-game-test.mjs && node scripts/assemble-wave3.mjs && vite",
+    "build": "node scripts/restore-game-test.mjs && node scripts/assemble-wave3.mjs && tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "node scripts/assemble-wave3.mjs && tsc --noEmit",
-    "test": "node scripts/assemble-wave3.mjs && vitest run",
+    "typecheck": "node scripts/restore-game-test.mjs && node scripts/assemble-wave3.mjs && tsc --noEmit",
+    "test": "node scripts/restore-game-test.mjs && node scripts/assemble-wave3.mjs && vitest run",
     "test:watch": "vitest",
-    "test:e2e": "node scripts/assemble-wave3.mjs && playwright test",
-    "assemble:wave3": "node scripts/assemble-wave3.mjs"
+    "test:e2e": "node scripts/restore-game-test.mjs && node scripts/assemble-wave3.mjs && playwright test",
+    "assemble:wave3": "node scripts/restore-game-test.mjs && node scripts/assemble-wave3.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.1",
