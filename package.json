@@ -4,19 +4,20 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "dev": "node scripts/assemble-wave3.mjs && vite",
+    "build": "node scripts/assemble-wave3.mjs && tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "typecheck": "node scripts/assemble-wave3.mjs && tsc --noEmit",
+    "test": "node scripts/assemble-wave3.mjs && vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "assemble:wave3": "node scripts/assemble-wave3.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "^1.49.1",
-    "@types/node": "^26.4.0",
-    "typescript": "^5.7.2",
-    "vite": "^6.0.7",
-    "vitest": "^2.1.8"
+    "@playwright/test": "^1.48.0",
+    "@types/node": "^22.7.4",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.8",
+    "vitest": "^2.1.1"
   }
 }
