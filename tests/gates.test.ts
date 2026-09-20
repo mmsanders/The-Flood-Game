@@ -31,7 +31,7 @@ function newState(seed = 4242): GameState {
 
 /** Drop the player into a dungeon, facing north at the given tile. */
 function standIn(state: GameState, dungeonId: number, tx: number, ty: number): void {
-  state.location = { kind: 'dungeon', dungeonId, returnTo: { x: 1, y: 1 } };
+  state.location = { kind: 'dungeon', interiorId: -1, dungeonId, returnTo: { x: 1, y: 1 } };
   state.player.x = tx * TILE_PX + (TILE_PX - PLAYER_W) / 2;
   state.player.y = ty * TILE_PX + (TILE_PX - PLAYER_H) / 2;
   state.player.dir = 1; // up
