@@ -105,6 +105,24 @@ with ark materials.
 distinct `Shop` tile art beyond the existing door (TownDoor / CampTent mouths are
 enough).
 
+## Playtest follow-ups (post–Wave 3)
+
+Shipped on `playtest-road-auras-cliffs`:
+
+- **Road auras.** Towns (and Noah's camp) radiate pavement that peters out;
+  routes still *point* toward the next settlement, but wilderness gaps remain
+  between auras so navigation is not a free highway. Connectivity repair still
+  guarantees a solvable foot path without continuous paved roads.
+- **Impassable cliff faces.** Escarpment bands are thickened and gap-filled;
+  `Tile.Cliff` stays blocking. Stairs are cut only through really wide bands
+  (plus whatever connectivity must open for solvability). Roads no longer pave
+  Steps through every cliff they touch.
+- **Resource abundance.** Modest ~15% density cut and slightly tighter
+  clustering after playtest feedback that nodes never felt scarce. Shrine/ark
+  solvability margins retained; revisit with more play data if still too easy.
+- **Deferred:** scattered wayfinding signs if aura gaps prove too hard; full
+  elevation contour ledges remain Wave 4.
+
 ## Wave 4 — Contour ledges
 
 Risky global movement constraint; own session.
