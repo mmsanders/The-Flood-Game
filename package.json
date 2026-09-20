@@ -10,7 +10,7 @@
     "typecheck": "node scripts/assemble-wave3.mjs && tsc --noEmit",
     "test": "node scripts/assemble-wave3.mjs && vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
+    "test:e2e": "node scripts/assemble-wave3.mjs && playwright test",
     "assemble:wave3": "node scripts/assemble-wave3.mjs"
   },
   "devDependencies": {
