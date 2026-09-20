@@ -13,6 +13,7 @@ import { BIOME_COUNT, Biome, Tile } from '../tiles.js';
 import { valueNoise2d } from '../noise.js';
 import { overwrite, stamp } from './plan.js';
 import { isWorldRim, onPanelEdge } from './seams.js';
+import { cutEscarpments } from './escarpments.js';
 
 export function carveLandforms(
   seed: number,
@@ -289,70 +290,6 @@ function pickLakeSite(
     }
   }
   return best;
-}
-
-/**
- * Where elevation drops a biome band (or more) to the south, a cliff line
- * with a countable number of stairs. Going north becomes finding the stair.
- */
-function cutEscarpments(
-  rng: Rng,
-  elev: Uint8Array,
-  biome: Uint8Array,
-  plan: Uint8Array,
-  w: number,
-  h: number,
-): void {
-  const drop = 40;
-  const marks = new Uint8Array(w * h);
-  for (let y = 2; y < h - 3; y++) {
-    for (let x = 2; x < w - 2; x++) {
-      const i = y * w + x;
-      if (plan[i] === Tile.Water || plan[i] === Tile.Gorge || plan[i] === Tile.Bridge) continue;
-      const south = elev[i + w];
-      if (elev[i] - south < drop && biome[i] <= biome[i + w]) continue;
-      marks[i] = 1;
-    }
-  }
-
-  const seen = new Uint8Array(w * h);
-  const stack: number[] = [];
-  for (let start = 0; start < marks.length; start++) {
-    if (!marks[start] || seen[start]) continue;
-    const run: number[] = [];
-    stack.length = 0;
-    stack.push(start);
-    seen[start] = 1;
-    while (stack.length) {
-      const i = stack.pop() as number;
-      run.push(i);
-      const x = i % w;
-      const y = (i / w) | 0;
-      const n4 = [i - 1, i + 1, i - w, i + w];
-      for (const j of n4) {
-        if (j < 0 || j >= marks.length || seen[j] || !marks[j]) continue;
-        const jx = j % w;
-        const jy = (j / w) | 0;
-        if (Math.abs(jx - x) + Math.abs(jy - y) !== 1) continue;
-        seen[j] = 1;
-        stack.push(j);
-      }
-    }
-    if (run.length < 8) continue;
-    run.sort((a, b) => (a % w) - (b % w) || ((a / w) | 0) - ((b / w) | 0));
-    const stairs = 1 + ((run.length / 22) | 0);
-    const stride = Math.max(6, (run.length / (stairs + 1)) | 0);
-    const offset = randInt(rng, 2, Math.min(5, stride - 1));
-    for (let n = 0; n < run.length; n++) {
-      const i = run[n];
-      const x = i % w;
-      const y = (i / w) | 0;
-      if (isWorldRim(x, y, w, h)) continue;
-      if (plan[i] === Tile.Water || plan[i] === Tile.Gorge || plan[i] === Tile.Bridge) continue;
-      const isStair = (n + offset) % stride === 0;
-      stamp(plan, i, isStair ? Tile.Steps : Tile.Cliff);
-    }
-  }
 }
 
 /**
