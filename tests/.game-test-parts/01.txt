@@ -1,0 +1,54 @@
+      world.tiles[y * world.w + x] = Tile.Grass;
+      // Well above any water line these tests will reach.
+      world.elev[y * world.w + x] = 250;
+    }
+  }
+}
+
+let state: GameState;
+
+beforeEach(() => {
+  state = createGame(generateWorld(4242, SMALL));
+});
+
+describe('game: setup', () => {
+  it('starts the player at spawn with three hearts and nothing carried', () => {
+    expect(state.player.hearts).toBe(3);
+    expect(state.player.maxHearts).toBe(3);
+    expect(state.carried).toEqual([0, 0, 0, 0]);
+    expect(state.delivered).toEqual([0, 0, 0, 0]);
+    expect(state.phase).toBe('playing');
+
+    const tx = Math.floor((state.player.x + PLAYER_W / 2) / TILE_PX);
+    const ty = Math.floor((state.player.y + PLAYER_H / 2) / TILE_PX);
+    expect(tx).toBe(state.world.spawn.x);
+    expect(ty).toBe(state.world.spawn.y);
+  });
+
+  it('opens the camera on the panel containing spawn', () => {
+    expect(state.camera.panelX).toBe(Math.floor(state.world.spawn.x / PANEL_W));
+    expect(state.camera.panelY).toBe(Math.floor(state.world.spawn.y / PANEL_H));
+  });
+
+  it('has only the spawn panel on the map', () => {
+    const seen = visitedCells(state.exploredOverworld, state.world.params.panelsX);
+    expect(seen).toEqual([{ x: state.camera.panelX, y: state.camera.panelY }]);
+  });
+});
+
+describe('game: movement', () => {
+  beforeEach(() => {
+    clearArea(state.world, state.world.spawn.x, state.world.spawn.y, 6);
+    placeAt(state, state.world.spawn.x, state.world.spawn.y);
+  });
+
+  it('walks in the direction pressed', () => {
+    const startX = state.player.x;
+    run(state, 0.5, { moveX: 1, moveY: 0, attackPressed: false });
+    expect(state.player.x).toBeGreaterThan(startX);
+    expect(state.player.dir).toBe(Dir.Right);
+  });
+
+  it('does not move diagonally faster than straight', () => {
+    const straight = createGame(generateWorld(4242, SMALL));
+    clearArea(straight.world, straight.world.spawn.x, straight.world.spawn.y, 8);

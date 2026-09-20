@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BOAT_COST_FIBER, BOAT_COST_WOOD } from '../src/core/boat.js';
 import { TILE_PX, withParams } from '../src/core/config.js';
 import { FLOOD_RISE_PER_DAY, floodDepth } from '../src/core/flood.js';
+import { InteriorKind } from '../src/core/interior.js';
 import { Resource, Tile } from '../src/core/tiles.js';
 import { generateWorld } from '../src/core/worldgen/index.js';
 import {
@@ -42,6 +43,17 @@ function clearArea(state: GameState, tx: number, ty: number, radius: number): vo
   }
 }
 
+
+function enterCarpenter(state: GameState): void {
+  const room = state.world.interiors.find((r) => r.kind === InteriorKind.Carpenter);
+  expect(room).toBeDefined();
+  if (!room) return;
+  placeAt(state, state.world.boatYard.x, state.world.boatYard.y);
+  step(state, INTERACT, 1 / 60);
+  expect(state.location.kind).toBe('interior');
+  placeAt(state, room.focus.x, room.focus.y);
+}
+
 describe('boat: the slipway', () => {
   it('places a reachable slipway in the world', () => {
     const world = generateWorld(4242, SMALL);
@@ -50,7 +62,7 @@ describe('boat: the slipway', () => {
 
   it('names the price before you pay', () => {
     const state = createGame(generateWorld(4242, SMALL));
-    placeAt(state, state.world.boatYard.x, state.world.boatYard.y);
+    enterCarpenter(state);
     const prompt = actionPrompt(state);
     expect(prompt?.label).toContain(String(BOAT_COST_WOOD));
     expect(prompt?.label).toContain(String(BOAT_COST_FIBER));
@@ -59,10 +71,9 @@ describe('boat: the slipway', () => {
 
   it('frames a skiff from wood and fiber', () => {
     const state = createGame(generateWorld(4242, SMALL));
-    placeAt(state, state.world.boatYard.x, state.world.boatYard.y);
     state.carried[Resource.Wood] = BOAT_COST_WOOD + 1;
     state.carried[Resource.Fiber] = BOAT_COST_FIBER + 2;
-
+    enterCarpenter(state);
     step(state, INTERACT, 1 / 60);
 
     expect(state.hasBoat).toBe(true);
@@ -73,9 +84,9 @@ describe('boat: the slipway', () => {
 
   it('refuses when the stock is short', () => {
     const state = createGame(generateWorld(4242, SMALL));
-    placeAt(state, state.world.boatYard.x, state.world.boatYard.y);
     state.carried[Resource.Wood] = 1;
     state.carried[Resource.Fiber] = 1;
+    enterCarpenter(state);
     step(state, INTERACT, 1 / 60);
     expect(state.hasBoat).toBe(false);
     expect(state.carried[Resource.Wood]).toBe(1);

@@ -306,7 +306,7 @@ function stampCamp(plan: Uint8Array, w: number, h: number, spawn: number): void 
     if (onPanelEdge(nx, ny)) continue;
     const i = ny * w + nx;
     if (plan[i] === Tile.Water || plan[i] === Tile.Cliff || plan[i] === Tile.ArkSite) continue;
-    overwrite(plan, i, Tile.Tent);
+    overwrite(plan, i, Tile.CampTent);
     return;
   }
 }

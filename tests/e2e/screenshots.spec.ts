@@ -150,7 +150,7 @@ test.describe('game', () => {
       const s = w.flood.state;
       const d = s.world.dungeons[0];
 
-      s.location = { kind: 'dungeon', dungeonId: 0, returnTo: { x: 1, y: 1 } };
+      s.location = { kind: 'dungeon', interiorId: -1, dungeonId: 0, returnTo: { x: 1, y: 1 } };
       const spot = d.stairs;
       d.tiles[spot.y * d.w + spot.x] = 0x40; // floor
       d.tiles[spot.y * d.w + spot.x + 1] = 0x50; // chasm

@@ -303,6 +303,17 @@ const TILE_PAINTERS: Record<number, Painter> = {
     px(c, 3, 7, 3, 2, '#efe6d2');
   },
 
+  [Tile.CampTent]: (c) => {
+    base(c, PALETTE.dirt);
+    px(c, 1, 12, 14, 3, '#8f5f30');
+    px(c, 2, 6, 12, 8, PALETTE.tent);
+    px(c, 4, 3, 8, 5, PALETTE.tent);
+    px(c, 6, 1, 4, 4, '#d8c48a');
+    px(c, 7, 8, 2, 7, '#5a3a18');
+    px(c, 3, 7, 3, 2, '#efe6d2');
+    px(c, 7, 12, 2, 3, '#3a2412');
+  },
+
   [Tile.House]: (c) => {
     base(c, PALETTE.dirt);
     px(c, 1, 7, 14, 8, PALETTE.house);

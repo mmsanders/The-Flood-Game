@@ -9,6 +9,7 @@
 
 import { PANEL_H, PANEL_W, type WorldParams } from './config.js';
 import type { Dungeon } from './dungeon.js';
+import type { Interior } from './interior.js';
 import type { TileMap } from './tilemap.js';
 import { Biome, Tile } from './tiles.js';
 import type { Animal } from './animals.js';
@@ -79,6 +80,8 @@ export interface World extends TileMap {
   animals: Animal[];
   /** One per biome. Entrances are linked by index from the matching Poi. */
   dungeons: Dungeon[];
+  /** Shops, hermitage, carpenter, Noah's tent — one-room maps. */
+  interiors: Interior[];
   stats: WorldStats;
 }
 

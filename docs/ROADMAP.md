@@ -11,9 +11,10 @@ ones land on foundations that already exist.
 Nothing here is precious. Where I disagree with a note I say so and say why, and the note
 wins if you still want it.
 
-**Status:** Waves 0–2 have shipped (frame budget; the world people left behind; the
-depth ladder and the things that beat it), along with the round-two fixes in *What the
-first full run changed* below. What remains is Waves 3 through 6.
+**Status:** Waves 0–3 have shipped (frame budget; the world people left behind; the
+depth ladder and the things that beat it; interiors and instruments), along with the
+round-two fixes in *What the first full run changed* below. What remains is Waves 4
+through 6.
 
 > Full Wave 0 / Wave 1 prose is unchanged from `main` history. This file keeps the
 > Wave 2 write-up and the forward plan; expand from `main` if you need the long
@@ -69,8 +70,7 @@ the contextual prompt — perception, not reach.
 ### 2.3 Barter, not money (notes 7, 20) — shipped
 
 No currency. Marked town frontage (`TownDoor`, labeled Town Market) barters ark materials;
-prices rise as biomes drown. A dedicated `Shop` interior tile is deferred to Wave 3 with
-interiors, so the economy does not have to move twice.
+prices rise as biomes drown. Markets now sit behind shop doors (Wave 3); the outdoor `TownDoor` is the mouth.
 
 ### 2.4 Tools that break (notes 12, 13, 18, 20) — shipped
 
@@ -81,20 +81,29 @@ yield one unit. Tool-first recovery when a shrine is about to drown.
 
 Off the ground: dungeon chests remain; loose overworld hearts are retired at run start;
 shop heart at a painful barter price; mountain hermit trades a rescued sheep for a heart
-(outdoor scaffold until Wave 3 interiors).
+(now through the hermit interior).
 
 ---
 
-## Wave 3 — Doors, and the people behind them
+## Wave 3 — Doors, and the people behind them *(shipped)*
 
-### 3.1 Interiors
+### 3.1 Interiors — shipped
 
-One-room interior primitive for hermit, shop, carpenter, Noah's tent. Move Wave 2 markets
-behind doors; optional distinct shop tile.
+One-room interior primitive (same enter-from-south / stairs-back pattern as dungeon
+rooms) for hermit, shop, carpenter, and Noah's tent. Town markets and the hermit trade
+happen at the focus tile inside; the slipway opens the carpenter; the camp tent at
+spawn is enterable. No second room system.
 
-### 3.2 The instruments
+### 3.2 The instruments — shipped
 
-Chart, Lodestone, Dove. Sounding Line and Galoshes already land in Wave 2.
+Chart (colours the minimap; explored panels stay grey without it), Lodestone (bearing
+to the ark on land or at sea), Dove (scout dry land or free beasts). Sounding Line and
+Galoshes remain Wave 2. All three are bartered in shop interiors at prices that compete
+with ark materials.
+
+**Deferred deliberately:** fullscreen map key (Chart still drives HUD colour); a
+distinct `Shop` tile art beyond the existing door (TownDoor / CampTent mouths are
+enough).
 
 ## Wave 4 — Contour ledges
 
@@ -118,9 +127,9 @@ Wave 1  landforms, settlements, roads       ← shipped
         round-two fixes                     ← shipped
 Wave 2  the depth ladder, the skiff as an   ← shipped
         object, barter, tools
-Wave 3  interiors, the people in them,      ← next
+Wave 3  interiors, the people in them,      ← shipped
         the item set
-Wave 4  contour ledges                      ← risky; own session
+Wave 4  contour ledges                      ← next; risky; own session
 Wave 5  the prologue, dungeon flood,
         animal husbandry
 Wave 6  the desert                          ← independent; whenever

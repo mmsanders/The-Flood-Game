@@ -121,6 +121,8 @@ export const TILE_COLOR: Record<number, string> = {
   0x34: PALETTE.dock,
   0x35: PALETTE.shrine,
   0x36: PALETTE.stoneGround,
+  0x37: PALETTE.dock,
+  0x38: PALETTE.tent,
 
   0x40: PALETTE.dungeonFloor,
   0x41: PALETTE.dungeonWall,

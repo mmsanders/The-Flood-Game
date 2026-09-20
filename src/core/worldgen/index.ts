@@ -17,9 +17,10 @@ import {
   tileWidth,
 } from '../config.js';
 import { generateDungeonRoom } from '../dungeon.js';
+import { generateInterior, InteriorKind } from '../interior.js';
 import { checkSolvable } from '../resources.js';
 import { deriveSeed } from '../rng.js';
-import { BIOME_COUNT, RESOURCE_COUNT, isWalkable, resourceOf } from '../tiles.js';
+import { BIOME_COUNT, Biome, RESOURCE_COUNT, Tile, isWalkable, resourceOf } from '../tiles.js';
 import { PoiKind, type World, type WorldStats } from '../world.js';
 import { spawnAnimals } from '../animals.js';
 import { ensureConnected } from './connectivity.js';
@@ -77,6 +78,8 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
     .filter((poi) => poi.kind === PoiKind.Dungeon)
     .map((poi, i) => generateDungeonRoom(seed, i, poi.biome, { x: poi.x, y: poi.y }));
 
+  const interiors = placeInteriors(tiles, biome, w, h, spawn, boatYard);
+
   const solvability = checkSolvable(
     tiles,
     elev,
@@ -114,6 +117,7 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
     pastures: livePastures,
     animals,
     dungeons,
+    interiors,
     stats,
   };
 }
@@ -139,6 +143,54 @@ export function generateValidWorld(
   }
 
   return { world, attempts };
+}
+
+
+/** Wave-three doors: every market, the hermitage, the slipway, Noah's tent. */
+function placeInteriors(
+  tiles: Uint8Array,
+  biomePlane: Uint8Array,
+  w: number,
+  h: number,
+  spawn: { x: number; y: number },
+  boatYard: { x: number; y: number },
+) {
+  const interiors: ReturnType<typeof generateInterior>[] = [];
+  let id = 0;
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (tiles[i] !== Tile.TownDoor) continue;
+      const b = biomePlane[i] as Biome;
+      const kind = b === Biome.Mountain ? InteriorKind.Hermit : InteriorKind.Shop;
+      interiors.push(generateInterior(kind, id++, b, { x, y }));
+    }
+  }
+
+  interiors.push(
+    generateInterior(
+      InteriorKind.Carpenter,
+      id++,
+      biomePlane[boatYard.y * w + boatYard.x] as Biome,
+      { x: boatYard.x, y: boatYard.y },
+    ),
+  );
+
+  for (let dy = -2; dy <= 2; dy++) {
+    for (let dx = -2; dx <= 2; dx++) {
+      const x = spawn.x + dx;
+      const y = spawn.y + dy;
+      if (x < 0 || y < 0 || x >= w || y >= h) continue;
+      if (tiles[y * w + x] !== Tile.CampTent) continue;
+      interiors.push(
+        generateInterior(InteriorKind.NoahTent, id++, biomePlane[y * w + x] as Biome, { x, y }),
+      );
+      return interiors;
+    }
+  }
+
+  return interiors;
 }
 
 function collectStats(

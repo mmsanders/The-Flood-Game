@@ -121,6 +121,7 @@ function isReserved(tile: number): boolean {
     tile === Tile.ArkSite ||
     tile === Tile.DungeonEntrance ||
     tile === Tile.BoatYard ||
+    tile === Tile.CampTent ||
     tile === Tile.HeartContainer ||
     tile === Tile.Steps ||
     tile === Tile.Bridge
@@ -272,7 +273,7 @@ function stepCost(tile: number): number {
   // bridge one if the alternative is not arriving.
   if (tile === Tile.Gorge) return 24;
   if (tile === Tile.Cliff) return 12;
-  if (tile === Tile.TownDoor || tile === Tile.Shrine || tile === Tile.BoatYard || tile === Tile.ArkSite) {
+  if (tile === Tile.TownDoor || tile === Tile.Shrine || tile === Tile.BoatYard || tile === Tile.CampTent || tile === Tile.ArkSite) {
     return 3;
   }
   if (
