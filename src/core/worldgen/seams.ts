@@ -239,6 +239,7 @@ function isPlannedKeep(tile: number): boolean {
     tile === Tile.HeartContainer ||
     tile === Tile.TownDoor ||
     tile === Tile.BoatYard ||
+    tile === Tile.CampTent ||
     tile === Tile.Shrine
   );
 }
