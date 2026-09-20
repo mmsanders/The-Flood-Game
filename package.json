@@ -14,10 +14,10 @@
     "assemble:wave3": "node scripts/assemble-wave3.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "^1.48.0",
-    "@types/node": "^22.7.4",
-    "typescript": "^5.6.2",
-    "vite": "^5.4.8",
-    "vitest": "^2.1.1"
+    "@playwright/test": "^1.49.1",
+    "@types/node": "^26.4.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7",
+    "vitest": "^2.1.8"
   }
 }
