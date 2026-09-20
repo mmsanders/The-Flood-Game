@@ -14,6 +14,9 @@ export const enum ItemKind {
   Pickaxe = 2,
   SoundingLine = 3,
   HeartContainer = 4,
+  Chart = 5,
+  Lodestone = 6,
+  Dove = 7,
 }
 
 export const ITEM_NAMES: Record<ItemKind, string> = {
@@ -22,6 +25,9 @@ export const ITEM_NAMES: Record<ItemKind, string> = {
   [ItemKind.Pickaxe]: 'Pickaxe',
   [ItemKind.SoundingLine]: 'Sounding Line',
   [ItemKind.HeartContainer]: 'Heart Container',
+  [ItemKind.Chart]: 'Chart',
+  [ItemKind.Lodestone]: 'Lodestone',
+  [ItemKind.Dove]: 'Dove',
 };
 
 export interface BarterPart {
@@ -34,14 +40,13 @@ export const AXE_DURABILITY = 14;
 export const PICKAXE_DURABILITY = 14;
 
 /**
- * The central marked building in each settlement is the Wave-two market
- * frontage. Wave three can put the same stock behind an interior without
- * changing the economy.
+ * Stock behind the shop door. Same economy as Wave two, now indoors; instruments
+ * compete with ark materials at prices that bite but do not strand a run.
  */
 export const SHOP_STOCK: Record<Biome, readonly ItemKind[]> = {
-  [Biome.Valley]: [ItemKind.Galoshes, ItemKind.HeartContainer],
-  [Biome.Forest]: [ItemKind.Axe, ItemKind.SoundingLine],
-  [Biome.Scrub]: [ItemKind.Pickaxe, ItemKind.HeartContainer],
+  [Biome.Valley]: [ItemKind.Galoshes, ItemKind.Dove, ItemKind.HeartContainer],
+  [Biome.Forest]: [ItemKind.Axe, ItemKind.SoundingLine, ItemKind.Chart],
+  [Biome.Scrub]: [ItemKind.Pickaxe, ItemKind.Lodestone, ItemKind.HeartContainer],
   [Biome.Mountain]: [],
 };
 
@@ -67,6 +72,18 @@ export const ITEM_COST: Record<ItemKind, readonly BarterPart[]> = {
     { resource: Resource.Fiber, amount: 10 },
     { resource: Resource.Wood, amount: 10 },
     { resource: Resource.Stone, amount: 8 },
+  ],
+  [ItemKind.Chart]: [
+    { resource: Resource.Fiber, amount: 4 },
+    { resource: Resource.Wood, amount: 6 },
+  ],
+  [ItemKind.Lodestone]: [
+    { resource: Resource.Stone, amount: 8 },
+    { resource: Resource.Pitch, amount: 2 },
+  ],
+  [ItemKind.Dove]: [
+    { resource: Resource.Fiber, amount: 6 },
+    { resource: Resource.Wood, amount: 3 },
   ],
 };
 
