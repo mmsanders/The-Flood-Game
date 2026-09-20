@@ -60,8 +60,11 @@ export function paintTiles(input: PaintInput): Uint8Array {
         gain: 0.5,
         scale: 26,
       });
+      // Slightly tighter patches, thinner scatter between them — playtest
+      // found nodes felt ubiquitous near spawn; clustering restores "find a
+      // stand" without changing shrine/ark affordability validation.
       const inPatch = cluster > 0.58;
-      const p = params.resourceDensity[b] * (inPatch ? 4.5 : 0.12);
+      const p = params.resourceDensity[b] * (inPatch ? 5.0 : 0.08);
       if (rng() < p && !onPanelEdge(x, y)) {
         tiles[i] = BIOME_RESOURCE_TILE[b];
       }
