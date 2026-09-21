@@ -207,6 +207,16 @@ export function isWalkable(tile: number): boolean {
   return WALKABLE[tile & 0xff] === 1;
 }
 
+/**
+ * High-ground tiles that draw an elevation face on the tile below.
+ * Cliff blocks; Steps is the cut through a face. Anything else that merely
+ * *looks* like a drop (a biome seam, a 40-unit slope of grass) must not
+ * pretend to be a wall.
+ */
+export function isCliffFace(tile: number): boolean {
+  return tile === Tile.Cliff || tile === Tile.Steps;
+}
+
 /** Obstacles that can be cleared by spending ark material. */
 export function isClearableObstacle(tile: number): boolean {
   return tile === Tile.Chasm || tile === Tile.Ledge || tile === Tile.DoorLocked;

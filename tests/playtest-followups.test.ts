@@ -1,11 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { withParams } from '../src/core/config.js';
-import { Tile, isWalkable } from '../src/core/tiles.js';
+import { DEFAULT_PARAMS, withParams } from '../src/core/config.js';
+import { Tile, isCliffFace, isWalkable } from '../src/core/tiles.js';
 import { generateWorld } from '../src/core/worldgen/index.js';
+import { ESCARPMENT_DROP } from '../src/core/worldgen/cliffGaps.js';
 import { SettlementKind } from '../src/core/world.js';
 
 const SMALL = withParams({ panelsX: 8, panelsY: 20 });
 const SEEDS = Array.from({ length: 24 }, (_, i) => i * 7919 + 13);
+
+/** Mouths and monuments that may sit on a drop without becoming Cliff. */
+function isReservedMouth(tile: number): boolean {
+  return (
+    tile === Tile.Steps ||
+    tile === Tile.Bridge ||
+    tile === Tile.TownDoor ||
+    tile === Tile.BoatYard ||
+    tile === Tile.Shrine ||
+    tile === Tile.ArkSite ||
+    tile === Tile.DungeonEntrance ||
+    tile === Tile.CampTent ||
+    tile === Tile.Skiff ||
+    tile === Tile.HeartContainer
+  );
+}
 
 describe('playtest: road auras', () => {
   it.each(SEEDS.slice(0, 8))('seed %i leaves wilderness gaps between town auras', (seed) => {
@@ -83,9 +100,13 @@ describe('playtest: road auras', () => {
 });
 
 describe('playtest: impassable cliffs', () => {
-  it('marks Cliff tiles as non-walkable', () => {
+  it('marks Cliff tiles as non-walkable and only Cliff/Steps as faces', () => {
     expect(isWalkable(Tile.Cliff)).toBe(false);
     expect(isWalkable(Tile.Steps)).toBe(true);
+    expect(isCliffFace(Tile.Cliff)).toBe(true);
+    expect(isCliffFace(Tile.Steps)).toBe(true);
+    expect(isCliffFace(Tile.Grass)).toBe(false);
+    expect(isCliffFace(Tile.Rock)).toBe(false);
   });
 
   it.each(SEEDS.slice(0, 8))('seed %i places impassable cliff faces with stairs on wide bands', (seed) => {
@@ -114,4 +135,26 @@ describe('playtest: impassable cliffs', () => {
     expect(cliffs, `seed ${seed} has no cliff faces`).toBeGreaterThan(20);
     expect(stepsBesideCliff, `seed ${seed} has no stairs through cliffs`).toBeGreaterThan(0);
   });
+
+  it.each([...SEEDS.slice(0, 8), 20260830])(
+    'seed %i: a hard elevation drop is a wall, not walkable ground',
+    (seed) => {
+      const params = seed === 20260830 ? DEFAULT_PARAMS : SMALL;
+      const world = generateWorld(seed, params);
+      let drops = 0;
+      let walkableFaces = 0;
+      for (let y = 2; y < world.h - 3; y++) {
+        for (let x = 2; x < world.w - 2; x++) {
+          const i = y * world.w + x;
+          if (world.elev[i] - world.elev[i + world.w] < ESCARPMENT_DROP) continue;
+          drops++;
+          const t = world.tiles[i];
+          if (isWalkable(t) && !isReservedMouth(t)) walkableFaces++;
+        }
+      }
+      expect(drops, `seed ${seed} has no hard elevation drops`).toBeGreaterThan(0);
+      expect(walkableFaces, `seed ${seed} has ${walkableFaces} walkable elevation faces`).toBe(0);
+      expect(world.stats.connected, `seed ${seed} disconnected after sealing cliffs`).toBe(true);
+    },
+  );
 });

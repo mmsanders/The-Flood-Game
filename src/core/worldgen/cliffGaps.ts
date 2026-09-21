@@ -2,6 +2,9 @@
  * Escarpment helpers: gap-fill for cliff faces.
  */
 
+/** Elevation units of southward drop that read as a cliff, not a slope. */
+export const ESCARPMENT_DROP = 40;
+
 /** Minimum cliff-run length that earns stairs through the face. */
 export const WIDE_CLIFF = 28;
 

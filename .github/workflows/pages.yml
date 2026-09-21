@@ -38,8 +38,11 @@ jobs:
       - run: npm ci
 
       - name: Build
-        # Pages serves the site from /<repo>/, so the asset base has to match.
-        run: npx vite build
+        # Same command as CI. Wave 3 briefly split the game sources into
+        # blobs that only `npm run build` assembled; Pages ran bare vite and
+        # shipped nothing. Keep the two workflows on one script so that
+        # cannot happen again. VITE_BASE is Pages' /<repo>/ prefix.
+        run: npm run build
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
 
