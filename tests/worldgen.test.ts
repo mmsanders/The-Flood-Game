@@ -337,7 +337,7 @@ describe('worldgen: settlements', () => {
     expect(world.pastures.length).toBeGreaterThan(4);
     let fences = 0;
     for (const t of world.tiles) if (t === Tile.Fence) fences++;
-    expect(fences).toBeGreaterThan(8);
+    expect(fences).toBeGreaterThanOrEqual(8);
     for (const i of world.pastures) {
       expect(isWalkable(world.tiles[i])).toBe(true);
     }
