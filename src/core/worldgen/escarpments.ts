@@ -5,7 +5,7 @@ import { randInt, type Rng } from '../rng.js';
 import { Tile } from '../tiles.js';
 import { stamp } from './plan.js';
 import { isWorldRim } from './seams.js';
-import { WIDE_CLIFF, fillCliffGaps } from './cliffGaps.js';
+import { ESCARPMENT_DROP, WIDE_CLIFF, fillCliffGaps } from './cliffGaps.js';
 
 /**
  * Where elevation drops a biome band (or more) to the south, a cliff face.
@@ -24,7 +24,7 @@ export function cutEscarpments(
   w: number,
   h: number,
 ): void {
-  const drop = 40;
+  const drop = ESCARPMENT_DROP;
   const marks = new Uint8Array(w * h);
   for (let y = 2; y < h - 3; y++) {
     for (let x = 2; x < w - 2; x++) {
@@ -63,7 +63,9 @@ export function cutEscarpments(
         stack.push(j);
       }
     }
-    if (run.length < 8) continue;
+    // Stamp every run, including short bluffs. Skipping runs under 8 left
+    // elevation-drop shadows drawn on walkable grass — the playtest lie.
+    if (run.length < 1) continue;
     run.sort((a, b) => (a % w) - (b % w) || ((a / w) | 0) - ((b / w) | 0));
 
     // Stairs only on wide faces, and sparsely. A run under WIDE_CLIFF is a
@@ -96,5 +98,56 @@ export function cutEscarpments(
         }
       }
     }
+  }
+}
+
+/**
+ * After paint, any leftover walkable ground on a hard elevation drop becomes
+ * a cliff. Landforms stamp most of these; this catch-up is what keeps the
+ * renderer honest — a 40-unit face is never grass you stroll through.
+ *
+ * Reserved mouths (doors, shrines, the ark) stay put; connectivity may still
+ * cut Steps through a sealed band so the world remains solvable.
+ */
+export function sealElevationFaces(
+  tiles: Uint8Array,
+  elev: Uint8Array,
+  w: number,
+  h: number,
+): void {
+  for (let y = 2; y < h - 3; y++) {
+    for (let x = 2; x < w - 2; x++) {
+      const i = y * w + x;
+      if (elev[i] - elev[i + w] < ESCARPMENT_DROP) continue;
+      if (!canSealAsCliff(tiles[i])) continue;
+      tiles[i] = Tile.Cliff;
+    }
+  }
+}
+
+function canSealAsCliff(tile: number): boolean {
+  switch (tile) {
+    case Tile.Water:
+    case Tile.Gorge:
+    case Tile.Bridge:
+    case Tile.Steps:
+    case Tile.Cliff:
+    case Tile.ArkSite:
+    case Tile.DungeonEntrance:
+    case Tile.HeartContainer:
+    case Tile.TownDoor:
+    case Tile.BoatYard:
+    case Tile.Shrine:
+    case Tile.Pedestal:
+    case Tile.Skiff:
+    case Tile.CampTent:
+    case Tile.House:
+    case Tile.Tent:
+    case Tile.StoneWall:
+    case Tile.Fence:
+    case Tile.Stairs:
+      return false;
+    default:
+      return true;
   }
 }

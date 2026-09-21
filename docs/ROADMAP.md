@@ -116,7 +116,10 @@ Shipped on `playtest-road-auras-cliffs`:
 - **Impassable cliff faces.** Escarpment bands are thickened and gap-filled;
   `Tile.Cliff` stays blocking. Stairs are cut only through really wide bands
   (plus whatever connectivity must open for solvability). Roads no longer pave
-  Steps through every cliff they touch.
+  Steps through every cliff they touch. The elevation-face overlay is drawn
+  only on `Cliff`/`Steps` — a grass slope no longer pretends to be a wall —
+  and any remaining 40-unit drop of walkable ground is sealed to `Cliff`
+  before connectivity repair.
 - **Resource abundance.** Modest ~15% density cut and slightly tighter
   clustering after playtest feedback that nodes never felt scarce. Shrine/ark
   solvability margins retained; revisit with more play data if still too easy.

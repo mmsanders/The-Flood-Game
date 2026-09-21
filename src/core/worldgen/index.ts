@@ -2,7 +2,7 @@
  * World generation pipeline.
  *
  *   elevation → landforms → settlements → siting → roads → paint →
- *   connectivity repair → validation
+ *   seal elevation faces → connectivity repair → validation
  *
  * Later passes overwrite earlier ones via the plan buffer, so a road stays a
  * road and a pasture stays a pasture instead of growing a random tree. Each
@@ -25,6 +25,7 @@ import { PoiKind, type World, type WorldStats } from '../world.js';
 import { spawnAnimals } from '../animals.js';
 import { ensureConnected } from './connectivity.js';
 import { generateElevation } from './elevation.js';
+import { sealElevationFaces } from './escarpments.js';
 import { carveLandforms } from './landforms.js';
 import { paintTiles } from './paint.js';
 import { freshPlan } from './plan.js';
@@ -54,6 +55,10 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
   });
 
   const tiles = paintTiles({ seed, params, elev, biome, plan });
+
+  // Catch-up: painted grass on a hard drop becomes Cliff before connectivity
+  // punches stairs through, so a visual face is never walkable ground.
+  sealElevationFaces(tiles, elev, w, h);
 
   const connectivity = ensureConnected(tiles, biome, params);
   // After the repair, not before: that pass cuts its own stairs when it carves

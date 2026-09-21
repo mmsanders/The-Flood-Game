@@ -354,11 +354,13 @@ describe('worldgen: settlements', () => {
           const nx = x + dx;
           const ny = y + dy;
           if (nx < 0 || ny < 0 || nx >= world.w || ny >= world.h) continue;
-          if (world.tiles[ny * world.w + nx] === Tile.Tent) tent = true;
+          const tile = world.tiles[ny * world.w + nx];
+          if (tile === Tile.Tent || tile === Tile.CampTent) tent = true;
         }
       }
       expect(tent, `seed ${seed} spawn has no tent`).toBe(true);
       expect(world.tiles[y * world.w + x]).not.toBe(Tile.Tent);
+      expect(world.tiles[y * world.w + x]).not.toBe(Tile.CampTent);
     }
   });
 
