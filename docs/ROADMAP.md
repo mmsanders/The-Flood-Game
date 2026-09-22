@@ -126,6 +126,16 @@ Shipped on `playtest-road-auras-cliffs`:
 - **Deferred:** scattered wayfinding signs if aura gaps prove too hard; full
   elevation contour ledges remain Wave 4.
 
+## Playtest notes (post-cliff)
+
+Gorge is a continuous channel with one bridge per biome. Scattered overworld
+ladders are gone. Dungeon chests hold the rods and instruments — Budding Rod
+behind pitch in the mountain, Serpent Rod behind stone in the scrub,
+Chart / Galoshes split across forest and valley behind wood and reed.
+Remaining kit is shop or hermit. Biome seams block north–south as a dark
+cliff line with sideways stairs. A beached skiff keeps the ground it was
+set on.
+
 ## Wave 4 — Contour ledges
 
 Risky global movement constraint; own session.
