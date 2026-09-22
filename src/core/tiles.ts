@@ -92,6 +92,12 @@ export const enum Tile {
    * are carrying.
    */
   PitchSeal = 0x54,
+  /** Forest vault — parted by a Rod that knows gopher wood. */
+  WoodSeal = 0x55,
+  /** Scrub vault — parted by a Rod that knows stone. */
+  StoneSeal = 0x56,
+  /** Valley vault — parted by a Rod that knows fiber. Introduces the mechanic. */
+  ReedSeal = 0x57,
 
   // -- 0x60 dungeon pickups -------------------------------------------------
   Key = 0x60,
@@ -190,6 +196,9 @@ const BLOCKING: readonly Tile[] = [
   Tile.Ledge,
   Tile.DoorLocked,
   Tile.PitchSeal,
+  Tile.WoodSeal,
+  Tile.StoneSeal,
+  Tile.ReedSeal,
 ];
 
 /**
@@ -261,7 +270,7 @@ export function carveTo(biome: Biome): Tile {
  */
 export function carveOpening(tile: number, biome: Biome): Tile {
   if (tile === Tile.Cliff) return Tile.Steps;
-  if (tile === Tile.Water) return Tile.Bridge;
+  if (tile === Tile.Water || tile === Tile.Gorge) return Tile.Bridge;
   return carveTo(biome);
 }
 
@@ -312,6 +321,9 @@ export const TILE_NAMES: Record<number, string> = {
   [Tile.DoorLocked]: 'Locked Door',
   [Tile.Pit]: 'Pit',
   [Tile.PitchSeal]: 'Seal of Pitch',
+  [Tile.WoodSeal]: 'Seal of Wood',
+  [Tile.StoneSeal]: 'Seal of Stone',
+  [Tile.ReedSeal]: 'Seal of Reed',
   [Tile.Key]: 'Key',
   [Tile.Chest]: 'Chest',
 };
