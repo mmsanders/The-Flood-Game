@@ -32,6 +32,8 @@ function enterCost(tile: number): number {
       return 3; // a causeway across a pond, or a ford across the river
     case Tile.Cliff:
       return MAX_COST; // a mountain pass: expensive, but never impossible
+    case Tile.Gorge:
+      return 20; // use a planned bridge; do not punch extra fords
     default:
       return 1;
   }

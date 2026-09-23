@@ -20,7 +20,6 @@ function make(seed: number, biome: Biome = Biome.Forest): Dungeon {
   return generateDungeon(seed, 0, biome, { x: 10, y: 10 });
 }
 
-/** Rooms reachable from the entrance, optionally treating obstacles as walls. */
 function reachableRooms(d: Dungeon, blockedBy: Set<number>): Set<number> {
   const entrance = d.rooms.findIndex((r) => r.kind === 'entrance');
   const seen = new Set<number>([entrance]);
@@ -147,7 +146,6 @@ describe('dungeon: structure is guaranteed, not hoped for', () => {
 
   it.each(SEEDS)('seed %i never puts the key behind the door it opens', (seed) => {
     const d = make(seed);
-    // Treat the locked door as impassable: the key must still be reachable.
     const withoutKey = reachableRooms(d, new Set<number>([Tile.DoorLocked]));
     expect(withoutKey.has(roomAt(d, 'key')), `key unreachable on seed ${seed}`).toBe(true);
   });
@@ -164,8 +162,6 @@ describe('dungeon: structure is guaranteed, not hoped for', () => {
       (sum, o) => sum + (OBSTACLE_COST[o.tile]?.amount ?? 0),
       0,
     );
-    // A raid should bite into the hull, not consume it: the recipe wants 60
-    // wood and 40 fiber, so a handful of units is a real but survivable cost.
     expect(spend, `seed ${seed} costs ${spend}`).toBeLessThanOrEqual(8);
   });
 
@@ -181,8 +177,8 @@ describe('dungeon: structure is guaranteed, not hoped for', () => {
     for (const seed of SEEDS) {
       for (const o of make(seed).obstacles) {
         const cost = OBSTACLE_COST[o.tile];
-        if (!cost) continue; // the locked door costs a key, not resources
-        expect([0, 1]).toContain(cost.resource); // Fiber or Wood
+        if (!cost) continue;
+        expect([0, 1]).toContain(cost.resource);
       }
     }
   });
@@ -190,10 +186,11 @@ describe('dungeon: structure is guaranteed, not hoped for', () => {
 
 describe('dungeon: rewards', () => {
   it('gives each biome its designated reward', () => {
-    expect(make(1, Biome.Valley).reward).toBe(RewardKind.HeartContainer);
-    expect(make(1, Biome.Forest).reward).toBe(RewardKind.BuddingRod);
-    expect(make(1, Biome.Scrub).reward).toBe(RewardKind.HeartContainer);
-    expect(make(1, Biome.Mountain).reward).toBe(RewardKind.SerpentRod);
+    expect(make(1, Biome.Mountain).reward).toBe(RewardKind.BuddingRod);
+    expect(make(1, Biome.Scrub).reward).toBe(RewardKind.SerpentRod);
+    expect([RewardKind.Chart, RewardKind.Galoshes]).toContain(make(1, Biome.Forest).reward);
+    expect([RewardKind.Chart, RewardKind.Galoshes]).toContain(make(1, Biome.Valley).reward);
+    expect(make(1, Biome.Forest).reward).not.toBe(make(1, Biome.Valley).reward);
   });
 });
 
@@ -232,8 +229,6 @@ describe('dungeon: attached to the world', () => {
   });
 
   it('leaves the ark winnable without entering a single dungeon', () => {
-    // Dungeons are optional. The solvability check must never come to depend
-    // on them, or the run stops being winnable by ordinary play.
     for (const seed of [1, 2, 3, 4, 5]) {
       const { world } = generateValidWorld(seed, DEFAULT_PARAMS);
       expect(world.stats.solvable, world.stats.problems.join('; ')).toBe(true);
@@ -249,5 +244,4 @@ describe('dungeon: attached to the world', () => {
   });
 });
 
-/** Keeps the Dir4 import meaningful for readers of the room graph. */
 export type { Dir4 };

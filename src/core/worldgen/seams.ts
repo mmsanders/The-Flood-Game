@@ -38,10 +38,6 @@ export function isSeamBlocker(tile: number): boolean {
   );
 }
 
-/**
- * Tiles across a panel boundary from `i`. A corner sits on two seams and
- * returns both neighbours.
- */
 export function seamPartnerIndices(i: number, w: number, h: number): number[] {
   const x = i % w;
   const y = (i / w) | 0;
@@ -55,10 +51,6 @@ export function seamPartnerIndices(i: number, w: number, h: number): number[] {
   return out;
 }
 
-/**
- * If one side of a seam is scenery-blocking, the other side becomes blocking
- * too, in a tile that belongs to its own biome. Openings are left open.
- */
 export function sealPanelSeams(
   tiles: Uint8Array,
   biome: Uint8Array,
@@ -68,9 +60,6 @@ export function sealPanelSeams(
   const w = tileWidth(params);
   const h = tileHeight(params);
 
-  // A counterpart on one seam is a new blocker on the perpendicular seam at
-  // panel corners, so one pass is not a fixed point. Spread is local to the
-  // 2x2 at each corner; a handful of rounds is enough.
   for (let pass = 0; pass < 8; pass++) {
     let changed = false;
     for (let px = 1; px < params.panelsX; px++) {
@@ -91,14 +80,6 @@ export function sealPanelSeams(
   }
 }
 
-/**
- * A solid frame of scenery so walking south, east, north or west until the
- * map stops is a wall you can see, not an invisible bounce.
- *
- * Biome picks the tile: trees in forest, rock in the lowlands and scrub,
- * cliff in the mountains. The south is sea with a sand beach. Connectivity
- * is told not to carve the frame.
- */
 export function wallWorldRim(
   tiles: Uint8Array,
   biome: Uint8Array,
@@ -121,13 +102,11 @@ export function wallWorldRim(
   paintSouthBeach(tiles, w, h);
 }
 
-/** Walkable sand just north of the sea, between the east and west walls. */
 export function paintSouthBeach(tiles: Uint8Array, w: number, h: number): void {
   if (h < 3) return;
   for (let x = 1; x < w - 1; x++) {
     const i = (h - 2) * w + x;
     const north = tiles[(h - 3) * w + x];
-    // Let the river keep its mouth; everywhere else is the strand.
     if (north === Tile.Water) tiles[i] = Tile.Water;
     else if (north === Tile.Bridge) tiles[i] = Tile.Bridge;
     else tiles[i] = Tile.Sand;
@@ -147,11 +126,6 @@ function rimTile(biome: Biome, elev: number): Tile {
   }
 }
 
-/**
- * After connectivity has carved, any leftover one-sided blocker is an
- * invisible wall. Prefer the opening: carve the blocker rather than close
- * the path that just got cut.
- */
 export function openSeamMismatches(
   tiles: Uint8Array,
   biome: Uint8Array,
@@ -218,9 +192,6 @@ function placeCounterpart(
   i: number,
   source: number,
 ): boolean {
-  // Resources and anything the plan placed with intent stay put. A road that
-  // hits a seam next to a tree should keep being a road; connectivity will
-  // open the other side rather than grow a forest over the path.
   if (isResourceNode(tiles[i]) || isPlannedKeep(tiles[i])) return false;
   const next = counterpartTile(biome[i] as Biome, elev[i], source);
   if (tiles[i] === next) return false;
@@ -259,20 +230,8 @@ function counterpartTile(biome: Biome, elev: number, source: number): Tile {
 }
 
 /**
- * Open the ground immediately above and below every stair.
- *
- * A stair is the one way through an escarpment, so a tree or a boulder landing
- * on its approach turns a deliberate route into a dead end you have to walk a
- * panel to discover. Scatter is painted from a noise field that knows nothing
- * about stairs, so this has to be swept afterwards rather than prevented.
- *
- * Runs *after* the connectivity repair, because that pass cuts new stairs of
- * its own when it carves a route through a cliff — sweeping first left those
- * ones blocked.
- *
- * Only scatter is removed, and only to the north and south. A cliff, a gorge
- * or a lake next to a stair is a landform doing its job, and opening east or
- * west would punch a hole through the escarpment the stair belongs to.
+ * Open the ground immediately around every stair, including east and west
+ * so biome-seam stairs can be approached sideways.
  */
 export function clearStairApproaches(
   tiles: Uint8Array,
@@ -285,18 +244,18 @@ export function clearStairApproaches(
     if (tiles[i] !== Tile.Steps) continue;
     const x = i % w;
     const y = (i / w) | 0;
-    for (const ny of [y - 1, y + 1]) {
-      if (ny < 0 || ny >= h) continue;
-      if (isWorldRim(x, ny, w, h)) continue;
-      const j = ny * w + x;
+    const neighbors = [
+      [x, y - 1],
+      [x, y + 1],
+      [x - 1, y],
+      [x + 1, y],
+    ];
+    for (const [nx, ny] of neighbors) {
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      if (isWorldRim(nx, ny, w, h)) continue;
+      const j = ny * w + nx;
       if (!isScatter(tiles[j])) continue;
 
-      // A blocker on a seam is mirrored on the other side, and the two have to
-      // stay in step: clearing one alone leaves an invisible wall on the
-      // neighbouring screen. At a panel corner a tile sits on two seams at
-      // once and its partners have partners of their own, so the whole group
-      // is gathered and cleared together — or, if anything in it is a landform
-      // this pass may not touch, not at all.
       const group = seamGroup(tiles, w, h, j);
       if (!group) continue;
       for (const k of group) {
@@ -308,10 +267,6 @@ export function clearStairApproaches(
   return opened;
 }
 
-/**
- * Every tile that must be cleared alongside `start` to keep panel seams in
- * step, or null if any of them is something this pass may not remove.
- */
 function seamGroup(
   tiles: Uint8Array,
   w: number,
@@ -328,7 +283,6 @@ function seamGroup(
   return group;
 }
 
-/** Scenery this pass may remove: painted clutter, never a landform. */
 function isScatter(tile: number): boolean {
   return isCarvable(tile) || isResourceNode(tile);
 }
