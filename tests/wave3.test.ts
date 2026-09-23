@@ -82,7 +82,6 @@ describe('wave 3: interiors', () => {
     step(state, IDLE, 1 / 60);
     expect(state.location.kind).toBe('overworld');
   });
-
 });
 
 describe('wave 3: hermit interior trade', () => {
@@ -154,7 +153,7 @@ describe('wave 3: carpenter and Noah tent', () => {
 });
 
 describe('wave 3: instruments', () => {
-  it('buys Chart, Lodestone and Dove from shop stock and records ownership', () => {
+  it('buys Axe, Lodestone and Dove from shop stock and records ownership', () => {
     const state = createGame(generateWorld(4242, SMALL));
     const { spawn } = state.world;
     clearArea(state, spawn.x, spawn.y, 4);
@@ -173,14 +172,12 @@ describe('wave 3: instruments', () => {
     }
 
     const forest = shopAt(0, Biome.Forest);
-    state.hasAxe = true;
-    state.hasSoundingLine = true;
     placeAt(state, spawn.x, spawn.y);
     step(state, INTERACT, 1 / 60);
     placeAt(state, forest.focus.x, forest.focus.y);
-    expect(actionPrompt(state)?.label).toMatch(/Chart/i);
+    expect(actionPrompt(state)?.label).toMatch(/Axe/i);
     step(state, INTERACT, 1 / 60);
-    expect(state.hasChart).toBe(true);
+    expect(state.hasAxe).toBe(true);
 
     state.location = { kind: 'overworld', dungeonId: -1, interiorId: -1, returnTo: null };
     const scrub = shopAt(1, Biome.Scrub);
@@ -210,7 +207,6 @@ describe('wave 3: instruments', () => {
     placeAt(state, spawn.x, spawn.y);
     state.hasLodestone = true;
 
-    // Place Noah south of the ark so the bearing is north.
     placeAt(state, ark.x, ark.y + 4);
     expect(lodestoneBearing(state)).toBe(Dir.Up);
 
@@ -234,7 +230,6 @@ describe('wave 3: instruments', () => {
     releaseDove(state);
     expect(state.message).toMatch(/dove/i);
 
-    // At sea / after the rain starts, prefer dry-ground messaging.
     state.elapsed = state.world.params.secondsPerDay * 5;
     state.inBoat = true;
     state.hasBoat = true;
