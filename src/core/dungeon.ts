@@ -46,40 +46,78 @@ export const enum RewardKind {
   BuddingRod = 1,
   /** Exodus 7:12 — a serpent. One more tile of reach, and dredges two floods. */
   SerpentRod = 2,
+  /** Colours the minimap. */
+  Chart = 3,
+  /** Wade depth 1. */
+  Galoshes = 4,
 }
 
 export const REWARD_NAMES: Record<RewardKind, string> = {
   [RewardKind.HeartContainer]: 'Heart Container',
   [RewardKind.BuddingRod]: 'The Budding Rod',
   [RewardKind.SerpentRod]: 'The Serpent Rod',
+  [RewardKind.Chart]: 'Chart',
+  [RewardKind.Galoshes]: 'Galoshes',
 };
 
 /**
- * Fixed per biome so every run offers the whole set and tests stay
- * deterministic. The Budding Rod sits in the forest on purpose: it doubles
- * harvest yield, so it wants to land mid-run while doubling still pays.
+ * Fixed rod placements; Chart and Galoshes swap between forest and valley
+ * per seed so both still appear every run.
+ *
+ * Mountain holds the Budding Rod behind pitch — it was free on day one when
+ * it sat in the forest. The Serpent Rod dropped one biome to the scrub,
+ * behind stone. The two major instruments share the lower pair.
  */
 export const BIOME_REWARD: Record<number, RewardKind> = {
-  0: RewardKind.HeartContainer,
-  1: RewardKind.BuddingRod,
-  2: RewardKind.HeartContainer,
-  3: RewardKind.SerpentRod,
+  0: RewardKind.Galoshes,
+  1: RewardKind.Chart,
+  2: RewardKind.SerpentRod,
+  3: RewardKind.BuddingRod,
+};
+
+/** Resource the Rod must know to part that biome's vault seal. */
+export const BIOME_SEAL_RESOURCE: Record<number, Resource> = {
+  0: Resource.Fiber,
+  1: Resource.Wood,
+  2: Resource.Stone,
+  3: Resource.Pitch,
+};
+
+export const SEAL_TILE: Record<number, Tile> = {
+  [Resource.Fiber]: Tile.ReedSeal,
+  [Resource.Wood]: Tile.WoodSeal,
+  [Resource.Stone]: Tile.StoneSeal,
+  [Resource.Pitch]: Tile.PitchSeal,
 };
 
 /**
- * The Rod tier that parts a dungeon's seal of pitch, or none.
- *
- * The overworld mouths sit near their own biome, and the mountain one ends up
- * a short walk from where you wake — so its reward, the best tool in the game,
- * was free on day one. A seal gates it behind the whole Rod ladder without
- * charging pitch for it: pitch is the one resource a dungeon must never eat,
- * because losing it strands the run.
+ * Rod tier that parts the vault for this reward. Chart/Galoshes follow the
+ * biome they actually landed in — use `BIOME_SEAL_RESOURCE` when you have
+ * the dungeon, this table when you only have the kind.
  */
 export const REWARD_SEAL: Record<RewardKind, number | null> = {
   [RewardKind.HeartContainer]: null,
-  [RewardKind.BuddingRod]: null,
-  [RewardKind.SerpentRod]: Resource.Pitch,
+  [RewardKind.BuddingRod]: Resource.Pitch,
+  [RewardKind.SerpentRod]: Resource.Stone,
+  [RewardKind.Chart]: Resource.Wood,
+  [RewardKind.Galoshes]: Resource.Fiber,
 };
+
+/** Seed-stable assignment so forest and valley split Chart / Galoshes. */
+export function pickDungeonReward(seed: number, biome: Biome): RewardKind {
+  const rng = stageRng(seed, 'dungeon-rewards');
+  const pair = shuffle(rng, [RewardKind.Chart, RewardKind.Galoshes]);
+  switch (biome) {
+    case 3:
+      return RewardKind.BuddingRod;
+    case 2:
+      return RewardKind.SerpentRod;
+    case 1:
+      return pair[0];
+    default:
+      return pair[1];
+  }
+}
 
 /** What clearing an obstacle costs. Pitch is never spendable. */
 export const OBSTACLE_COST: Record<number, { resource: Resource; amount: number }> = {
@@ -137,8 +175,6 @@ export function generateDungeon(
   const w = roomsX * PANEL_W;
   const h = roomsY * PANEL_H;
 
-  // Solid rock, carved into rooms below. Maximum elevation so the flood can
-  // never reach underground even if `floods` were ignored.
   const planes = blankPlanes(w, h, { tile: Tile.DungeonWall, elev: 255, biome });
 
   const rooms: RoomMeta[] = [];
@@ -150,30 +186,21 @@ export function generateDungeon(
 
   const roomIndex = (rx: number, ry: number): number => ry * roomsX + rx;
 
-  // The entrance sits on the bottom row: you descend from the overworld.
   const entranceRoom = roomIndex(randInt(rng, 0, roomsX - 1), roomsY - 1);
   rooms[entranceRoom].kind = 'entrance';
 
   carveSpanningTree(rng, rooms, roomsX, roomsY, entranceRoom);
-
-  // Loops first, so they make it feel like a place rather than a corridor.
-  // Distances are then measured on the graph the player actually walks — pick
-  // the treasure before adding loops and a shortcut can quietly bypass the very
-  // edges the obstacles were placed to gate.
   addLoopEdges(rng, rooms, roomsX, roomsY);
 
   const distance = treeDistances(rooms, entranceRoom);
   for (let r = 0; r < rooms.length; r++) rooms[r].distance = distance[r];
 
-  // Furthest room from the entrance holds the prize.
   let treasureRoom = entranceRoom;
   for (let r = 0; r < rooms.length; r++) {
     if (distance[r] > distance[treasureRoom]) treasureRoom = r;
   }
   rooms[treasureRoom].kind = 'treasure';
 
-  // Seal the treasure down to a single approach, so the lock is a real gate
-  // rather than one of several ways in.
   isolateTreasure(rooms, entranceRoom, treasureRoom);
 
   const parents = treeParents(rooms, entranceRoom);
@@ -181,15 +208,12 @@ export function generateDungeon(
 
   const obstacles: Dungeon['obstacles'] = [];
 
-  // The lock goes on the final edge into the treasure room.
   if (pathEdges.length > 0) {
     const last = pathEdges[pathEdges.length - 1];
     setDoorTile(planes.tiles, w, rooms, last.from, last.dir, Tile.DoorLocked);
     obstacles.push({ tile: Tile.DoorLocked, between: [last.from, last.to] });
   }
 
-  // Obstacles on the remaining approach, capped so a raid costs 4-6 units
-  // rather than a whole hull.
   const approach = pathEdges.slice(0, -1);
   const chosen = shuffle(rng, approach.slice()).slice(0, MAX_OBSTACLES);
   for (const edge of chosen) {
@@ -198,8 +222,6 @@ export function generateDungeon(
     obstacles.push({ tile, between: [edge.from, edge.to] });
   }
 
-  // The key must sit somewhere reachable without the door it opens, and behind
-  // no more than MAX_OBSTACLES_TO_KEY of them.
   const keyRoom = pickKeyRoom(rooms, parents, entranceRoom, treasureRoom, obstacles);
   rooms[keyRoom].kind = 'key';
 
@@ -228,7 +250,7 @@ export function generateDungeon(
     overworldEntrance,
     chest,
     key,
-    reward: BIOME_REWARD[biome] ?? RewardKind.HeartContainer,
+    reward: pickDungeonReward(seed, biome),
     obstacles,
   };
 }
@@ -264,11 +286,11 @@ export function generateDungeonRoom(
   planes.tiles[chest.y * w + chest.x] = Tile.Chest;
   planes.tiles[key.y * w + key.x] = Tile.Key;
 
-  // Seal the vault off from the rest of the room, north of the key so the key
-  // stays reachable and the seal is the only thing between you and the chest.
-  const reward = BIOME_REWARD[biome] ?? RewardKind.HeartContainer;
-  if (REWARD_SEAL[reward] !== null) {
-    for (let x = 1; x < w - 1; x++) planes.tiles[SEAL_ROW * w + x] = Tile.PitchSeal;
+  const reward = pickDungeonReward(_seed, biome);
+  const sealRes = BIOME_SEAL_RESOURCE[biome];
+  const sealTile = SEAL_TILE[sealRes];
+  if (sealTile !== undefined) {
+    for (let x = 1; x < w - 1; x++) planes.tiles[SEAL_ROW * w + x] = sealTile;
   }
 
   return {
@@ -285,7 +307,7 @@ export function generateDungeonRoom(
     overworldEntrance,
     chest,
     key,
-    reward: BIOME_REWARD[biome] ?? RewardKind.HeartContainer,
+    reward,
     obstacles: [],
   };
 }
@@ -335,14 +357,12 @@ function link(rooms: RoomMeta[], a: number, b: number, dir: Dir4): void {
   rooms[b].links[OPPOSITE[dir]] = a;
 }
 
-/** A handful of extra connections, so the layout has loops rather than one spine. */
 function addLoopEdges(rng: Rng, rooms: RoomMeta[], roomsX: number, roomsY: number): void {
   const candidates: { a: number; b: number; dir: Dir4 }[] = [];
 
   for (let r = 0; r < rooms.length; r++) {
     const room = rooms[r];
     for (let d = 0; d < 2; d++) {
-      // Only East and South, so each pair is considered once.
       const dir = (d === 0 ? Dir4.East : Dir4.South) as Dir4;
       const nx = room.rx + DIR_DX[dir];
       const ny = room.ry + DIR_DY[dir];
@@ -358,13 +378,6 @@ function addLoopEdges(rng: Rng, rooms: RoomMeta[], roomsX: number, roomsY: numbe
   }
 }
 
-/**
- * Cut every approach to the treasure but one.
- *
- * The lock only means something if there is a single way in. The surviving
- * edge is the treasure's parent on the shortest route from the entrance, so
- * the room stays reachable and the door stays on the path you would walk.
- */
 function isolateTreasure(rooms: RoomMeta[], entranceRoom: number, treasureRoom: number): void {
   const keep = treeParents(rooms, entranceRoom)[treasureRoom];
   if (keep.from === -1) return;
@@ -377,7 +390,6 @@ function isolateTreasure(rooms: RoomMeta[], entranceRoom: number, treasureRoom: 
   }
 }
 
-/** Breadth-first distances over the room graph. */
 function treeDistances(rooms: RoomMeta[], start: number): number[] {
   const dist = new Array<number>(rooms.length).fill(-1);
   const queue = [start];
@@ -395,7 +407,6 @@ function treeDistances(rooms: RoomMeta[], start: number): number[] {
   return dist;
 }
 
-/** BFS parent per room, plus the direction travelled to reach it. */
 function treeParents(rooms: RoomMeta[], start: number): { from: number; dir: Dir4 }[] {
   const parents: { from: number; dir: Dir4 }[] = rooms.map(() => ({
     from: -1,
@@ -419,7 +430,6 @@ function treeParents(rooms: RoomMeta[], start: number): { from: number; dir: Dir
   return parents;
 }
 
-/** Edges from the entrance to a room, in order. */
 function pathToRoom(
   parents: { from: number; dir: Dir4 }[],
   target: number,
@@ -437,11 +447,6 @@ function pathToRoom(
   return edges.reverse();
 }
 
-/**
- * A room that is reachable without opening the locked door, and behind no more
- * than MAX_OBSTACLES_TO_KEY obstacles. Prefers the furthest such room, so the
- * key is still worth walking for.
- */
 function pickKeyRoom(
   rooms: RoomMeta[],
   parents: { from: number; dir: Dir4 }[],
@@ -458,7 +463,6 @@ function pickKeyRoom(
     if (r === treasureRoom || r === entranceRoom) continue;
 
     const edges = pathToRoom(parents, r);
-    // Crossing the lock would put the key behind the door it opens.
     const crossesLock = edges.some((e) => {
       const o = obstacles.find((ob) => ob.between[0] === e.from && ob.between[1] === e.to);
       return o?.tile === Tile.DoorLocked;
@@ -477,9 +481,6 @@ function pickKeyRoom(
   return best;
 }
 
-// ---------------------------------------------------------------- painting
-
-/** Top-left tile of a room. */
 function roomOrigin(room: RoomMeta): Point {
   return { x: room.rx * PANEL_W, y: room.ry * PANEL_H };
 }
@@ -489,11 +490,6 @@ function roomCentre(room: RoomMeta): Point {
   return { x: o.x + (PANEL_W >> 1), y: o.y + (PANEL_H >> 1) };
 }
 
-/**
- * Tiles forming the doorway between a room and its neighbour in `dir`.
- * The gap spans both sides of the shared boundary, so an obstacle placed here
- * is a single band rather than two the player has to pay for twice.
- */
 export function doorTiles(room: RoomMeta, dir: Dir4): Point[] {
   const o = roomOrigin(room);
   const out: Point[] = [];
@@ -531,15 +527,6 @@ function setDoorTile(
   }
 }
 
-/**
- * Pits in room interiors: the hazard that makes a dungeon dangerous rather
- * than merely expensive.
- *
- * Kept well clear of walls and doorways so a pit can always be walked around —
- * a pit that seals a corridor would be an obstacle, and obstacles are supposed
- * to be things you pay to cross, not things you blunder into. The entrance room
- * gets none, so arriving is never an ambush.
- */
 function scatterPits(
   rng: Rng,
   tiles: Uint8Array,
@@ -555,7 +542,6 @@ function scatterPits(
     const count = randInt(rng, 1, 3);
 
     for (let n = 0; n < count; n++) {
-      // Inset by 3 keeps pits off the walls and out of every doorway lane.
       const x = o.x + randInt(rng, 3, PANEL_W - 4);
       const y = o.y + randInt(rng, 3, PANEL_H - 4);
       const i = y * w + x;
@@ -564,12 +550,6 @@ function scatterPits(
   }
 }
 
-/**
- * Hollow out each room, then re-open its doorways.
- *
- * Obstacles were written into the doorways first, so this preserves anything
- * already sitting there rather than paving over it.
- */
 function paintRooms(tiles: Uint8Array, w: number, rooms: RoomMeta[]): void {
   for (const room of rooms) {
     const o = roomOrigin(room);
