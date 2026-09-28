@@ -237,6 +237,11 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
       if (tile === Tile.HeartContainer || tile === Tile.Pedestal) {
         blitTile(ctx, sheet, carveTo(map.biome[i] as Biome), sx, sy);
       }
+      if (tile === Tile.Skiff) {
+        const tracked = state.boatX === tx && state.boatY === ty;
+        const under = tracked ? state.boatUnderTile : carveTo(map.biome[i] as Biome);
+        blitTile(ctx, sheet, under === Tile.Skiff ? carveTo(map.biome[i] as Biome) : under, sx, sy);
+      }
       // A gorge with water in it is a river, and should look like one. Dry,
       // it is a hole in the ground you cannot climb into.
       const wetGorge = tile === Tile.Gorge && runoff > 0;
@@ -679,9 +684,9 @@ function drawElevationFaces(ctx: CanvasRenderingContext2D, count: number): void 
 
 /** Height of a drawn drop, in pixels. Six of sixteen reads as a real step. */
 const FACE_H = 6;
-const FACE_LIP = '#9a917f';
-const FACE_ROCK = '#4a443b';
-const FACE_FOOT = '#26221c';
+const FACE_LIP = '#2a2620';
+const FACE_ROCK = '#141210';
+const FACE_FOOT = '#0a0908';
 
 function drawAnimals(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (state.location.kind !== 'overworld') return;

@@ -68,8 +68,20 @@ import {
   payForPitching,
 } from '../core/boat.js';
 
-/** Rod tier that parts a seal of pitch. */
-const SEAL_TIER = Resource.Pitch;
+function sealResourceOf(tile: number): Resource | null {
+  switch (tile) {
+    case Tile.ReedSeal:
+      return Resource.Fiber;
+    case Tile.WoodSeal:
+      return Resource.Wood;
+    case Tile.StoneSeal:
+      return Resource.Stone;
+    case Tile.PitchSeal:
+      return Resource.Pitch;
+    default:
+      return null;
+  }
+}
 
 export const enum Dir {
   Down = 0,
@@ -879,6 +891,12 @@ function openChest(state: GameState): void {
     case RewardKind.SerpentRod:
       state.rodReach = 2;
       break;
+    case RewardKind.Chart:
+      state.hasChart = true;
+      break;
+    case RewardKind.Galoshes:
+      state.hasGaloshes = true;
+      break;
   }
 
   say(state, `${REWARD_NAMES[dungeon.reward]}! Take it and go.`);
@@ -925,13 +943,15 @@ export function obstacleInFront(state: GameState): ObstaclePrompt | null {
     };
   }
 
-  if (tile === Tile.PitchSeal) {
-    const ready = state.rodTier >= SEAL_TIER;
+  const needed = sealResourceOf(tile);
+  if (needed !== null) {
+    const ready = state.rodTier >= needed;
+    const name = RESOURCE_LABEL[needed];
     return {
       tile,
       label: ready
-        ? 'Part the seal — the Rod knows pitch'
-        : 'A seal of pitch. The Rod is not ready for this.',
+        ? `Part the seal — the Rod knows ${name}`
+        : `A seal of ${name}. The Rod is not ready for this.`,
       affordable: ready,
     };
   }
@@ -1854,14 +1874,16 @@ function tryClear(state: GameState, tx: number, ty: number): void {
     return;
   }
 
-  if (tile === Tile.PitchSeal) {
-    if (state.rodTier < SEAL_TIER) {
-      say(state, 'The seal holds. Imbue the Rod with pitch and return.');
+  const needed = sealResourceOf(tile);
+  if (needed !== null) {
+    const name = RESOURCE_LABEL[needed];
+    if (state.rodTier < needed) {
+      say(state, `The seal holds. Imbue the Rod with ${name} and return.`);
       return;
     }
     convertConnected(map, tx, ty, tile, Tile.DungeonFloor);
     state.mapRevision++;
-    say(state, 'The Rod drinks the pitch. The seal parts.');
+    say(state, `The Rod drinks the ${name}. The seal parts.`);
     return;
   }
 
