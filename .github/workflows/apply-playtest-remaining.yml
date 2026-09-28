@@ -1,0 +1,27 @@
+name: apply-playtest-remaining
+on:
+  push:
+    branches: [playtest-notes-progression]
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: playtest-notes-progression
+      - name: Apply remaining hunks and drop this scaffolding
+        run: |
+          set -euo pipefail
+          if [ ! -f playtest-remaining.patch ]; then
+            echo 'already applied'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git apply playtest-remaining.patch
+          git add src/game/state.ts src/game/render.ts
+          git rm -f playtest-remaining.patch .github/workflows/apply-playtest-remaining.yml
+          git commit -m 'Part biome seals; blit skiff ground; darken seam faces.'
+          git push

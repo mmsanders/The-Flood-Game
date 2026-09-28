@@ -1,0 +1,109 @@
+diff --git a/src/game/render.ts b/src/game/render.ts
+index 8cd5b66..ecd44d3 100644
+--- a/src/game/render.ts
++++ b/src/game/render.ts
+@@ -237,6 +237,11 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
+       if (tile === Tile.HeartContainer || tile === Tile.Pedestal) {
+         blitTile(ctx, sheet, carveTo(map.biome[i] as Biome), sx, sy);
+       }
++      if (tile === Tile.Skiff) {
++        const tracked = state.boatX === tx && state.boatY === ty;
++        const under = tracked ? state.boatUnderTile : carveTo(map.biome[i] as Biome);
++        blitTile(ctx, sheet, under === Tile.Skiff ? carveTo(map.biome[i] as Biome) : under, sx, sy);
++      }
+       // A gorge with water in it is a river, and should look like one. Dry,
+       // it is a hole in the ground you cannot climb into.
+       const wetGorge = tile === Tile.Gorge && runoff > 0;
+@@ -679,9 +684,9 @@ function drawElevationFaces(ctx: CanvasRenderingContext2D, count: number): void
+ 
+ /** Height of a drawn drop, in pixels. Six of sixteen reads as a real step. */
+ const FACE_H = 6;
+-const FACE_LIP = '#9a917f';
+-const FACE_ROCK = '#4a443b';
+-const FACE_FOOT = '#26221c';
++const FACE_LIP = '#2a2620';
++const FACE_ROCK = '#141210';
++const FACE_FOOT = '#0a0908';
+ 
+ function drawAnimals(ctx: CanvasRenderingContext2D, state: GameState): void {
+   if (state.location.kind !== 'overworld') return;
+diff --git a/src/game/state.ts b/src/game/state.ts
+index aa537c9..8601cb8 100644
+--- a/src/game/state.ts
++++ b/src/game/state.ts
+@@ -68,8 +68,20 @@ import {
+   payForPitching,
+ } from '../core/boat.js';
+ 
+-/** Rod tier that parts a seal of pitch. */
+-const SEAL_TIER = Resource.Pitch;
++function sealResourceOf(tile: number): Resource | null {
++  switch (tile) {
++    case Tile.ReedSeal:
++      return Resource.Fiber;
++    case Tile.WoodSeal:
++      return Resource.Wood;
++    case Tile.StoneSeal:
++      return Resource.Stone;
++    case Tile.PitchSeal:
++      return Resource.Pitch;
++    default:
++      return null;
++  }
++}
+ 
+ export const enum Dir {
+   Down = 0,
+@@ -879,6 +891,12 @@ function openChest(state: GameState): void {
+     case RewardKind.SerpentRod:
+       state.rodReach = 2;
+       break;
++    case RewardKind.Chart:
++      state.hasChart = true;
++      break;
++    case RewardKind.Galoshes:
++      state.hasGaloshes = true;
++      break;
+   }
+ 
+   say(state, `${REWARD_NAMES[dungeon.reward]}! Take it and go.`);
+@@ -925,13 +943,15 @@ export function obstacleInFront(state: GameState): ObstaclePrompt | null {
+     };
+   }
+ 
+-  if (tile === Tile.PitchSeal) {
+-    const ready = state.rodTier >= SEAL_TIER;
++  const needed = sealResourceOf(tile);
++  if (needed !== null) {
++    const ready = state.rodTier >= needed;
++    const name = RESOURCE_LABEL[needed];
+     return {
+       tile,
+       label: ready
+-        ? 'Part the seal — the Rod knows pitch'
+-        : 'A seal of pitch. The Rod is not ready for this.',
++        ? `Part the seal — the Rod knows ${name}`
++        : `A seal of ${name}. The Rod is not ready for this.`,
+       affordable: ready,
+     };
+   }
+@@ -1854,14 +1874,16 @@ function tryClear(state: GameState, tx: number, ty: number): void {
+     return;
+   }
+ 
+-  if (tile === Tile.PitchSeal) {
+-    if (state.rodTier < SEAL_TIER) {
+-      say(state, 'The seal holds. Imbue the Rod with pitch and return.');
++  const needed = sealResourceOf(tile);
++  if (needed !== null) {
++    const name = RESOURCE_LABEL[needed];
++    if (state.rodTier < needed) {
++      say(state, `The seal holds. Imbue the Rod with ${name} and return.`);
+       return;
+     }
+     convertConnected(map, tx, ty, tile, Tile.DungeonFloor);
+     state.mapRevision++;
+-    say(state, 'The Rod drinks the pitch. The seal parts.');
++    say(state, `The Rod drinks the ${name}. The seal parts.`);
+     return;
+   }
