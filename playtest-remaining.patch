@@ -87,7 +87,7 @@ index aa537c9..8601cb8 100644
        affordable: ready,
      };
    }
-@@ -1854,14 +1874,16 @@ function tryClear(state: GameState, tx: number, ty: number): void {
+@@ -1854,16 +1874,18 @@ function tryClear(state: GameState, tx: number, ty: number): void {
      return;
    }
  
@@ -107,3 +107,5 @@ index aa537c9..8601cb8 100644
 +    say(state, `The Rod drinks the ${name}. The seal parts.`);
      return;
    }
+ 
+   const cost = OBSTACLE_COST[tile];
