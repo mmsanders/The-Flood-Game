@@ -147,7 +147,6 @@ describe('wave 2: the physical skiff', () => {
     expect(state.world.tiles[spawn.y * state.world.w + spawn.x]).toBe(Tile.Skiff);
     expect(state.boatX).toBe(spawn.x);
 
-    // Flood the beached tile past what an unpitched hull can take.
     state.elapsed = state.world.params.secondsPerDay * 20;
     const i = spawn.y * state.world.w + spawn.x;
     const level = waterLevel(state);
@@ -155,7 +154,6 @@ describe('wave 2: the physical skiff', () => {
     expect(depthAt(state, spawn.x, spawn.y)).toBe(3);
     expect(boatDestroyedAtDepth(state.boatDepth, 3)).toBe(true);
 
-    // Walk away so the check runs while Noah is not aboard or hauling.
     placeAt(state, spawn.x + 1, spawn.y);
     step(state, IDLE, 1 / 60);
 
@@ -196,9 +194,9 @@ describe('wave 2: barter and breakable tools', () => {
     state.world.biome[i] = Biome.Valley;
     state.carried.fill(100);
 
-    expect(actionPrompt(state)?.label).toMatch(/Galoshes/i);
+    expect(actionPrompt(state)?.label).toMatch(/Dove/i);
     step(state, INTERACT, 1 / 60);
-    expect(state.hasGaloshes).toBe(true);
+    expect(state.hasDove).toBe(true);
     expect(state.carried[Resource.Fiber]).toBeLessThan(100);
   });
 

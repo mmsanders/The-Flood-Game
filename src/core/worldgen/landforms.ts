@@ -11,9 +11,9 @@ import { type WorldParams, tileHeight, tileWidth } from '../config.js';
 import { randInt, stageRng, type Rng } from '../rng.js';
 import { BIOME_COUNT, Biome, Tile } from '../tiles.js';
 import { valueNoise2d } from '../noise.js';
-import { overwrite, stamp } from './plan.js';
+import { UNPLANNED, overwrite, stamp } from './plan.js';
 import { isWorldRim, onPanelEdge } from './seams.js';
-import { cutEscarpments } from './escarpments.js';
+import { cutEscarpments, markBiomeSeams } from './escarpments.js';
 
 export function carveLandforms(
   seed: number,
@@ -26,9 +26,10 @@ export function carveLandforms(
   const h = tileHeight(params);
   const rng = stageRng(seed, 'landforms');
 
-  carveRiver(rng, elev, plan, w, h);
+  carveRiver(rng, elev, biome, plan, w, h);
   placeLakes(rng, elev, biome, plan, w, h);
   cutEscarpments(rng, elev, biome, plan, w, h);
+  markBiomeSeams(rng, biome, plan, w, h);
   raisePlateaus(rng, elev, biome, plan, w, h);
 }
 
@@ -41,13 +42,14 @@ export function carveLandforms(
 function carveRiver(
   rng: Rng,
   elev: Uint8Array,
+  biome: Uint8Array,
   plan: Uint8Array,
   w: number,
   h: number,
 ): void {
   const startX = pickSpring(rng, elev, w, h);
-  const stem = followDescent(rng, elev, w, h, startX, 2, h - 3);
-  stampChannel(elev, plan, stem, w, h, rng, true);
+  const stem = densifyPath(followDescent(rng, elev, w, h, startX, 2, h - 3), w);
+  stampChannel(elev, biome, plan, stem, w, h, rng, true);
 
   const tributaries = 2 + (rng() < 0.5 ? 1 : 0);
   for (let t = 0; t < tributaries; t++) {
@@ -59,8 +61,8 @@ function carveRiver(
     const length = randInt(rng, 18, 40);
     const sx = clamp(jx + side * randInt(rng, 10, 22), 3, w - 4);
     const sy = clamp(jy - randInt(rng, 4, 14), 3, h - 6);
-    const branch = followToward(rng, elev, w, h, sx, sy, jx, jy, length);
-    stampChannel(elev, plan, branch, w, h, rng, false);
+    const branch = densifyPath(followToward(rng, elev, w, h, sx, sy, jx, jy, length), w);
+    stampChannel(elev, biome, plan, branch, w, h, rng, false);
   }
 }
 
@@ -110,9 +112,6 @@ function followDescent(
         const ny = y + dy;
         if (nx < 2 || nx >= w - 2 || ny < 1 || ny >= h - 1) continue;
         if (seen[ny * w + nx]) continue;
-        // Descent dominates, but the lateral penalty is light and a slow
-        // wander field pushes the channel off-axis for stretches at a time.
-        // With a heavy `|dx|` penalty this drew a straight line down the map.
         const drift = wander(nx, ny) * 14;
         const score =
           elev[ny * w + nx] - dy * 9 + Math.abs(dx) * 1.5 - dx * drift + rng() * 5;
@@ -192,6 +191,7 @@ function followToward(
  */
 function stampChannel(
   elev: Uint8Array,
+  biome: Uint8Array,
   plan: Uint8Array,
   path: readonly number[],
   w: number,
@@ -199,33 +199,97 @@ function stampChannel(
   rng: Rng,
   fords: boolean,
 ): void {
+  const crossings = fords ? pickBiomeBridges(path, biome, w) : new Set<number>();
   for (let n = 0; n < path.length; n++) {
     const i = path[n];
     const x = i % w;
     const y = (i / w) | 0;
     if (isWorldRim(x, y, w, h)) continue;
     dropChannel(elev, i);
-    const ford = fords && n > 8 && n % FORD_SPACING === 0;
+    const ford = crossings.has(i);
     overwrite(plan, i, ford ? Tile.Bridge : Tile.Gorge);
     const side = rng() < 0.5 ? -1 : 1;
     const nx = x + side;
     if (nx > 0 && nx < w - 1 && !isWorldRim(nx, y, w, h)) {
       const j = y * w + nx;
       dropChannel(elev, j);
-      // A ford spans the full width, or it is not a crossing.
       if (ford) overwrite(plan, j, Tile.Bridge);
       else stamp(plan, j, Tile.Gorge);
     }
   }
+  dropOrphanGorge(plan, w, h);
+}
+
+function dropOrphanGorge(plan: Uint8Array, w: number, h: number): void {
+  for (let i = 0; i < plan.length; i++) {
+    if (plan[i] !== Tile.Gorge) continue;
+    const x = i % w;
+    const y = (i / w) | 0;
+    const n4 = [
+      x > 0 ? i - 1 : -1,
+      x + 1 < w ? i + 1 : -1,
+      y > 0 ? i - w : -1,
+      y + 1 < h ? i + w : -1,
+    ];
+    const linked = n4.some((j) => j >= 0 && (plan[j] === Tile.Gorge || plan[j] === Tile.Bridge));
+    if (!linked) plan[i] = UNPLANNED;
+  }
 }
 
 /**
- * Tiles of channel between crossings.
- *
- * Twelve is about three-quarters of a panel, so you are never more than a
- * screen from a ford but you can still be on the wrong side of one.
+ * One crossing per biome band, spaced so the four bridges are not a cluster.
+ * Row gap of ~36 is a little over two panels.
  */
-const FORD_SPACING = 12;
+const MIN_BRIDGE_SEP = 36;
+
+function pickBiomeBridges(path: readonly number[], biome: Uint8Array, w: number): Set<number> {
+  const byBand: number[][] = [[], [], [], []];
+  for (const i of path) {
+    const band = biome[i] & 3;
+    byBand[band].push(i);
+  }
+  const chosen: number[] = [];
+  for (let b = 0; b < 4; b++) {
+    const cells = byBand[b];
+    if (cells.length === 0) continue;
+    const mid = (cells.length / 2) | 0;
+    let pick = cells[mid];
+    for (let k = 0; k < cells.length; k++) {
+      const offset = (k & 1) === 0 ? k >> 1 : -((k + 1) >> 1);
+      const cand = cells[(mid + offset + cells.length) % cells.length];
+      const cy = (cand / w) | 0;
+      if (chosen.every((p) => Math.abs(((p / w) | 0) - cy) >= MIN_BRIDGE_SEP)) {
+        pick = cand;
+        break;
+      }
+    }
+    chosen.push(pick);
+  }
+  return new Set(chosen);
+}
+
+/**
+ * followDescent can step two rows at a time, which left a dashed gorge
+ * (water, grass, water). Fill every skipped cardinal step so the channel
+ * is a continuous landform.
+ */
+function densifyPath(path: readonly number[], w: number): number[] {
+  if (path.length === 0) return [];
+  const out: number[] = [path[0]];
+  for (let n = 1; n < path.length; n++) {
+    let x = path[n - 1] % w;
+    let y = (path[n - 1] / w) | 0;
+    const tx = path[n] % w;
+    const ty = (path[n] / w) | 0;
+    while (x !== tx || y !== ty) {
+      if (y !== ty) y += y < ty ? 1 : -1;
+      else x += x < tx ? 1 : -1;
+      const i = y * w + x;
+      if (out[out.length - 1] !== i) out.push(i);
+    }
+  }
+  return out;
+}
 
 function dropChannel(elev: Uint8Array, i: number): void {
   const next = elev[i] < 36 ? 0 : elev[i] - 36;

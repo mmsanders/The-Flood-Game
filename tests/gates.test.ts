@@ -40,15 +40,15 @@ function standIn(state: GameState, dungeonId: number, tx: number, ty: number): v
 }
 
 describe('the seal of pitch', () => {
-  it('seals the Serpent Rod and nothing else', () => {
-    expect(REWARD_SEAL[RewardKind.SerpentRod]).toBe(Resource.Pitch);
+  it('seals the Budding Rod behind pitch and the Serpent Rod behind stone', () => {
+    expect(REWARD_SEAL[RewardKind.BuddingRod]).toBe(Resource.Pitch);
+    expect(REWARD_SEAL[RewardKind.SerpentRod]).toBe(Resource.Stone);
     expect(REWARD_SEAL[RewardKind.HeartContainer]).toBeNull();
-    expect(REWARD_SEAL[RewardKind.BuddingRod]).toBeNull();
   });
 
   it('stands between the stairs and the chest in that dungeon', () => {
     const world = generateWorld(4242, SMALL);
-    const sealed = world.dungeons.find((d) => d.reward === RewardKind.SerpentRod);
+    const sealed = world.dungeons.find((d) => d.reward === RewardKind.BuddingRod);
     expect(sealed).toBeDefined();
     if (!sealed) return;
 
@@ -56,8 +56,6 @@ describe('the seal of pitch', () => {
     expect(seals).toBeGreaterThan(0);
     expect(isWalkable(Tile.PitchSeal)).toBe(false);
 
-    // Flood-fill from the stairs without passing the seal: the chest must be
-    // out of reach. This is the actual claim — not "a seal tile exists".
     const seen = new Set<number>();
     const start = sealed.stairs.y * sealed.w + sealed.stairs.x;
     const queue = [start];
@@ -82,13 +80,12 @@ describe('the seal of pitch', () => {
       }
     }
     expect(seen.has(sealed.chest.y * sealed.w + sealed.chest.x)).toBe(false);
-    // ...but the key is still on your side of it.
     expect(seen.has(sealed.key.y * sealed.w + sealed.key.x)).toBe(true);
   });
 
   it('refuses a Rod that has not been imbued with pitch', () => {
     const state = newState();
-    const id = state.world.dungeons.findIndex((d) => d.reward === RewardKind.SerpentRod);
+    const id = state.world.dungeons.findIndex((d) => d.reward === RewardKind.BuddingRod);
     expect(id).toBeGreaterThanOrEqual(0);
     const dungeon = state.world.dungeons[id];
     const seal = dungeon.tiles.indexOf(Tile.PitchSeal);
@@ -108,7 +105,7 @@ describe('the seal of pitch', () => {
 
   it('parts for a Rod that knows pitch, and costs nothing to do it', () => {
     const state = newState();
-    const id = state.world.dungeons.findIndex((d) => d.reward === RewardKind.SerpentRod);
+    const id = state.world.dungeons.findIndex((d) => d.reward === RewardKind.BuddingRod);
     const dungeon = state.world.dungeons[id];
     const seal = dungeon.tiles.indexOf(Tile.PitchSeal);
     const sx = seal % dungeon.w;
@@ -122,13 +119,12 @@ describe('the seal of pitch', () => {
     step(state, INTERACT, 1 / 60);
 
     expect(dungeon.tiles[seal]).toBe(Tile.DungeonFloor);
-    // Pitch is never spent on a dungeon — losing it strands the run.
     expect(state.carried).toEqual([5, 5, 5, 5]);
   });
 
   it('opens the whole seam in one go, not a tile at a time', () => {
     const state = newState();
-    const id = state.world.dungeons.findIndex((d) => d.reward === RewardKind.SerpentRod);
+    const id = state.world.dungeons.findIndex((d) => d.reward === RewardKind.BuddingRod);
     const dungeon = state.world.dungeons[id];
     const before = [...dungeon.tiles].filter((t) => t === Tile.PitchSeal).length;
     expect(before).toBeGreaterThan(1);
@@ -151,11 +147,8 @@ describe('stairs', () => {
         if (world.tiles[i] !== Tile.Steps) continue;
         const x = i % world.w;
         const y = (i / world.w) | 0;
-        // Skip the rim, which is wall by design.
         if (y <= 1 || y >= world.h - 2) continue;
         checked++;
-        // Scatter is the thing that must never land here. A cliff, a gorge or
-        // a lake beside a stair is a landform doing its job.
         for (const [dir, t] of [
           ['north', world.tiles[i - world.w]],
           ['south', world.tiles[i + world.w]],
@@ -173,9 +166,6 @@ describe('stairs', () => {
 
 describe('roads', () => {
   it('does not draw a ruler down the map', () => {
-    // A uniform cost field made the search return the Manhattan-shortest path,
-    // which on open ground is a straight line. Measure the longest unbroken
-    // run of road in a single column: a real route bends out of one quickly.
     for (const seed of [1, 2, 3, 7, 4242]) {
       const world = generateWorld(seed, SMALL);
       let longest = 0;

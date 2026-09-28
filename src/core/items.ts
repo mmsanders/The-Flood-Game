@@ -42,10 +42,11 @@ export const PICKAXE_DURABILITY = 14;
 /**
  * Stock behind the shop door. Same economy as Wave two, now indoors; instruments
  * compete with ark materials at prices that bite but do not strand a run.
+ * Chart and Galoshes moved into dungeon chests.
  */
 export const SHOP_STOCK: Record<Biome, readonly ItemKind[]> = {
-  [Biome.Valley]: [ItemKind.Galoshes, ItemKind.Dove, ItemKind.HeartContainer],
-  [Biome.Forest]: [ItemKind.Axe, ItemKind.SoundingLine, ItemKind.Chart],
+  [Biome.Valley]: [ItemKind.Dove, ItemKind.HeartContainer],
+  [Biome.Forest]: [ItemKind.Axe, ItemKind.SoundingLine],
   [Biome.Scrub]: [ItemKind.Pickaxe, ItemKind.Lodestone, ItemKind.HeartContainer],
   [Biome.Mountain]: [],
 };
@@ -56,17 +57,17 @@ export const ITEM_COST: Record<ItemKind, readonly BarterPart[]> = {
     { resource: Resource.Wood, amount: 2 },
   ],
   [ItemKind.Axe]: [
-    { resource: Resource.Fiber, amount: 3 },
-    { resource: Resource.Wood, amount: 6 },
+    { resource: Resource.Fiber, amount: 5 },
+    { resource: Resource.Wood, amount: 10 },
   ],
   [ItemKind.Pickaxe]: [
-    { resource: Resource.Wood, amount: 3 },
-    { resource: Resource.Stone, amount: 7 },
+    { resource: Resource.Wood, amount: 5 },
+    { resource: Resource.Stone, amount: 12 },
   ],
   [ItemKind.SoundingLine]: [
-    { resource: Resource.Fiber, amount: 5 },
-    { resource: Resource.Wood, amount: 5 },
-    { resource: Resource.Stone, amount: 3 },
+    { resource: Resource.Fiber, amount: 8 },
+    { resource: Resource.Wood, amount: 8 },
+    { resource: Resource.Stone, amount: 5 },
   ],
   [ItemKind.HeartContainer]: [
     { resource: Resource.Fiber, amount: 10 },
@@ -78,12 +79,12 @@ export const ITEM_COST: Record<ItemKind, readonly BarterPart[]> = {
     { resource: Resource.Wood, amount: 6 },
   ],
   [ItemKind.Lodestone]: [
-    { resource: Resource.Stone, amount: 8 },
-    { resource: Resource.Pitch, amount: 2 },
+    { resource: Resource.Stone, amount: 12 },
+    { resource: Resource.Pitch, amount: 3 },
   ],
   [ItemKind.Dove]: [
-    { resource: Resource.Fiber, amount: 6 },
-    { resource: Resource.Wood, amount: 3 },
+    { resource: Resource.Fiber, amount: 10 },
+    { resource: Resource.Wood, amount: 5 },
   ],
 };
 

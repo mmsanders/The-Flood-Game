@@ -38,7 +38,6 @@ function placeAt(state: GameState, tx: number, ty: number): void {
 
 describe('the depth model', () => {
   it('treats natural water as over your head, whatever the sea is doing', () => {
-    // Dry land at the same elevation is dry; the pond is not.
     expect(waterDepth(Tile.Grass, 200, 0, 0)).toBe(0);
     expect(waterDepth(Tile.Water, 200, 0, 0)).toBe(2);
   });
@@ -56,13 +55,10 @@ describe('the depth model', () => {
 
   it('fills from the top of the map downwards, not like a bathtub', () => {
     const H = 440;
-    // A third of the way through the first day: wet at the top, dry at the
-    // bottom. The water is running *down* the channel, not rising in it.
     const day = GORGE_FILL_DAYS / 3;
     expect(gorgeDepthAt(day, 0, H)).toBeGreaterThan(0);
     expect(gorgeDepthAt(day, H - 1, H)).toBe(0);
 
-    // And the front only ever moves south.
     let frontier = 0;
     for (let t = 0; t <= 1; t += 0.05) {
       let wet = 0;
@@ -77,13 +73,10 @@ describe('the depth model', () => {
     for (let y = 0; y < H; y += 20) {
       expect(gorgeDepthAt(GORGE_FILL_DAYS, y, H), `row ${y}`).toBeGreaterThan(0);
     }
-    // ...and at a depth you cannot wade, which is what makes it the skiff's road.
     expect(gorgeDepthAt(GORGE_FILL_DAYS + 1, 0, H)).toBe(2);
   });
 
   it('runs the gorge in the high north long before the sea gets there', () => {
-    // On day 10 the whole channel is wet, because it is rain coming off the
-    // mountain, not the sea coming up.
     const day = 10;
     const H = 440;
     const level = waterLevelAtDay(day);
@@ -127,15 +120,19 @@ describe('the gorge on the map', () => {
 
     const gx = gorge % map.w;
     const gy = (gorge / map.w) | 0;
-    placeAt(state, gx, gy + 1);
+    const stand = [
+      [gx, gy + 1],
+      [gx, gy - 1],
+      [gx + 1, gy],
+      [gx - 1, gy],
+    ].find(([x, y]) => x > 0 && y > 0 && x < map.w - 1 && y < map.h - 1 && isWalkable(map.tiles[y * map.w + x]));
+    expect(stand, 'no walkable tile beside the gorge').toBeDefined();
+    placeAt(state, stand![0], stand![1]);
     const before = { x: state.player.x, y: state.player.y };
 
-    // Walk north into it for a second of game time.
     for (let i = 0; i < 60; i++) {
       step(state, { moveX: 0, moveY: -1, attackPressed: false }, 1 / 60);
     }
-    // It may not have been directly north, but the player must never be
-    // standing on a gorge tile.
     const onX = Math.floor((state.player.x + PLAYER_W / 2) / TILE_PX);
     const onY = Math.floor((state.player.y + PLAYER_H / 2) / TILE_PX);
     expect(map.tiles[onY * map.w + onX]).not.toBe(Tile.Gorge);
@@ -147,7 +144,6 @@ describe('the skiff and the drowned landscape', () => {
   it('will not float on dry ground', () => {
     const state = newState();
     const map = state.world;
-    // Day 0: nothing is wet except natural water and the sea.
     let dryLand = -1;
     for (let i = 0; i < map.tiles.length; i++) {
       if (map.tiles[i] === Tile.Grass && map.elev[i] > 200) {
@@ -168,13 +164,10 @@ describe('the skiff and the drowned landscape', () => {
     map.tiles[i] = Tile.Rock;
     map.elev[i] = 0;
 
-    // Shallow: the drowned landscape still steers you.
     state.elapsed = state.world.params.secondsPerDay * (FLOOD_GRACE_DAYS + 0.2);
     expect(depthAt(state, tx, ty)).toBe(1);
     expect(isBoatableTile(state, tx, ty)).toBe(false);
 
-    // Wave two gives the ordinary skiff a hard depth-2 ceiling. Find an
-    // elevation at the later water level that exercises exactly that rung.
     state.elapsed = state.world.params.secondsPerDay * 20;
     let depthTwoElevation = -1;
     for (let elevation = 0; elevation <= 255; elevation++) {
@@ -199,7 +192,6 @@ describe('the skiff and the drowned landscape', () => {
     placeAt(state, i % map.w, (i / map.w) | 0);
 
     step(state, IDLE, 1 / 60);
-    // Standing on the highest ground in the world: there is nothing to sail on.
     expect(depthAt(state, i % map.w, (i / map.w) | 0)).toBe(0);
   });
 });
