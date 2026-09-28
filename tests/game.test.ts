@@ -678,12 +678,12 @@ describe('game: dungeon rewards and hazards', () => {
   });
 
   it('applies the Budding Rod to harvest yield', () => {
-    const forest = state.world.dungeons.find((d) => d.biomeKind === Biome.Forest);
-    expect(forest).toBeDefined();
-    if (!forest) return;
+    const mountain = state.world.dungeons.find((d) => d.biomeKind === Biome.Mountain);
+    expect(mountain).toBeDefined();
+    if (!mountain) return;
 
-    state.location = { kind: 'dungeon', interiorId: -1, dungeonId: forest.id, returnTo: { x: 1, y: 1 } };
-    placeAt(state, forest.chest.x, forest.chest.y);
+    state.location = { kind: 'dungeon', interiorId: -1, dungeonId: mountain.id, returnTo: { x: 1, y: 1 } };
+    placeAt(state, mountain.chest.x, mountain.chest.y);
     step(state, IDLE, 1 / 60);
 
     expect(state.harvestYield).toBe(2);
@@ -701,12 +701,12 @@ describe('game: dungeon rewards and hazards', () => {
   });
 
   it('applies the Serpent Rod to reach', () => {
-    const mountain = state.world.dungeons.find((d) => d.biomeKind === Biome.Mountain);
-    expect(mountain).toBeDefined();
-    if (!mountain) return;
+    const scrub = state.world.dungeons.find((d) => d.biomeKind === Biome.Scrub);
+    expect(scrub).toBeDefined();
+    if (!scrub) return;
 
-    state.location = { kind: 'dungeon', interiorId: -1, dungeonId: mountain.id, returnTo: { x: 1, y: 1 } };
-    placeAt(state, mountain.chest.x, mountain.chest.y);
+    state.location = { kind: 'dungeon', interiorId: -1, dungeonId: scrub.id, returnTo: { x: 1, y: 1 } };
+    placeAt(state, scrub.chest.x, scrub.chest.y);
     step(state, IDLE, 1 / 60);
 
     expect(state.rodReach).toBe(2);
