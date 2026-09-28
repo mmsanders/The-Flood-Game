@@ -194,17 +194,13 @@ describe('resources: the Rod ladder', () => {
   });
 
   it('rejects a world whose valley shrine drowns before you could afford it', () => {
-    // The Rod takes nothing but fiber until a shrine says otherwise, so a
-    // lower shrine that goes under early ends the run silently — and reaching
-    // it was never the constraint, since the map is half a day wide. Sink one
-    // and check the generator notices.
     const world = generateWorld(20260830, DEFAULT_PARAMS);
     const shrine = world.pois.find((p) => p.kind === PoiKind.Shrine && p.biome === Biome.Valley);
     expect(shrine).toBeDefined();
     if (!shrine) return;
 
     const i = shrine.y * world.w + shrine.x;
-    world.elev[i] = 0; // underwater almost as soon as the rain starts
+    world.elev[i] = 0;
 
     const report = checkSolvable(
       world.tiles,
@@ -236,7 +232,6 @@ describe('resources: the Rod ladder', () => {
       DEFAULT_PARAMS,
       world.pois.filter((p) => p.kind === PoiKind.Shrine),
     );
-    // It only buds the harvest: a run without it is poorer, not stuck.
     expect(report.problems.join('; ')).not.toContain('Rod ladder');
     expect(report.ladder.length).toBeGreaterThan(0);
   });
