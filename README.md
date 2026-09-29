@@ -49,10 +49,15 @@ you a world the game wouldn't generate.
 ```
 src/core/      pure simulation, zero DOM — worldgen, flood, resources, serialization
 src/render/    palette and the tilesheet, drawn in code (no binary assets)
-src/game/      canvas renderer, input, game loop
+src/game/      canvas renderer, input, game loop, and the rules of play
 src/devtool/   the world inspector
 tests/         vitest over core + game; playwright for screenshots
 ```
+
+The rules of play are one module per system (skiff, trade, rod, places, ...) behind
+`src/game/state.ts`, which creates a run, orders each step, and re-exports the rest — so it
+stays the single hot-reload boundary. Each system offers its E-key actions beside its own
+rules, prompt and effect together, and `actions.ts` lists them in order of precedence.
 
 ## Design decisions worth knowing
 
