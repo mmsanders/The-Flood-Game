@@ -7,8 +7,17 @@ import { TILE_PX } from '../core/config.js';
 import { AXE_DURABILITY, PICKAXE_DURABILITY } from '../core/items.js';
 import { canRodHarvest, SHRINE_COST } from '../core/resources.js';
 import { Biome, carveTo, Resource, RESOURCE_NAMES, resourceOf, Tile } from '../core/tiles.js';
-import { activeMap, depthAt, dirX, dirY, RESOURCE_LABEL, say } from './queries.js';
-import { type GameState, type ObstaclePrompt, PLAYER_H, PLAYER_W } from './types.js';
+import {
+  activeMap,
+  depthAt,
+  dirX,
+  dirY,
+  facingTile,
+  RESOURCE_LABEL,
+  say,
+  tileUnder,
+} from './queries.js';
+import { type Action, type GameState, type ObstaclePrompt, PLAYER_H, PLAYER_W } from './types.js';
 
 /** The Rod is weapon and default harvesting tool; hand tools are emergency alternatives. */
 export function swingRod(state: GameState): void {
@@ -144,7 +153,7 @@ function tryToolHarvest(state: GameState, tx: number, ty: number): boolean {
   return true;
 }
 
-export function shrinePrompt(state: GameState, biome: Biome): ObstaclePrompt {
+function shrinePrompt(state: GameState, biome: Biome): ObstaclePrompt {
   const cost = SHRINE_COST[biome] ?? 0;
   const res = biome as unknown as Resource;
   const held = state.carried[res] ?? 0;
@@ -167,7 +176,7 @@ export function shrinePrompt(state: GameState, biome: Biome): ObstaclePrompt {
   };
 }
 
-export function tryImbueRod(state: GameState, biome: Biome): void {
+function tryImbueRod(state: GameState, biome: Biome): void {
   if (state.rodTier > biome) {
     say(state, 'The Rod already bears this gift.');
     return;
@@ -191,4 +200,54 @@ export function tryImbueRod(state: GameState, biome: Biome): void {
   }
   const unlocked = RESOURCE_LABEL[state.rodTier];
   say(state, `The Rod drinks. It will take ${unlocked}.`);
+}
+
+/** Standing on a shrine: imbue the Rod. */
+export function shrineAction(state: GameState): Action | null {
+  if (state.location.kind !== 'overworld') return null;
+  const { map, i } = tileUnder(state);
+  if (map.tiles[i] !== Tile.Shrine) return null;
+  return { prompt: shrinePrompt(state, map.biome[i] as Biome), run: imbueHere };
+}
+
+function imbueHere(state: GameState): boolean {
+  const { map, i } = tileUnder(state);
+  tryImbueRod(state, map.biome[i] as Biome);
+  return true;
+}
+
+/**
+ * Afloat and facing a drowned node: say whether the Rod can dredge it. Only a
+ * hint, with no effect of its own — the Rod dredges on a swing, so E passes
+ * on to whatever else could use it.
+ */
+export function dredgeHint(state: GameState): Action | null {
+  if (state.location.kind !== 'overworld' || !state.inBoat) return null;
+  const facing = facingTile(state);
+  if (facing.tx < 0 || facing.ty < 0 || facing.tx >= facing.map.w || facing.ty >= facing.map.h) {
+    return null;
+  }
+  const fi = facing.ty * facing.map.w + facing.tx;
+  const res = resourceOf(facing.map.tiles[fi]);
+  const depth = depthAt(state, facing.tx, facing.ty);
+  if (res === null || !facing.map.floods || depth <= 0) return null;
+
+  const tile = facing.map.tiles[fi] as Tile;
+  const reachable = depth <= state.rodReach;
+  if (state.hasSoundingLine) {
+    return {
+      prompt: {
+        tile,
+        label: `Sounding line: depth ${Math.min(4, depth)} — ${RESOURCE_NAMES[res]} below${reachable ? '; swing to dredge' : '; beyond the Rod'}`,
+        affordable: reachable,
+      },
+    };
+  }
+  return {
+    prompt: {
+      tile,
+      label: reachable ? 'Dredge the deep — swing the Rod' : 'Something lies below, beyond the Rod',
+      affordable: reachable,
+    },
+  };
 }

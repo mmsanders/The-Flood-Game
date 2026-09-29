@@ -5,9 +5,9 @@
 
 import { animalDef, AnimalStatus } from '../core/animals.js';
 import { TILE_PX } from '../core/config.js';
-import { isWalkable } from '../core/tiles.js';
+import { isWalkable, Tile } from '../core/tiles.js';
 import { currentDay, say, waterLevel } from './queries.js';
-import { Dir, type GameState, PLAYER_H, PLAYER_W } from './types.js';
+import { type Action, Dir, type GameState, PLAYER_H, PLAYER_W } from './types.js';
 
 export const LODESTONE_DIR_NAME: Record<Dir, string> = {
   [Dir.Down]: 'south',
@@ -91,6 +91,24 @@ export function releaseDove(state: GameState): void {
     return;
   }
   say(state, 'The dove finds neither dry ground nor beast nearby.');
+}
+
+/**
+ * Carrying the dove: release it. The HUD offers it only outdoors, but E
+ * releases it anywhere, even underground.
+ */
+export function doveAction(state: GameState): Action | null {
+  if (!state.hasDove) return null;
+  if (state.location.kind !== 'overworld') return { prompt: null, run: releaseHere };
+  return {
+    prompt: { tile: Tile.Reed, label: 'Release the dove — scout dry land or beasts', affordable: true },
+    run: releaseHere,
+  };
+}
+
+function releaseHere(state: GameState): boolean {
+  releaseDove(state);
+  return true;
 }
 
 function bearingName(dx: number, dy: number): string {

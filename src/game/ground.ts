@@ -21,7 +21,7 @@ import {
   tileUnder,
 } from './queries.js';
 import { damage, deliverToArk } from './run.js';
-import { type GameState, type ObstaclePrompt, PLAYER_H, PLAYER_W } from './types.js';
+import { type Action, type GameState, type ObstaclePrompt, PLAYER_H, PLAYER_W } from './types.js';
 
 /** Tiles converted in one clear. Generous enough for any doorway band. */
 const CLEAR_LIMIT = 32;
@@ -171,7 +171,7 @@ export function obstacleInFront(state: GameState): ObstaclePrompt | null {
 }
 
 /** Pay to cross. Costs come out of the same stock the ark needs. */
-export function tryClear(state: GameState, tx: number, ty: number): void {
+function tryClear(state: GameState, tx: number, ty: number): void {
   const map = activeMap(state);
   if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return;
 
@@ -217,6 +217,18 @@ export function tryClear(state: GameState, tx: number, ty: number): void {
   convertConnected(map, tx, ty, tile, OBSTACLE_CLEARS_TO[tile]);
   state.mapRevision++;
   say(state, `${cost.amount} ${name} spent. The ark will notice.`);
+}
+
+/** Facing a lock, a seal or a toll: open it, part it, or pay it. */
+export function obstacleAction(state: GameState): Action | null {
+  const prompt = obstacleInFront(state);
+  return prompt && { prompt, run: clearInFront };
+}
+
+function clearInFront(state: GameState): boolean {
+  const { tx, ty } = facingTile(state);
+  tryClear(state, tx, ty);
+  return true;
 }
 
 /** Convert a whole obstacle band in one payment. */

@@ -30,7 +30,7 @@ import {
   tileUnder,
   waterLevel,
 } from './queries.js';
-import { type GameState, type ObstaclePrompt, PLAYER_H, PLAYER_W } from './types.js';
+import { type Action, type GameState, type ObstaclePrompt, PLAYER_H, PLAYER_W } from './types.js';
 
 /** Reused so the every-frame launch prompt does not allocate a point. */
 const boatSpot: Point = { x: 0, y: 0 };
@@ -142,6 +142,23 @@ export function handleBoatYard(state: GameState, biome: Biome): boolean {
   return false;
 }
 
+/**
+ * A boatyard: frame a skiff, or recaulk the one you haul. (A yard with a
+ * carpenter's shop behind it is a doorway, and `entranceAction` comes first.)
+ */
+export function boatYardAction(state: GameState): Action | null {
+  if (state.location.kind !== 'overworld') return null;
+  const { map, i } = tileUnder(state);
+  if (map.tiles[i] !== Tile.BoatYard) return null;
+  const prompt = boatYardPrompt(state, map.biome[i] as Biome);
+  return prompt && { prompt, run: useBoatYard };
+}
+
+function useBoatYard(state: GameState): boolean {
+  const { map, i } = tileUnder(state);
+  return handleBoatYard(state, map.biome[i] as Biome);
+}
+
 function tryCraftBoat(state: GameState): void {
   if (!canAffordBoat(state.carried)) {
     say(state, `The slipway wants ${BOAT_COST_WOOD} gopher wood and ${BOAT_COST_FIBER} fiber.`);
@@ -167,7 +184,7 @@ function tryPitchBoat(state: GameState): void {
   say(state, 'Fresh pitch in every seam. The skiff will take depth three.');
 }
 
-export function tryLaunchBoat(state: GameState): boolean {
+function tryLaunchBoat(state: GameState): boolean {
   if (!state.hasBoat || state.inBoat || state.location.kind !== 'overworld') return false;
   if (!state.haulingBoat && state.boatX >= 0) return false;
   const dest = firstAdjacentBoatable(state);
@@ -183,14 +200,14 @@ export function tryLaunchBoat(state: GameState): boolean {
   return true;
 }
 
-export function canSetBoatHere(state: GameState): boolean {
+function canSetBoatHere(state: GameState): boolean {
   if (!state.haulingBoat || state.inBoat || state.location.kind !== 'overworld') return false;
   const { map, tx, ty, i } = tileUnder(state);
   if (depthAt(state, tx, ty) > 0) return false;
   return isBoatGround(map.tiles[i]);
 }
 
-export function trySetDownBoat(state: GameState): boolean {
+function trySetDownBoat(state: GameState): boolean {
   if (!state.haulingBoat || state.inBoat || state.location.kind !== 'overworld') return false;
   const { map, tx, ty, i } = tileUnder(state);
   if (!canSetBoatHere(state)) {
@@ -207,7 +224,7 @@ export function trySetDownBoat(state: GameState): boolean {
   return true;
 }
 
-export function pickUpBoat(state: GameState, tx: number, ty: number, i: number): void {
+function pickUpBoat(state: GameState, tx: number, ty: number, i: number): void {
   const map = activeMap(state);
   const tracked = state.boatX === tx && state.boatY === ty;
   map.tiles[i] = tracked ? state.boatUnderTile : carveTo(map.biome[i]);
@@ -219,6 +236,52 @@ export function pickUpBoat(state: GameState, tx: number, ty: number, i: number):
   state.boatY = -1;
   state.mapRevision++;
   say(state, 'You take hold of the skiff.');
+}
+
+/** A beached skiff underfoot: take hold of it. */
+export function skiffPickupAction(state: GameState): Action | null {
+  if (state.location.kind !== 'overworld' || state.haulingBoat || state.inBoat) return null;
+  const { map, i } = tileUnder(state);
+  if (map.tiles[i] !== Tile.Skiff) return null;
+  return {
+    prompt: { tile: Tile.Skiff, label: 'Take hold of the skiff', affordable: true },
+    run: takeHold,
+  };
+}
+
+function takeHold(state: GameState): boolean {
+  const { tx, ty, i } = tileUnder(state);
+  pickUpBoat(state, tx, ty, i);
+  return true;
+}
+
+/** Hauling the skiff (or owning one never set down) beside water: launch. */
+export function launchAction(state: GameState): Action | null {
+  if (state.location.kind !== 'overworld' || !state.hasBoat || state.inBoat) return null;
+  if (!state.haulingBoat && state.boatX >= 0) return null;
+  if (!hasAdjacentBoatable(state)) return null;
+  return {
+    prompt: {
+      tile: Tile.Water,
+      label: `Launch the skiff — depth limit ${state.boatDepth}`,
+      affordable: true,
+    },
+    run: tryLaunchBoat,
+  };
+}
+
+/** Hauling the skiff: set it down, if the ground here will take it. */
+export function setDownAction(state: GameState): Action | null {
+  if (state.location.kind !== 'overworld' || !state.haulingBoat) return null;
+  const clear = canSetBoatHere(state);
+  return {
+    prompt: {
+      tile: Tile.Skiff,
+      label: clear ? 'Set down the skiff' : 'Carry the skiff onto clear dry ground',
+      affordable: clear,
+    },
+    run: trySetDownBoat,
+  };
 }
 
 function isBoatGround(tile: number): boolean {
@@ -238,7 +301,7 @@ function isBoatGround(tile: number): boolean {
   );
 }
 
-export function hasAdjacentBoatable(state: GameState): boolean {
+function hasAdjacentBoatable(state: GameState): boolean {
   return firstAdjacentBoatable(state) !== null;
 }
 

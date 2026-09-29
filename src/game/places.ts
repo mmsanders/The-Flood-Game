@@ -16,14 +16,21 @@ import { placeOn } from './camera.js';
 import { activeMap, currentInterior, depthAt, say, tileUnder } from './queries.js';
 import { boatYardPrompt, handleBoatYard } from './skiff.js';
 import { hermitPrompt, interactSettlement, settlementPrompt, tradeWithHermit } from './trade.js';
-import { Dir, type GameState, type ObstaclePrompt, PLAYER_H, PLAYER_W } from './types.js';
+import {
+  type Action,
+  Dir,
+  type GameState,
+  type ObstaclePrompt,
+  PLAYER_H,
+  PLAYER_W,
+} from './types.js';
 
 /** Distinct tiles covered by the player hitbox, without allocating. */
 const HITBOX_SAMPLES = 6;
 
 const hitboxScratch = new Int32Array(HITBOX_SAMPLES);
 
-export function entrancePrompt(state: GameState, tile: Tile): ObstaclePrompt {
+function entrancePrompt(state: GameState, tile: Tile): ObstaclePrompt {
   const { tx, ty } = tileUnder(state);
   const room = findInteriorAtTile(state, tx, ty);
   if (!room) {
@@ -36,7 +43,7 @@ export function entrancePrompt(state: GameState, tile: Tile): ObstaclePrompt {
   };
 }
 
-export function interiorPrompt(state: GameState): ObstaclePrompt | null {
+function interiorPrompt(state: GameState): ObstaclePrompt | null {
   const room = currentInterior(state);
   if (!room) return null;
   const { tx, ty } = tileUnder(state);
@@ -59,7 +66,7 @@ export function interiorPrompt(state: GameState): ObstaclePrompt | null {
   };
 }
 
-export function interactInterior(state: GameState): void {
+function interactInterior(state: GameState): void {
   const room = currentInterior(state);
   if (!room) return;
   const { tx, ty } = tileUnder(state);
@@ -82,7 +89,33 @@ export function interactInterior(state: GameState): void {
   say(state, 'Canvas and rope. Home, until the rain.');
 }
 
-export function findInteriorAtTile(state: GameState, tx: number, ty: number): Interior | null {
+/** Inside a building, E always belongs to the room — even off the counter. */
+export function interiorAction(state: GameState): Action | null {
+  if (state.location.kind !== 'interior') return null;
+  return { prompt: interiorPrompt(state), run: useInterior };
+}
+
+function useInterior(state: GameState): boolean {
+  interactInterior(state);
+  return true;
+}
+
+/** A doorway with a room behind it: step inside. */
+export function entranceAction(state: GameState): Action | null {
+  if (state.location.kind !== 'overworld') return null;
+  const { map, tx, ty, i } = tileUnder(state);
+  const standing = map.tiles[i] as Tile;
+  if (!isInteriorEntrance(standing) || !findInteriorAtTile(state, tx, ty)) return null;
+  return { prompt: entrancePrompt(state, standing), run: enterHere };
+}
+
+function enterHere(state: GameState): boolean {
+  const { tx, ty } = tileUnder(state);
+  enterInteriorAt(state, tx, ty);
+  return true;
+}
+
+function findInteriorAtTile(state: GameState, tx: number, ty: number): Interior | null {
   const list = state.world.interiors ?? [];
   for (const room of list) {
     if (room.overworldEntrance.x === tx && room.overworldEntrance.y === ty) return room;
@@ -90,7 +123,7 @@ export function findInteriorAtTile(state: GameState, tx: number, ty: number): In
   return null;
 }
 
-export function enterInteriorAt(state: GameState, tx: number, ty: number): void {
+function enterInteriorAt(state: GameState, tx: number, ty: number): void {
   if (state.location.kind !== 'overworld') return;
   if (depthAt(state, tx, ty) > 0) return;
 

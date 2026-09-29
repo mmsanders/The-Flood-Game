@@ -143,3 +143,17 @@ export interface ObstaclePrompt {
   label: string;
   affordable: boolean;
 }
+
+/**
+ * One thing E can do where the player stands: what the HUD offers, and what
+ * pressing E does, written side by side so the two cannot drift apart.
+ */
+export interface Action {
+  /** What the HUD shows; null when E acts here without a prompt. */
+  prompt: ObstaclePrompt | null;
+  /**
+   * What E does. Returning false passes E on to the next provider. Absent for
+   * hints that only inform — the dredge hint says to swing the Rod, not E.
+   */
+  run?: (state: GameState) => boolean;
+}

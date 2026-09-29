@@ -14,8 +14,8 @@ import {
   SHOP_STOCK,
 } from '../core/items.js';
 import { Biome, Tile } from '../core/tiles.js';
-import { currentDay, RESOURCE_LABEL, say } from './queries.js';
-import type { GameState, ObstaclePrompt } from './types.js';
+import { currentDay, RESOURCE_LABEL, say, tileUnder } from './queries.js';
+import type { Action, GameState, ObstaclePrompt } from './types.js';
 
 export function settlementPrompt(state: GameState, biome: Biome): ObstaclePrompt {
   if (biome === Biome.Mountain) return hermitPrompt(state);
@@ -41,6 +41,20 @@ export function interactSettlement(state: GameState, biome: Biome): void {
     return;
   }
   buyItem(state, biome, item);
+}
+
+/** A town door with no shop behind it: the market, or the hermit up high. */
+export function townAction(state: GameState): Action | null {
+  if (state.location.kind !== 'overworld') return null;
+  const { map, i } = tileUnder(state);
+  if (map.tiles[i] !== Tile.TownDoor) return null;
+  return { prompt: settlementPrompt(state, map.biome[i] as Biome), run: tradeHere };
+}
+
+function tradeHere(state: GameState): boolean {
+  const { map, i } = tileUnder(state);
+  interactSettlement(state, map.biome[i] as Biome);
+  return true;
 }
 
 function nextShopItem(state: GameState, biome: Biome): ItemKind | null {
