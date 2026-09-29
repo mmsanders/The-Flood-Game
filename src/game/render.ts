@@ -42,6 +42,7 @@ import {
   currentDay,
   currentDungeon,
   flockScore,
+  keysHere,
   lodestoneBearing,
   waterLevel,
 } from './state.js';
@@ -1308,7 +1309,8 @@ function putMiniPixel(
 
 /** Keys sit next to the hearts, the way Zelda 1 parked them on the status bar. */
 function drawKeys(ctx: CanvasRenderingContext2D, state: GameState, x: number, y: number): void {
-  if (!currentDungeon(state) || state.keysHeld <= 0) return;
+  const keys = keysHere(state);
+  if (keys <= 0) return;
 
   ctx.fillStyle = PALETTE.key;
   ctx.fillRect(x, y + 1, 5, 5);
@@ -1318,7 +1320,7 @@ function drawKeys(ctx: CanvasRenderingContext2D, state: GameState, x: number, y:
   ctx.textBaseline = 'top';
   ctx.textAlign = 'left';
   ctx.fillStyle = PALETTE.key;
-  ctx.fillText(`x${state.keysHeld}`, x + 7, y);
+  ctx.fillText(`x${keys}`, x + 7, y);
 }
 
 

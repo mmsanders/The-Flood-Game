@@ -1,0 +1,67 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`replay determinism > sailing a flooding lowland 1`] = `
+[
+  "250:d9a0ef58",
+  "500:f3e8d333",
+  "750:74dbb623",
+  "1000:2ffc7514",
+  "1250:ee890ff6",
+  "1500:d46b215f",
+  "1750:f19c52c4",
+  "2000:ce27dfbf",
+  "2250:14a82171",
+  "2500:2009681d",
+  "2750:038911bb",
+  "3000:93b17578",
+  "3250:55b4dbfa",
+  "3500:e979b041",
+  "3750:43365fc9",
+  "4000:6d0d049d",
+  "end:playing:overworld:The dove returns from the north-west. Dry ground.",
+]
+`;
+
+exports[`replay determinism > wandering and harvesting from spawn 1`] = `
+[
+  "250:cc238064",
+  "500:42ed8bfd",
+  "750:5b66a345",
+  "1000:7367fb7d",
+  "1250:879e3cff",
+  "1500:7fca7844",
+  "1750:38a19435",
+  "2000:27cf0f12",
+  "2250:a01b1a66",
+  "2500:06ba1785",
+  "2750:02b360cb",
+  "3000:6604b9b8",
+  "3250:80611087",
+  "3500:b70035b2",
+  "3750:486aa44a",
+  "4000:b7169d02",
+  "4250:95791414",
+  "4500:8f705627",
+  "4750:9c56d58e",
+  "5000:425ba7e9",
+  "end:playing:overworld:",
+]
+`;
+
+exports[`replay determinism > working a cave with a crowned Rod 1`] = `
+[
+  "250:d8daf853",
+  "500:6912d359",
+  "750:17318fb9",
+  "1000:19ddc08f",
+  "1250:21341214",
+  "1500:b306072c",
+  "1750:1fecb451",
+  "2000:07b23840",
+  "2250:49d6d82c",
+  "2500:ff0fab53",
+  "2750:bdb3dcba",
+  "3000:54884de5",
+  "end:playing:overworld:Daylight. Or what is left of it.",
+]
+`;

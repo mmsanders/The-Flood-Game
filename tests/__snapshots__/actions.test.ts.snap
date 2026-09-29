@@ -1,0 +1,1476 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`E: cave seals and tolls > bridges a chasm with wood 1`] = `
+{
+  "after": {
+    "carried": "0,3,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 1,
+    "dungeonId": 0,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": "2 gopher wood spent. The ark will notice.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 8,
+      "y": 6,
+    },
+    "where": "dungeon",
+  },
+  "prompt": {
+    "affordable": true,
+    "label": "Bridge the chasm — 2 gopher wood (you have 5)",
+    "tile": 80,
+  },
+}
+`;
+
+exports[`E: cave seals and tolls > holds a seal the Rod does not know 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 1,
+    "dungeonId": 0,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": "The seal holds. Imbue the Rod with pitch and return.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 8,
+      "y": 6,
+    },
+    "where": "dungeon",
+  },
+  "prompt": {
+    "affordable": false,
+    "label": "A seal of pitch. The Rod is not ready for this.",
+    "tile": 84,
+  },
+}
+`;
+
+exports[`E: cave seals and tolls > opens a locked door with a key 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 1,
+    "dungeonId": 0,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": "The key turns.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 8,
+      "y": 6,
+    },
+    "where": "dungeon",
+  },
+  "prompt": {
+    "affordable": true,
+    "label": "Unlock the door — 1 key",
+    "tile": 82,
+  },
+}
+`;
+
+exports[`E: cave seals and tolls > parts a seal the Rod knows 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 1,
+    "dungeonId": 0,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": "The Rod drinks the fiber. The seal parts.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 1,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 8,
+      "y": 6,
+    },
+    "where": "dungeon",
+  },
+  "prompt": {
+    "affordable": true,
+    "label": "Part the seal — the Rod knows fiber",
+    "tile": 87,
+  },
+}
+`;
+
+exports[`E: cave seals and tolls > refuses a ledge without fiber 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 1,
+    "dungeonId": 0,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": "Not enough fiber — 2 needed, you have 0.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 8,
+      "y": 6,
+    },
+    "where": "dungeon",
+  },
+  "prompt": {
+    "affordable": false,
+    "label": "Rope the ledge — 2 fiber (you have 0)",
+    "tile": 81,
+  },
+}
+`;
+
+exports[`E: cave seals and tolls > refuses a locked door without one 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 1,
+    "dungeonId": 0,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": "Locked. A key is somewhere in here.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 8,
+      "y": 6,
+    },
+    "where": "dungeon",
+  },
+  "prompt": {
+    "affordable": false,
+    "label": "Locked. A key is somewhere here.",
+    "tile": 82,
+  },
+}
+`;
+
+exports[`E: divergences between the prompt and the key, recorded as-is > (a) in a room, off the counter: no prompt, but E speaks 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": 0,
+    "keys": 0,
+    "kit": "",
+    "message": "The stairs lead back outside.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 5,
+      "y": 6,
+    },
+    "where": "interior",
+  },
+  "prompt": null,
+}
+`;
+
+exports[`E: divergences between the prompt and the key, recorded as-is > (b) sailing with a dredge hint showing: E releases the dove instead 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 3,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "dove",
+    "message": "The dove returns from the north. Dry ground.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": true,
+      "hauling": false,
+      "in": true,
+    },
+    "tile": {
+      "x": 64,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": {
+    "affordable": true,
+    "label": "Dredge the deep — swing the Rod",
+    "tile": 32,
+  },
+}
+`;
+
+exports[`E: dredging from the skiff (a prompt-only hint) > beyond reach 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 3,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": null,
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": true,
+      "hauling": false,
+      "in": true,
+    },
+    "tile": {
+      "x": 64,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": {
+    "affordable": false,
+    "label": "Something lies below, beyond the Rod",
+    "tile": 32,
+  },
+}
+`;
+
+exports[`E: dredging from the skiff (a prompt-only hint) > with the sounding line 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 3,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "line",
+    "message": null,
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": true,
+      "hauling": false,
+      "in": true,
+    },
+    "tile": {
+      "x": 64,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": {
+    "affordable": true,
+    "label": "Sounding line: depth 1 — Fiber below; swing to dredge",
+    "tile": 32,
+  },
+}
+`;
+
+exports[`E: dredging from the skiff (a prompt-only hint) > within reach 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 3,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": null,
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": true,
+      "hauling": false,
+      "in": true,
+    },
+    "tile": {
+      "x": 64,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": {
+    "affordable": true,
+    "label": "Dredge the deep — swing the Rod",
+    "tile": 32,
+  },
+}
+`;
+
+exports[`E: interiors > frames a skiff at the carpenter 1`] = `
+{
+  "after": {
+    "carried": "93,91,99,99",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": 3,
+    "keys": 0,
+    "kit": "",
+    "message": "A skiff of gopher wood. It is yours to sail — and to carry.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": true,
+      "hauling": true,
+      "in": false,
+    },
+    "tile": {
+      "x": 8,
+      "y": 3,
+    },
+    "where": "interior",
+  },
+  "prompt": {
+    "affordable": true,
+    "label": "Frame a skiff — 8 wood, 6 fiber (you have 99, 99)",
+    "tile": 52,
+  },
+}
+`;
+
+exports[`E: interiors > rests in the tent 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": 4,
+    "keys": 0,
+    "kit": "",
+    "message": "Canvas and rope. Home, until the rain.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 8,
+      "y": 3,
+    },
+    "where": "interior",
+  },
+  "prompt": {
+    "affordable": true,
+    "label": "Your tent. Rest, then build.",
+    "tile": 5,
+  },
+}
+`;
+
+exports[`E: interiors > trades at a shop counter 1`] = `
+{
+  "after": {
+    "carried": "99,94,87,99",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": 0,
+    "keys": 0,
+    "kit": "pick14",
+    "message": "A pickaxe, 14 durability. Rock is costly to break.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 8,
+      "y": 3,
+    },
+    "where": "interior",
+  },
+  "prompt": {
+    "affordable": true,
+    "label": "Market: Pickaxe — 5 gopher wood + 12 stone",
+    "tile": 51,
+  },
+}
+`;
+
+exports[`E: interiors > trades at the hermit counter 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": 5,
+    "keys": 0,
+    "kit": "",
+    "message": "The hermit asks for a sheep you have rescued.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 8,
+      "y": 3,
+    },
+    "where": "interior",
+  },
+  "prompt": {
+    "affordable": false,
+    "label": "Hermit: one rescued sheep → Heart Container (0 aboard)",
+    "tile": 51,
+  },
+}
+`;
+
+exports[`E: interiors > walks into a real town door 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 1,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": 0,
+    "keys": 0,
+    "kit": "",
+    "message": "The stairs lead back outside.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 8,
+      "y": 8,
+    },
+    "where": "interior",
+  },
+  "prompt": {
+    "affordable": true,
+    "label": "Enter the market",
+    "tile": 51,
+  },
+}
+`;
+
+exports[`E: settlements without an interior behind them > buys the first market item when affordable 1`] = `
+{
+  "after": {
+    "carried": "94,89,99,99",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "axe14",
+    "message": "An axe, 14 durability. Ordinary timber is costly to cut.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 64,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": {
+    "affordable": true,
+    "label": "Market: Axe — 5 fiber + 10 gopher wood",
+    "tile": 51,
+  },
+}
+`;
+
+exports[`E: settlements without an interior behind them > has nothing left once everything is owned 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "axe5 line",
+    "message": "The market has nothing more you need.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 64,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": {
+    "affordable": false,
+    "label": "The market has nothing more you need.",
+    "tile": 51,
+  },
+}
+`;
+
+exports[`E: settlements without an interior behind them > lets the hermit ask for a sheep you do not have 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": "The hermit asks for a sheep you have rescued.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 64,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": {
+    "affordable": false,
+    "label": "Hermit: one rescued sheep → Heart Container (0 aboard)",
+    "tile": 51,
+  },
+}
+`;
+
+exports[`E: settlements without an interior behind them > offers the first market item, unaffordable 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": "The barter is 5 fiber + 10 gopher wood. The flood has no mercy on prices.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 64,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": {
+    "affordable": false,
+    "label": "Market: Axe — 5 fiber + 10 gopher wood",
+    "tile": 51,
+  },
+}
+`;
+
+exports[`E: settlements without an interior behind them > trades a rescued sheep for a heart 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "4/4",
+    "hermit": true,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": "The hermit takes the sheep and gives a heart container. A life for strength.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 64,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": {
+    "affordable": true,
+    "label": "Hermit: one rescued sheep → Heart Container (1 aboard)",
+    "tile": 51,
+  },
+}
+`;
+
+exports[`E: shrines > asks for more when short 1`] = `
+{
+  "after": {
+    "carried": "3,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": "The shrine wants 18 fiber.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 64,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": {
+    "affordable": false,
+    "label": "Imbue the Rod — 18 fiber → Gopher Wood (you have 3)",
+    "tile": 53,
+  },
+}
+`;
+
+exports[`E: shrines > crowns the Rod at the mountain 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,21",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": "Pitch crowns the Rod. It buds twice.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 4,
+      "yield": 2,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 64,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": {
+    "affordable": true,
+    "label": "Imbue the Rod — 9 pitch → a budding harvest (you have 30)",
+    "tile": 53,
+  },
+}
+`;
+
+exports[`E: shrines > imbues the Rod when affordable 1`] = `
+{
+  "after": {
+    "carried": "22,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": "The Rod drinks. It will take gopher wood.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 1,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 64,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": {
+    "affordable": true,
+    "label": "Imbue the Rod — 18 fiber → Gopher Wood (you have 40)",
+    "tile": 53,
+  },
+}
+`;
+
+exports[`E: shrines > is silent above the Rod 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": "This shrine is silent. Seek the lower biome first.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 64,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": {
+    "affordable": false,
+    "label": "This shrine is silent. Seek the lower biome first.",
+    "tile": 53,
+  },
+}
+`;
+
+exports[`E: shrines > is spent below the Rod 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": "The Rod already bears this gift.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 2,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 64,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": {
+    "affordable": false,
+    "label": "The Rod already bears this gift.",
+    "tile": 53,
+  },
+}
+`;
+
+exports[`E: the boatyard without an interior > asks for timber when short 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": "The slipway wants 8 gopher wood and 6 fiber.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 64,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": {
+    "affordable": false,
+    "label": "Frame a skiff — 8 wood, 6 fiber (you have 0, 0)",
+    "tile": 52,
+  },
+}
+`;
+
+exports[`E: the boatyard without an interior > frames a skiff 1`] = `
+{
+  "after": {
+    "carried": "93,91,99,99",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": "A skiff of gopher wood. It is yours to sail — and to carry.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": true,
+      "hauling": true,
+      "in": false,
+    },
+    "tile": {
+      "x": 64,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": {
+    "affordable": true,
+    "label": "Frame a skiff — 8 wood, 6 fiber (you have 99, 99)",
+    "tile": 52,
+  },
+}
+`;
+
+exports[`E: the boatyard without an interior > recaulks a hauled skiff at a high yard 1`] = `
+{
+  "after": {
+    "carried": "96,99,99,95",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": "Fresh pitch in every seam. The skiff will take depth three.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 3,
+      "has": true,
+      "hauling": true,
+      "in": false,
+    },
+    "tile": {
+      "x": 64,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": {
+    "affordable": true,
+    "label": "Recaulk for depth 3 — 4 pitch + 3 fiber",
+    "tile": 52,
+  },
+}
+`;
+
+exports[`E: the dove and nothing at all > does nothing with nothing to do 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": null,
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 64,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": null,
+}
+`;
+
+exports[`E: the dove and nothing at all > releases the dove outdoors 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "dove",
+    "message": "The dove circles a donkey to the south-east.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 64,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": {
+    "affordable": true,
+    "label": "Release the dove — scout dry land or beasts",
+    "tile": 9,
+  },
+}
+`;
+
+exports[`E: the skiff > launches from the shore 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": "The skiff takes the water.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": true,
+      "hauling": false,
+      "in": true,
+    },
+    "tile": {
+      "x": 65,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": {
+    "affordable": true,
+    "label": "Launch the skiff — depth limit 2",
+    "tile": 20,
+  },
+}
+`;
+
+exports[`E: the skiff > refuses to set the skiff down on a road-less shrine 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": "Set the skiff down on clear dry ground.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": true,
+      "hauling": true,
+      "in": false,
+    },
+    "tile": {
+      "x": 64,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": {
+    "affordable": false,
+    "label": "Carry the skiff onto clear dry ground",
+    "tile": 55,
+  },
+}
+`;
+
+exports[`E: the skiff > sets the skiff down on dry ground 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": "You set the skiff down. The flood can strand it here.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "64,110",
+      "depth": 2,
+      "has": true,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 64,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": {
+    "affordable": true,
+    "label": "Set down the skiff",
+    "tile": 55,
+  },
+}
+`;
+
+exports[`E: the skiff > takes hold of a set-down skiff 1`] = `
+{
+  "after": {
+    "carried": "0,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": -1,
+    "keys": 0,
+    "kit": "",
+    "message": "You take hold of the skiff.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": true,
+      "hauling": true,
+      "in": false,
+    },
+    "tile": {
+      "x": 64,
+      "y": 110,
+    },
+    "where": "overworld",
+  },
+  "prompt": {
+    "affordable": true,
+    "label": "Take hold of the skiff",
+    "tile": 55,
+  },
+}
+`;
+
+exports[`walking, not E: cave and room mouths > walks into a cave from the south and back out by the stairs 1`] = `
+[
+  null,
+  {
+    "where": "dungeon",
+  },
+  {
+    "message": "Daylight. Or what is left of it.",
+    "where": "overworld",
+  },
+]
+`;
