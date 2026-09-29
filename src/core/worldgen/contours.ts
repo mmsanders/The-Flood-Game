@@ -16,14 +16,18 @@
 
 import type { WorldParams } from '../config.js';
 import { randInt, type Rng } from '../rng.js';
-import { Tile } from '../tiles.js';
+import { Tile, isWalkable } from '../tiles.js';
 import { UNPLANNED, stamp } from './plan.js';
+import { onPanelEdge } from './seams.js';
 
 /** Lines shorter than this are knolls and dimples, not terraces: left open. */
 export const MIN_CONTOUR_RUN = 10;
 
 /** Tiles of ledge between planned stairs, measured along the line. */
 export const CONTOUR_STAIR_STRIDE = 24;
+
+/** Ground sealed in by a ledge and this small or smaller becomes ledge too. */
+export const MAX_SLIVER = 24;
 
 export interface ContourStats {
   /** Elevations a contour follows, low to high. */
@@ -176,7 +180,53 @@ export function cutContours(
     }
   }
 
+  stats.cliffs += fillSlivers(plan, marks, w, h);
   return stats;
+}
+
+/**
+ * Where a ledge runs close beside a gorge, a river or another wall, it leaves
+ * a strip of ground too small to put a stair in and sealed on every side.
+ * Connectivity repair would cut a stair into each one. Instead the strip
+ * becomes part of the ledge, so the two walls read as one bank.
+ *
+ * Only strips that touch a contour are filled, and never one holding planned
+ * walkable ground (a stair, a bridge, a path), so this cannot seal a route
+ * that some other pass laid.
+ */
+function fillSlivers(plan: Uint8Array, marks: Uint8Array, w: number, h: number): number {
+  const open = (i: number): boolean => plan[i] === UNPLANNED || isWalkable(plan[i]);
+  const seen = new Uint8Array(w * h);
+  const region: number[] = [];
+  let filled = 0;
+  for (let start = 0; start < plan.length; start++) {
+    if (seen[start] || !open(start)) continue;
+    region.length = 0;
+    region.push(start);
+    seen[start] = 1;
+    let fillable = true;
+    let touchesContour = false;
+    for (let k = 0; k < region.length; k++) {
+      const i = region[k];
+      const x = i % w;
+      const y = (i / w) | 0;
+      if (plan[i] !== UNPLANNED) fillable = false;
+      if (x < 1 || y < 1 || x >= w - 1 || y >= h - 1) {
+        fillable = false;
+        continue;
+      }
+      for (const j of [i - 1, i + 1, i - w, i + w]) {
+        if (marks[j] && plan[j] === Tile.Cliff) touchesContour = true;
+        if (seen[j] || !open(j)) continue;
+        seen[j] = 1;
+        region.push(j);
+      }
+    }
+    if (!fillable || !touchesContour || region.length > MAX_SLIVER) continue;
+    for (const i of region) plan[i] = Tile.Cliff;
+    filled += region.length;
+  }
+  return filled;
 }
 
 /**
@@ -195,9 +245,13 @@ function isStairSpot(
   const x = i % w;
   const y = (i / w) | 0;
   if (x < 2 || y < 2 || x >= w - 2 || y >= h - 2) return false;
+  // Off the panel seams: a stair there is paired with whatever sits over the
+  // boundary, usually more ledge, and repair would cut that open to match.
+  if (onPanelEdge(x, y)) return false;
   for (const d of [1, -1, w, -w]) {
     const low = i + d;
     const high = i - d;
+    if (onPanelEdge(low % w, (low / w) | 0) || onPanelEdge(high % w, (high / w) | 0)) continue;
     if (terrace[low] >= terrace[i]) continue;
     if (marks[low] || marks[high]) continue;
     if (terrace[high] !== terrace[i]) continue;

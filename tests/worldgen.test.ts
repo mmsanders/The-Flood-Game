@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_PARAMS, PANEL_H, PANEL_W, withParams } from '../src/core/config.js';
 import { BIOME_COUNT, Biome, Tile, isResourceNode, isWalkable } from '../src/core/tiles.js';
 import { generateWorld } from '../src/core/worldgen/index.js';
-import { labelRegions } from '../src/core/worldgen/connectivity.js';
+import { ensureConnected, labelRegions } from '../src/core/worldgen/connectivity.js';
 import { isSeamBlocker, onPanelEdge } from '../src/core/worldgen/seams.js';
 import { PoiKind, SettlementKind, getPanel } from '../src/core/world.js';
 
@@ -76,6 +76,30 @@ describe('worldgen: connectivity', () => {
         ).toBe(spawnRegion);
       }
     }
+  });
+
+  it('repairs along the truly cheapest route when a gorge is on offer', () => {
+    // One panel: a walled rim, and a wall down column 6 that is ledge except
+    // for one tile of gorge. A ledge is the cheaper cut. The repair's bucket
+    // queue once had fewer buckets than the gorge's cost, so the gorge wrapped
+    // into an early bucket, was settled first, and got bridged instead.
+    const params = withParams({ panelsX: 1, panelsY: 1 });
+    const w = PANEL_W;
+    const h = PANEL_H;
+    const tiles = new Uint8Array(w * h).fill(Tile.Grass);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (x === 0 || y === 0 || x === w - 1 || y === h - 1 || x === 6) tiles[y * w + x] = Tile.Cliff;
+      }
+    }
+    tiles[5 * w + 6] = Tile.Gorge;
+    const biome = new Uint8Array(w * h).fill(Biome.Valley);
+
+    const result = ensureConnected(tiles, biome, params);
+
+    expect(result.connected).toBe(true);
+    expect(tiles[5 * w + 6]).toBe(Tile.Gorge);
+    expect(result.stairsCut).toBe(1);
   });
 });
 

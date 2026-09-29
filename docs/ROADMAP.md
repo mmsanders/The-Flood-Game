@@ -11,10 +11,10 @@ ones land on foundations that already exist.
 Nothing here is precious. Where I disagree with a note I say so and say why, and the note
 wins if you still want it.
 
-**Status:** Waves 0–3 have shipped (frame budget; the world people left behind; the
-depth ladder and the things that beat it; interiors and instruments), along with the
-round-two fixes in *What the first full run changed* below. What remains is Waves 4
-through 6.
+**Status:** Waves 0–4 have shipped (frame budget; the world people left behind; the
+depth ladder and the things that beat it; interiors and instruments; contour ledges),
+along with the round-two fixes in *What the first full run changed* below. What remains
+is Waves 5 and 6.
 
 > Full Wave 0 / Wave 1 prose is unchanged from `main` history. This file keeps the
 > Wave 2 write-up and the forward plan; expand from `main` if you need the long
@@ -136,13 +136,50 @@ Remaining kit is shop or hermit. Biome seams block north–south as a dark
 cliff line with sideways stairs. A beached skiff keeps the ground it was
 set on.
 
-## Wave 4 — Contour ledges
+## Housekeeping: one module per system (#17) — shipped
 
-Risky global movement constraint; own session.
+`src/game/state.ts` is split into one module per system (types, queries, camera,
+movement, rod, skiff, trade, places, ground, instruments, run, actions). `state.ts` stays
+the single public entry point and the hot-reload boundary. The E key has one resolver,
+an ordered list of providers in `actions.ts`. The dove no longer releases underground,
+and a single-room cave's chest needs that cave's key. `tests/actions.test.ts` and
+`tests/replay.test.ts` pin the behaviour.
+
+## Wave 4 — Contour ledges *(shipped)*
+
+Note 10: "impossible ledges with stairs". The biome seams were already ledges at the band
+edges. Wave 4 adds `contoursPerBand` more lines inside each band (default 1, so lines at
+elevation ~36 / 102 / 158 / 219 and seven in all). The flood rises at a constant rate,
+so it crosses a ledge about every five days, and the topographic map doubles as a flood
+calendar.
+
+- **Closed, not decorative.** Unlike the seams, a contour walls every crossing, so you
+  cannot walk round its end. It climbs by planned stairs every 24 tiles along the line,
+  each with open ground straight across it. Stairs stay off the panel seams, where
+  they used to pair with ledge across the boundary and force repair to cut it open.
+- **Slivers become bank.** A strip of 24 tiles or fewer sealed between a ledge and a
+  gorge, river or other wall becomes part of the ledge instead of a pocket that repair
+  would cut a stair into.
+- **Towns stand on one terrace.** Sites prefer a footprint with no ledge in it, but
+  never at the cost of moving down a terrace. A town moved down would drag its shrine
+  below the grace line. If no clean site exists on its own terrace, a town keeps its
+  ledge rather than not being built.
+- **Repair is the safety net, not the design.** A ledge costs repair as much as ten
+  trees, so it takes the longer way through scatter when there is one. The repair's
+  bucket queue also had fewer buckets than the gorge's cost, which settled gorge tiles out
+  of order; fixing that is what made the cut count honest.
+- **The numbers** (12 seeds, full size, `npx tsx scripts/survey.ts 12`): repair cuts
+  about 54 ledge tiles per world against about 37 with contours off, and single-attempt
+  solvability is unchanged. The inspector shows lines, stairs and repair cuts per world.
 
 ## Wave 5 — The rain begins
 
 Prologue, dungeon flood, animal husbandry.
+
+Dungeon flooding **revives the 4×4 multi-room generator** (`generateDungeon` in
+`src/core/dungeon.ts`), with row as depth: the water climbs a dungeon room by room. Its
+chasm and ledge tolls and its locked door in `src/game/ground.ts` are kept dormant for
+this.
 
 ## Wave 6 — The endless sand
 
@@ -160,8 +197,8 @@ Wave 2  the depth ladder, the skiff as an   ← shipped
         object, barter, tools
 Wave 3  interiors, the people in them,      ← shipped
         the item set
-Wave 4  contour ledges                      ← next; risky; own session
-Wave 5  the prologue, dungeon flood,
+Wave 4  contour ledges                      ← shipped
+Wave 5  the prologue, dungeon flood,        ← next
         animal husbandry
 Wave 6  the desert                          ← independent; whenever
 ```

@@ -20,6 +20,7 @@ import { freshPlan } from '../src/core/worldgen/plan.js';
 import { placePois } from '../src/core/worldgen/pois.js';
 import { PoiKind } from '../src/core/world.js';
 import { layRoads } from '../src/core/worldgen/roads.js';
+import { clearStairApproaches } from '../src/core/worldgen/seams.js';
 import { placeSettlements } from '../src/core/worldgen/settlements.js';
 
 const params = { ...DEFAULT_PARAMS, contoursPerBand: Number(process.argv[3] ?? 1) };
@@ -34,6 +35,7 @@ const { spawn, pois } = placePois(seed, params, elev, biome, plan, settlements);
 layRoads(seed, params, elev, biome, plan, settlements, { spawn, dungeons: pois.filter((p) => p.kind === PoiKind.Dungeon), docks: pois.filter((p) => p.kind === PoiKind.BoatYard) });
 const tiles = paintTiles({ seed, params, elev, biome, plan });
 sealElevationFaces(tiles, elev, w, h);
+clearStairApproaches(tiles, biome, w, h);
 const { labels, sizes } = labelRegions(tiles, w, h);
 let main = 0; for (let r = 1; r < sizes.length; r++) if (sizes[r] > sizes[main]) main = r;
 const { marks, terrace } = markContours(elev, w, h, contourThresholds(params));

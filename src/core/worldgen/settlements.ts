@@ -15,6 +15,7 @@ import {
   type Point,
   type Settlement,
 } from '../world.js';
+import { contourThresholds } from './contours.js';
 import { UNPLANNED, overwrite, stamp } from './plan.js';
 import { isWorldRim, onPanelEdge } from './seams.js';
 
@@ -35,6 +36,7 @@ export function placeSettlements(
   const rng = stageRng(seed, 'settlements');
   const water = waterDistance(plan, w, h);
   const scale = params.panelsX / 12;
+  const thresholds = contourThresholds(params);
 
   const settlements: Settlement[] = [];
   const pastures: number[] = [];
@@ -48,12 +50,13 @@ export function placeSettlements(
     h,
     Biome.Valley,
     SettlementKind.TentCity,
-    Math.max(7, Math.round(12 * scale)),
-    Math.max(5, Math.round(8 * scale)),
+    scale,
+    elev,
+    thresholds,
     settlements,
   );
   if (tent) {
-    stampPasture(rng, plan, pastures, w, h, tent.x + Math.max(5, tentRx(scale) + 1), tent.y, scale);
+    stampPasture(rng, plan, pastures, w, h, tent.x + Math.max(5, townFootprint(SettlementKind.TentCity, scale).rx + 1), tent.y, scale);
     const shrine = stampShrine(
       rng,
       plan,
@@ -77,8 +80,9 @@ export function placeSettlements(
     h,
     Biome.Forest,
     SettlementKind.LoggingTown,
-    Math.max(6, Math.round(11 * scale)),
-    Math.max(5, Math.round(7 * scale)),
+    scale,
+    elev,
+    thresholds,
     settlements,
   );
   if (mill) {
@@ -105,8 +109,9 @@ export function placeSettlements(
     h,
     Biome.Scrub,
     SettlementKind.City,
-    Math.max(8, Math.round(16 * scale)),
-    Math.max(6, Math.round(11 * scale)),
+    scale,
+    elev,
+    thresholds,
     settlements,
   );
   if (city) {
@@ -121,8 +126,20 @@ export function placeSettlements(
   return { settlements, pastures };
 }
 
-function tentRx(scale: number): number {
-  return Math.max(7, Math.round(12 * scale));
+/**
+ * Half-width and half-height of the ellipse a town fills, in tiles. `scale`
+ * is the map's width against the full twelve panels. Hamlets are sited by
+ * their own pass and have no footprint here.
+ */
+export function townFootprint(kind: SettlementKind, scale: number): { rx: number; ry: number } {
+  switch (kind) {
+    case SettlementKind.TentCity:
+      return { rx: Math.max(7, Math.round(12 * scale)), ry: Math.max(5, Math.round(8 * scale)) };
+    case SettlementKind.LoggingTown:
+      return { rx: Math.max(6, Math.round(11 * scale)), ry: Math.max(5, Math.round(7 * scale)) };
+    default:
+      return { rx: Math.max(8, Math.round(16 * scale)), ry: Math.max(6, Math.round(11 * scale)) };
+  }
 }
 
 function placeTown(
@@ -134,11 +151,26 @@ function placeTown(
   h: number,
   want: Biome,
   kind: SettlementKind,
-  rx: number,
-  ry: number,
+  scale: number,
+  elev: Uint8Array,
+  thresholds: readonly number[],
   existing: Settlement[],
 ): Settlement | null {
-  const site = pickSite(rng, biome, plan, water, w, h, want, existing, rx);
+  const { rx, ry } = townFootprint(kind, scale);
+  const site = pickSite(
+    rng,
+    biome,
+    plan,
+    water,
+    w,
+    h,
+    want,
+    existing,
+    rx,
+    ry,
+    elev,
+    thresholds,
+  );
   if (site < 0) return null;
   const cx = site % w;
   const cy = (site / w) | 0;
@@ -164,9 +196,14 @@ function pickSite(
   want: Biome,
   existing: readonly Settlement[],
   radius: number,
+  ry: number,
+  elev: Uint8Array,
+  thresholds: readonly number[],
 ): number {
   let best = -1;
   let bestScore = -Infinity;
+  const sites: number[] = [];
+  const scores: number[] = [];
   const margin = Math.max(6, radius);
   for (let y = margin; y < h - margin; y++) {
     for (let x = margin; x < w - margin; x++) {
@@ -186,13 +223,57 @@ function pickSite(
       if (blocked) continue;
       const nearWater = water[i] < 0xffff ? Math.max(0, 36 - water[i]) : 0;
       const score = nearWater * 3 + rng() * 4 - Math.abs(x - w / 2) * 0.04;
+      sites.push(i);
+      scores.push(score);
       if (score > bestScore) {
         bestScore = score;
         best = i;
       }
     }
   }
-  return best;
+  if (best < 0 || !cliffInFootprint(plan, w, h, best % w, (best / w) | 0, radius, ry)) return best;
+
+  // A ledge through the town would cut its streets in two, so move it off —
+  // but never down a terrace. Sites score best near water, which is low, and
+  // a town pushed below its contour takes its shrine with it: the valley's
+  // then drowns before the Rod can afford it.
+  let floor = 0;
+  for (const t of thresholds) if (t <= elev[best]) floor = t;
+  let clear = -1;
+  let clearScore = -Infinity;
+  for (let k = 0; k < sites.length; k++) {
+    const i = sites[k];
+    if (scores[k] <= clearScore || elev[i] < floor) continue;
+    if (cliffInFootprint(plan, w, h, i % w, (i / w) | 0, radius, ry)) continue;
+    clearScore = scores[k];
+    clear = i;
+  }
+  return clear >= 0 ? clear : best;
+}
+
+/** Any planned Cliff inside the ellipse `stampTown` would fill. */
+function cliffInFootprint(
+  plan: Uint8Array,
+  w: number,
+  h: number,
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+): boolean {
+  for (let dy = -ry; dy <= ry; dy++) {
+    const y = cy + dy;
+    if (y < 0 || y >= h) continue;
+    for (let dx = -rx; dx <= rx; dx++) {
+      const x = cx + dx;
+      if (x < 0 || x >= w) continue;
+      const u = dx / rx;
+      const v = dy / ry;
+      if (u * u + v * v > 1.05) continue;
+      if (plan[y * w + x] === Tile.Cliff) return true;
+    }
+  }
+  return false;
 }
 
 function stampTown(

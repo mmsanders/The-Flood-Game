@@ -63,6 +63,11 @@ export function renderReadout(world: World, day: number): string {
 
     group('Terrain', [
       row('Walkable', pct(s.walkableTiles, s.totalTiles)),
+      row(
+        'Contours',
+        `${s.contours.lines} lines · ${s.contours.stairs} stairs · ` +
+          `<span class="dim">${s.contours.stairsCut} cut by repair</span>`,
+      ),
       row('Panels', `${world.params.panelsX} × ${world.params.panelsY}`),
       row('Tiles', s.totalTiles.toLocaleString()),
       row('Explicit size', `${(worldToBytes(world).length / 1024).toFixed(0)} KB`),

@@ -9,7 +9,15 @@
  */
 
 import { PANEL_H, PANEL_W, type WorldParams, tileHeight, tileWidth } from '../config.js';
-import { Biome, Tile, carveOpening, carveTo, isCarvable, isResourceNode } from '../tiles.js';
+import {
+  Biome,
+  Tile,
+  carveOpening,
+  carveTo,
+  isCarvable,
+  isResourceNode,
+  isWalkable,
+} from '../tiles.js';
 
 /** True on the first or last row/column of any panel, including the map rim. */
 export function onPanelEdge(x: number, y: number): boolean {
@@ -240,8 +248,12 @@ export function clearStairApproaches(
   h: number,
 ): number {
   let opened = 0;
-  for (let i = 0; i < tiles.length; i++) {
-    if (tiles[i] !== Tile.Steps) continue;
+  // A worklist, not a scan: widening a stair across a seam makes a new one,
+  // possibly behind a scan cursor, and its approaches need clearing too.
+  const stairs: number[] = [];
+  for (let i = tiles.length - 1; i >= 0; i--) if (tiles[i] === Tile.Steps) stairs.push(i);
+  while (stairs.length > 0) {
+    const i = stairs.pop() as number;
     const x = i % w;
     const y = (i / w) | 0;
     const neighbors = [
@@ -259,7 +271,15 @@ export function clearStairApproaches(
       const group = seamGroup(tiles, w, h, j);
       if (!group) continue;
       for (const k of group) {
-        tiles[k] = carveTo(biome[k] as Biome);
+        if (isWalkable(tiles[k])) continue;
+        // Ledge over the seam from the scatter we are clearing: the stair
+        // widens across the boundary rather than leaving its approach shut.
+        if (tiles[k] === Tile.Cliff) {
+          tiles[k] = Tile.Steps;
+          stairs.push(k);
+        } else {
+          tiles[k] = carveTo(biome[k] as Biome);
+        }
         opened++;
       }
     }
@@ -267,6 +287,10 @@ export function clearStairApproaches(
   return opened;
 }
 
+/**
+ * The scatter tile and every seam partner that has to open with it, or null
+ * if one of them is something the approach should not cut through.
+ */
 function seamGroup(
   tiles: Uint8Array,
   w: number,
@@ -275,9 +299,12 @@ function seamGroup(
 ): number[] | null {
   const group: number[] = [start];
   for (let n = 0; n < group.length; n++) {
-    if (!isScatter(tiles[group[n]])) return null;
-    for (const k of seamPartnerIndices(group[n], w, h)) {
-      if (!group.includes(k)) group.push(k);
+    const k = group[n];
+    if (isWorldRim(k % w, (k / w) | 0, w, h)) return null;
+    const t = tiles[k];
+    if (!isScatter(t) && !isWalkable(t) && !(n > 0 && t === Tile.Cliff)) return null;
+    for (const p of seamPartnerIndices(k, w, h)) {
+      if (!group.includes(p)) group.push(p);
     }
   }
   return group;
