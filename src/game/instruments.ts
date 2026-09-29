@@ -30,7 +30,9 @@ export function lodestoneBearing(state: GameState): Dir | null {
 
 /** Scout nearest dry land (above the flood) or a free animal. Usable at sea. */
 export function releaseDove(state: GameState): void {
-  if (!state.hasDove) return;
+  // The dove scouts the open sky; underground its bearings would be read off
+  // the overworld at cave coordinates.
+  if (!state.hasDove || state.location.kind !== 'overworld') return;
 
   const px = Math.floor((state.player.x + PLAYER_W / 2) / TILE_PX);
   const py = Math.floor((state.player.y + PLAYER_H / 2) / TILE_PX);
@@ -93,13 +95,9 @@ export function releaseDove(state: GameState): void {
   say(state, 'The dove finds neither dry ground nor beast nearby.');
 }
 
-/**
- * Carrying the dove: release it. The HUD offers it only outdoors, but E
- * releases it anywhere, even underground.
- */
+/** Outdoors with the dove: release it. */
 export function doveAction(state: GameState): Action | null {
-  if (!state.hasDove) return null;
-  if (state.location.kind !== 'overworld') return { prompt: null, run: releaseHere };
+  if (!state.hasDove || state.location.kind !== 'overworld') return null;
   return {
     prompt: { tile: Tile.Reed, label: 'Release the dove — scout dry land or beasts', affordable: true },
     run: releaseHere,

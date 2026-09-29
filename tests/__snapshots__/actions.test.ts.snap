@@ -332,44 +332,6 @@ exports[`E: divergences between the prompt and the key, recorded as-is > (b) sai
 }
 `;
 
-exports[`E: divergences between the prompt and the key, recorded as-is > (c) underground with the dove: no prompt, but E releases it 1`] = `
-{
-  "after": {
-    "carried": "0,0,0,0",
-    "cleared": "0000",
-    "delivered": "0,0,0,0",
-    "dir": 1,
-    "dungeonId": 0,
-    "hearts": "3/3",
-    "hermit": false,
-    "interiorId": -1,
-    "keys": 0,
-    "kit": "dove",
-    "message": "The dove circles a goat to the north-east.",
-    "phase": "playing",
-    "rod": {
-      "reach": 1,
-      "tier": 0,
-      "yield": 1,
-    },
-    "shopHearts": 0,
-    "skiff": {
-      "at": "-1,-1",
-      "depth": 2,
-      "has": false,
-      "hauling": false,
-      "in": false,
-    },
-    "tile": {
-      "x": 8,
-      "y": 6,
-    },
-    "where": "dungeon",
-  },
-  "prompt": null,
-}
-`;
-
 exports[`E: dredging from the skiff (a prompt-only hint) > beyond reach 1`] = `
 {
   "after": {

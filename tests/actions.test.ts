@@ -5,9 +5,10 @@
  * as snapshots. The refactor must leave every one of these byte-identical:
  * the HUD prompt, and what one press of E then does.
  *
- * Three scenarios pin places where the prompt and the key disagree today —
- * see "divergences" below. They are recorded as-is on purpose, so that any
+ * Two scenarios pin places where the prompt and the key disagree — see
+ * "divergences" below. They are recorded as-is on purpose, so that any
  * change to them is a deliberate, reviewed change rather than a side effect.
+ * (A third, E releasing the dove underground, was a bug and is now fixed.)
  */
 
 import { describe, expect, it } from 'vitest';
@@ -247,6 +248,14 @@ describe('E: the dove and nothing at all', () => {
   it('does nothing with nothing to do', () => {
     expect(pressE(overworldAt(Biome.Valley, Tile.Grass))).toMatchSnapshot();
   });
+  it('underground with the dove: no prompt, and E keeps the dove', () => {
+    // Once E released it here too, reading bearings off the overworld at
+    // cave coordinates. The dove scouts the open sky only.
+    const { prompt, after } = pressE(facingInCave(null, (g) => (g.hasDove = true)));
+    expect(prompt).toBeNull();
+    expect(after.kit).toContain('dove');
+    expect(after.message).toBeNull();
+  });
 });
 
 describe('E: divergences between the prompt and the key, recorded as-is', () => {
@@ -266,9 +275,6 @@ describe('E: divergences between the prompt and the key, recorded as-is', () => 
       g.player.dir = Dir.Right;
     });
     expect(pressE(s)).toMatchSnapshot();
-  });
-  it('(c) underground with the dove: no prompt, but E releases it', () => {
-    expect(pressE(facingInCave(null, (g) => (g.hasDove = true)))).toMatchSnapshot();
   });
 });
 
