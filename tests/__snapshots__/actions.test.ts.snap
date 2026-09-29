@@ -1265,7 +1265,7 @@ exports[`E: the dove and nothing at all > releases the dove outdoors 1`] = `
     "interiorId": -1,
     "keys": 0,
     "kit": "dove",
-    "message": "The dove circles a donkey to the south-east.",
+    "message": "The dove circles a bear to the north-west.",
     "phase": "playing",
     "rod": {
       "reach": 1,
