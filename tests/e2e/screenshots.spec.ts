@@ -100,6 +100,17 @@ test.describe('dev tool', () => {
     await page.waitForTimeout(250);
     await page.screenshot({ path: `${OUT}/devtool-${info.project.name}-panel.png` });
   });
+
+  test('opens a linked panel: contour ledges and their stairs', async ({ page }, info) => {
+    // Panel 7,32 is among this seed's densest in ledge and stairs, away from
+    // the rim's own wall.
+    await page.goto(`/dev/?seed=${SEED}&day=0&panel=7,32`);
+    await page.waitForFunction(() => 'flood' in window);
+    await expect(page.locator('#panel-sheet')).toBeVisible();
+    await expect(page).not.toHaveURL(/panel=/);
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: `${OUT}/devtool-${info.project.name}-contours.png` });
+  });
 });
 
 test.describe('game', () => {
