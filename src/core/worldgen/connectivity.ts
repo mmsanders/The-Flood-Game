@@ -43,6 +43,8 @@ export interface ConnectivityResult {
   /** Regions found before repair. 1 means the map was already connected. */
   regionsBefore: number;
   tilesCarved: number;
+  /** Cliff tiles the repair turned into stairs: routes nobody planned. */
+  stairsCut: number;
   /** Verified after repair by re-labelling. */
   connected: boolean;
 }
@@ -55,13 +57,15 @@ export function ensureConnected(
   const w = tileWidth(params);
   const h = tileHeight(params);
 
+  const cliffsBefore = countTile(tiles, Tile.Cliff);
+  const cutStats = (): number => Math.max(0, cliffsBefore - countTile(tiles, Tile.Cliff));
   let tilesCarved = openBlockedPanels(tiles, biome, params, w, h);
 
   const { labels, sizes } = labelRegions(tiles, w, h);
   const regionsBefore = sizes.length;
 
   if (regionsBefore <= 1) {
-    return { regionsBefore, tilesCarved, connected: true };
+    return { regionsBefore, tilesCarved, stairsCut: cutStats(), connected: true };
   }
 
   // Largest region is the mainland; everything else gets cut through to it.
@@ -99,7 +103,13 @@ export function ensureConnected(
   tilesCarved += openSeamMismatches(tiles, biome, params);
 
   const after = labelRegions(tiles, w, h);
-  return { regionsBefore, tilesCarved, connected: after.sizes.length <= 1 };
+  return { regionsBefore, tilesCarved, stairsCut: cutStats(), connected: after.sizes.length <= 1 };
+}
+
+function countTile(tiles: Uint8Array, tile: Tile): number {
+  let n = 0;
+  for (let i = 0; i < tiles.length; i++) if (tiles[i] === tile) n++;
+  return n;
 }
 
 /**

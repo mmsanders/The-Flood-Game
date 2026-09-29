@@ -5,19 +5,25 @@
  * to see what the change did to biome balance, resource supply, and solvability
  * across many seeds rather than one lucky one.
  *
- *   npx tsx scripts/survey.ts [count] [--small]
+ *   npx tsx scripts/survey.ts [count] [--small] [--contours=N]
  */
 
 import { DEFAULT_PARAMS, FLOOD_DAYS, withParams } from '../src/core/config.js';
 import { OBSTACLE_COST, REWARD_NAMES } from '../src/core/dungeon.js';
 import { drownDayForElev } from '../src/core/flood.js';
 import { ARK_RECIPE } from '../src/core/resources.js';
-import { BIOME_NAMES, Biome, RESOURCE_NAMES, Resource } from '../src/core/tiles.js';
+import { BIOME_NAMES, Biome, RESOURCE_NAMES, Resource, Tile } from '../src/core/tiles.js';
 import { generateWorld } from '../src/core/worldgen/index.js';
 
 const count = Number(process.argv[2] ?? 12);
 const small = process.argv.includes('--small');
-const params = small ? withParams({ panelsX: 8, panelsY: 20 }) : DEFAULT_PARAMS;
+const contoursArg = process.argv.find((a) => a.startsWith('--contours='));
+const params = withParams({
+  ...(small ? { panelsX: 8, panelsY: 20 } : {}),
+  contoursPerBand: contoursArg
+    ? Number(contoursArg.split('=')[1])
+    : DEFAULT_PARAMS.contoursPerBand,
+});
 
 console.log(
   `Surveying ${count} worlds at ${params.panelsX}x${params.panelsY} panels ` +
@@ -38,6 +44,11 @@ let dungeonToll = 0;
 let dungeonRooms = 0;
 const rewardCounts = new Map<string, number>();
 const sealDays: number[] = [];
+let contourLines = 0;
+let contourStairs = 0;
+let stairsCut = 0;
+let cliffTiles = 0;
+const shrineReach: number[] = [];
 
 for (let i = 0; i < count; i++) {
   const seed = 1000 + i * 7919;
@@ -53,6 +64,13 @@ for (let i = 0; i < count; i++) {
   walkable += world.stats.walkableTiles;
   total += world.stats.totalTiles;
   if (world.stats.connected) connected++;
+  contourLines += world.stats.contours.lines;
+  contourStairs += world.stats.contours.stairs;
+  stairsCut += world.stats.contours.stairsCut;
+  for (const t of world.tiles) if (t === Tile.Cliff) cliffTiles++;
+  for (const rung of world.stats.ladder) {
+    if (Number.isFinite(rung.reachableOn)) shrineReach.push(rung.reachableOn);
+  }
   if (world.stats.solvable) solvable++;
   else console.log(`  seed ${seed}: ${world.stats.problems.join('; ')}`);
 
@@ -113,6 +131,14 @@ if (sealDays.length > 0) {
 for (const [name, n] of [...rewardCounts.entries()].sort()) {
   console.log(`  ${name.padEnd(16)}${n}`);
 }
+
+console.log(`\nContour ledges (contoursPerBand ${params.contoursPerBand})`);
+console.log(`  lines           ${(contourLines / count).toFixed(1)} per world`);
+console.log(`  planned stairs  ${(contourStairs / count).toFixed(1)} per world`);
+console.log(`  cut by repair   ${(stairsCut / count).toFixed(1)} per world`);
+console.log(`  cliff share     ${pct(cliffTiles, total)}`);
+const meanReach = shrineReach.reduce((a, b) => a + b, 0) / Math.max(1, shrineReach.length);
+console.log(`  shrine reached  day ${meanReach.toFixed(2)} mean, first reachable`);
 
 console.log('\nHealth');
 console.log(`  walkable        ${pct(walkable, total)}`);

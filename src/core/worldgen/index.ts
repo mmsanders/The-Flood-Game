@@ -1,7 +1,7 @@
 /**
  * World generation pipeline.
  *
- *   elevation → landforms → settlements → siting → roads → paint →
+ *   elevation → landforms → contours → settlements → siting → roads → paint →
  *   seal elevation faces → connectivity repair → validation
  *
  * Later passes overwrite earlier ones via the plan buffer, so a road stays a
@@ -19,11 +19,12 @@ import {
 import { generateDungeonRoom } from '../dungeon.js';
 import { generateInterior, InteriorKind } from '../interior.js';
 import { checkSolvable } from '../resources.js';
-import { deriveSeed } from '../rng.js';
+import { deriveSeed, stageRng } from '../rng.js';
 import { BIOME_COUNT, Biome, RESOURCE_COUNT, Tile, isWalkable, resourceOf } from '../tiles.js';
 import { PoiKind, type World, type WorldStats } from '../world.js';
 import { spawnAnimals } from '../animals.js';
 import { ensureConnected } from './connectivity.js';
+import { cutContours } from './contours.js';
 import { generateElevation } from './elevation.js';
 import { sealElevationFaces } from './escarpments.js';
 import { carveLandforms } from './landforms.js';
@@ -45,6 +46,9 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
   const plan = freshPlan(w * h);
 
   carveLandforms(seed, params, elev, biome, plan);
+  // After landforms (plateaus edit elevation), before anything is sited, so
+  // towns, shrines and roads all see the ledges and roads find their stairs.
+  const contours = cutContours(stageRng(seed, 'contours'), elev, plan, w, h, params);
   const { settlements, pastures } = placeSettlements(seed, params, elev, biome, plan);
   const { spawn, ark, pois, boatYard } = placePois(seed, params, elev, biome, plan, settlements);
 
@@ -60,6 +64,9 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
   // punches stairs through, so a visual face is never walkable ground.
   sealElevationFaces(tiles, elev, w, h);
 
+  // Open planned stairs before the repair looks for stranded ground, so it
+  // uses them instead of cutting stairs of its own beside them.
+  clearStairApproaches(tiles, biome, w, h);
   const connectivity = ensureConnected(tiles, biome, params);
   // After the repair, not before: that pass cuts its own stairs when it carves
   // a route through a cliff, and those need clearing too. Removing scatter can
@@ -97,6 +104,11 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
 
   const stats = collectStats(tiles, biome, w, h);
   stats.connected = connectivity.connected;
+  stats.contours = {
+    lines: contours.lines,
+    stairs: contours.stairs,
+    stairsCut: connectivity.stairsCut,
+  };
   stats.solvable = solvability.solvable;
   stats.reachableResources = solvability.reachable;
   stats.ladder = solvability.ladder;
@@ -222,6 +234,7 @@ function collectStats(
     walkableTiles,
     totalTiles: w * h,
     connected: false,
+    contours: { lines: 0, stairs: 0, stairsCut: 0 },
     solvable: false,
     ladder: [],
     problems: [],

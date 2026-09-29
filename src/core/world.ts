@@ -57,6 +57,8 @@ export interface WorldStats {
   totalTiles: number;
   /** Did every walkable region join up into one? */
   connected: boolean;
+  /** Contour ledges, and how many stairs the connectivity repair had to cut. */
+  contours: { lines: number; stairs: number; stairsCut: number };
   /** Is the ark recipe satisfiable before the world drowns? */
   solvable: boolean;
   /** Per-shrine: the day it drowns, and the day it could first be reached. */
