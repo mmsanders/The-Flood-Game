@@ -47,6 +47,12 @@ export interface WorldParams {
    */
   biomeBands: [number, number, number];
 
+  /**
+   * Contour ledges inside each biome band, evenly spaced (0 = none). The band
+   * edges are already ledges (biome seams), so 1 gives seven lines in all.
+   */
+  contoursPerBand: number;
+
   /** Per-biome density of blocking scenery (trees, rocks), 0..1. */
   scatterDensity: [number, number, number, number];
 
@@ -80,6 +86,11 @@ export const DEFAULT_PARAMS: WorldParams = {
   // ~24% valley, ~30% forest, ~26% scrub, ~21% mountain. Mountains stay the
   // smallest band on purpose — high ground should feel scarce.
   biomeBands: [0.28, 0.52, 0.72],
+
+  // One mid-band ledge per biome: lines at elevation ~36/102/158/219, beside
+  // the seams at ~71/133/184. The flood crosses one every ~5 days, so the
+  // terraces drown in order and the map doubles as a calendar.
+  contoursPerBand: 1,
 
   //                 valley forest scrub mountain
   scatterDensity: [0.1, 0.3, 0.24, 0.32],

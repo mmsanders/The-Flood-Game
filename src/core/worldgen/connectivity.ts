@@ -12,9 +12,20 @@ import { PANEL_H, PANEL_W, type WorldParams, tileHeight, tileWidth } from '../co
 import { Biome, Tile, carveOpening, isResourceNode, isWalkable } from '../tiles.js';
 import { isWorldRim, openSeamMismatches, seamPartnerIndices } from './seams.js';
 
-/** Cost to cut a path through a tile. 0 means it is already walkable. */
-const MAX_COST = 5;
+/**
+ * A cut stair lands wherever is cheapest and reads as arbitrary, so a ledge
+ * costs as much as clearing ten trees: repair takes the longer way through
+ * scatter when there is one, and cuts a stair only when there is not.
+ */
+const CLIFF_COST = 10;
+const GORGE_COST = 20;
+/**
+ * The largest single step. Dial's buckets have to span it: with fewer, a
+ * costly tile wraps round into an early bucket and is settled out of order.
+ */
+const MAX_COST = Math.max(CLIFF_COST, GORGE_COST);
 
+/** Cost to cut a path through a tile. 0 means it is already walkable. */
 function enterCost(tile: number): number {
   if (isWalkable(tile)) return 0;
   if (isResourceNode(tile)) return 2; // carving destroys a node; prefer to route around
@@ -31,9 +42,9 @@ function enterCost(tile: number): number {
     case Tile.Water:
       return 3; // a causeway across a pond, or a ford across the river
     case Tile.Cliff:
-      return MAX_COST; // a mountain pass: expensive, but never impossible
+      return CLIFF_COST; // a mountain pass: expensive, but never impossible
     case Tile.Gorge:
-      return 20; // use a planned bridge; do not punch extra fords
+      return GORGE_COST; // use a planned bridge; do not punch extra fords
     default:
       return 1;
   }
@@ -43,6 +54,8 @@ export interface ConnectivityResult {
   /** Regions found before repair. 1 means the map was already connected. */
   regionsBefore: number;
   tilesCarved: number;
+  /** Cliff tiles the repair turned into stairs: routes nobody planned. */
+  stairsCut: number;
   /** Verified after repair by re-labelling. */
   connected: boolean;
 }
@@ -55,13 +68,15 @@ export function ensureConnected(
   const w = tileWidth(params);
   const h = tileHeight(params);
 
+  const cliffsBefore = countTile(tiles, Tile.Cliff);
+  const cutStats = (): number => Math.max(0, cliffsBefore - countTile(tiles, Tile.Cliff));
   let tilesCarved = openBlockedPanels(tiles, biome, params, w, h);
 
   const { labels, sizes } = labelRegions(tiles, w, h);
   const regionsBefore = sizes.length;
 
   if (regionsBefore <= 1) {
-    return { regionsBefore, tilesCarved, connected: true };
+    return { regionsBefore, tilesCarved, stairsCut: cutStats(), connected: true };
   }
 
   // Largest region is the mainland; everything else gets cut through to it.
@@ -99,7 +114,13 @@ export function ensureConnected(
   tilesCarved += openSeamMismatches(tiles, biome, params);
 
   const after = labelRegions(tiles, w, h);
-  return { regionsBefore, tilesCarved, connected: after.sizes.length <= 1 };
+  return { regionsBefore, tilesCarved, stairsCut: cutStats(), connected: after.sizes.length <= 1 };
+}
+
+function countTile(tiles: Uint8Array, tile: Tile): number {
+  let n = 0;
+  for (let i = 0; i < tiles.length; i++) if (tiles[i] === tile) n++;
+  return n;
 }
 
 /**

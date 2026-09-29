@@ -249,6 +249,24 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'f' && !isTyping(e)) viewport.fit();
 });
 
+// `?panel=x,y` opens that panel's sheet on load, so a link can point at one
+// screen as well as one world. Consumed on open: closing the sheet should not
+// leave a URL that reopens it.
+openLinkedPanel(url.searchParams.get('panel'));
+
+function openLinkedPanel(param: string | null): void {
+  const match = param?.match(/^(\d+),(\d+)$/);
+  if (!match) return;
+  const map = viewedMap();
+  const px = Number(match[1]);
+  const py = Number(match[2]);
+  if (px * PANEL_W >= map.w || py * PANEL_H >= map.h) return;
+  openPanelSheet(sheetRefs, map, px, py, state.day);
+  const next = new URL(window.location.href);
+  next.searchParams.delete('panel');
+  window.history.replaceState(null, '', next);
+}
+
 // ---------------------------------------------------------------- actions
 
 function regenerate(seed: number): void {
