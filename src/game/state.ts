@@ -39,6 +39,7 @@ export {
   facingTile,
   gorgeRunoff,
   isBoatableTile,
+  keysHere,
   say,
   waterLevel,
 } from './queries.js';
@@ -94,7 +95,7 @@ export function createGame(world: World): GameState {
     messageTimer: 0,
     harvested: 0,
     heartsFound: 0,
-    keysHeld: 0,
+    keysByDungeon: new Array<number>(world.dungeons.length).fill(0),
     safeSpot: null,
     harvestYield: NODE_YIELD,
     rodReach: 1,
@@ -156,10 +157,12 @@ export function adoptHotState(running: GameState): GameState {
     carried: padCounts(running.carried, RESOURCE_COUNT),
     delivered: padCounts(running.delivered, RESOURCE_COUNT),
     dungeonsCleared: padFlags(running.dungeonsCleared, running.world.dungeons.length),
+    keysByDungeon: adoptKeys(running),
     exploredOverworld: adoptGrid(running.exploredOverworld, next.exploredOverworld),
     exploredDungeons: adoptDungeonGrids(running.exploredDungeons, next.exploredDungeons),
     exploredInteriors: adoptDungeonGrids(running.exploredInteriors ?? [], next.exploredInteriors),
   };
+  delete (merged as LegacyState).keysHeld;
   markExplored(merged);
   for (const a of merged.world.animals) {
     if (typeof a.prevX !== 'number') a.prevX = a.x;
@@ -167,6 +170,22 @@ export function adoptHotState(running: GameState): GameState {
   }
   syncInterpolation(merged);
   return merged;
+}
+
+/** Fields a live run may still carry from an older rules module. */
+interface LegacyState {
+  /** One key count for whichever cave you stood in, zeroed at every stair. */
+  keysHeld?: number;
+}
+
+/** Keys became per-cave; a key held under the old rules stays in its cave. */
+function adoptKeys(running: GameState & LegacyState): number[] {
+  const keys = padCounts(running.keysByDungeon, running.world.dungeons.length);
+  const cave = running.location.kind === 'dungeon' ? running.location.dungeonId : -1;
+  if (!running.keysByDungeon && running.keysHeld && cave >= 0 && cave < keys.length) {
+    keys[cave] += running.keysHeld;
+  }
+  return keys;
 }
 
 function adoptGrid(running: Uint8Array | undefined, fallback: Uint8Array): Uint8Array {

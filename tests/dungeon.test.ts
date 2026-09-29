@@ -205,6 +205,18 @@ describe('dungeon: single room', () => {
     expect(d.tiles[d.chest.y * d.w + d.chest.x]).toBe(Tile.Chest);
     expect(d.stairs.y).toBeGreaterThan(d.chest.y);
   });
+
+  it('locks the chest, with its key on the stairs side of the seal', () => {
+    const d = generateDungeonRoom(1, 0, Biome.Valley, { x: 4, y: 4 });
+    expect(d.chestLocked).toBe(true);
+    expect(d.tiles[d.key.y * d.w + d.key.x]).toBe(Tile.Key);
+    expect(d.key.y).toBeGreaterThan(d.chest.y);
+    expect(d.key.y).toBeLessThan(d.stairs.y);
+  });
+
+  it('leaves the multi-room chest unlocked: that key opens a door instead', () => {
+    expect(make(SEEDS[0]).chestLocked).toBe(false);
+  });
 });
 
 describe('dungeon: attached to the world', () => {

@@ -78,8 +78,12 @@ export interface GameState {
   messageTimer: number;
   harvested: number;
   heartsFound: number;
-  /** Keys are per-dungeon: they do not travel between them. */
-  keysHeld: number;
+  /**
+   * Keys held, per dungeon id. A key opens locks only in the cave it was found
+   * in, and stays with that cave when you leave, so a key taken before a trip
+   * outside still opens the chest on your return.
+   */
+  keysByDungeon: number[];
   /** Last non-hazard tile stood on, for spitting the player out of a pit. */
   safeSpot: Point | null;
   /** Units gathered per swing. The Budding Rod doubles it. */

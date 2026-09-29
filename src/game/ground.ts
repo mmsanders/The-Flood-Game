@@ -16,6 +16,7 @@ import {
   activeMap,
   currentDungeon,
   facingTile,
+  keysHere,
   RESOURCE_LABEL,
   say,
   tileUnder,
@@ -65,13 +66,17 @@ export function stepTileEffects(state: GameState): void {
     case Tile.ArkSite:
       deliverToArk(state);
       break;
-    case Tile.Key:
+    case Tile.Key: {
+      const cave = currentDungeon(state);
+      if (!cave) break;
       map.tiles[i] = Tile.DungeonFloor;
       state.mapRevision++;
-      state.keysHeld++;
+      state.keysByDungeon[cave.id]++;
       say(state, 'A key. Something here is locked.');
       break;
+    }
     case Tile.Chest:
+      if (!unlockChest(state)) break;
       map.tiles[i] = Tile.DungeonFloor;
       state.mapRevision++;
       openChest(state);
@@ -97,6 +102,26 @@ function fallInPit(state: GameState): void {
     syncInterpolation(state);
   }
   say(state, 'You fall. The dark is deeper than it looked.');
+}
+
+/**
+ * A locked chest takes one of this cave's keys. True when the chest may open;
+ * false leaves it shut, and says why for as long as you stand on it.
+ */
+function unlockChest(state: GameState): boolean {
+  const cave = currentDungeon(state);
+  if (!cave?.chestLocked) return true;
+  if (spendKey(state)) return true;
+  say(state, 'The chest is locked. The key is somewhere in this cave.');
+  return false;
+}
+
+/** Spends one of this cave's keys; false when there is none to spend. */
+function spendKey(state: GameState): boolean {
+  const cave = currentDungeon(state);
+  if (!cave || !(state.keysByDungeon[cave.id] > 0)) return false;
+  state.keysByDungeon[cave.id]--;
+  return true;
 }
 
 function openChest(state: GameState): void {
@@ -140,8 +165,8 @@ export function obstacleInFront(state: GameState): ObstaclePrompt | null {
     return {
       tile,
       label:
-        state.keysHeld > 0 ? 'Unlock the door — 1 key' : 'Locked. A key is somewhere here.',
-      affordable: state.keysHeld > 0,
+        keysHere(state) > 0 ? 'Unlock the door — 1 key' : 'Locked. A key is somewhere here.',
+      affordable: keysHere(state) > 0,
     };
   }
 
@@ -179,11 +204,10 @@ function tryClear(state: GameState, tx: number, ty: number): void {
   const tile = map.tiles[i] as Tile;
 
   if (tile === Tile.DoorLocked) {
-    if (state.keysHeld < 1) {
+    if (!spendKey(state)) {
       say(state, 'Locked. A key is somewhere in here.');
       return;
     }
-    state.keysHeld--;
     convertConnected(map, tx, ty, tile, Tile.DoorOpen);
     state.mapRevision++;
     say(state, 'The key turns.');

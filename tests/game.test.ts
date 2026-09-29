@@ -16,6 +16,7 @@ import {
   arkProgress,
   createGame,
   currentDay,
+  keysHere,
   obstacleInFront,
   snapCamera,
   step,
@@ -468,14 +469,23 @@ describe('game: entering and leaving dungeons', () => {
     expect(state.phase).toBe('playing');
   });
 
-  it('does not carry keys between dungeons', () => {
+  it('keeps each cave\'s keys with that cave', () => {
     standOnEntrance(state);
     step(state, INTERACT, 1 / 60);
-    state.keysHeld = 3;
+    state.keysByDungeon[0] = 3;
+    expect(keysHere(state)).toBe(3);
+
     const stairs = state.world.dungeons[0].stairs;
     placeAt(state, stairs.x, stairs.y);
     step(state, IDLE, 1 / 60);
-    expect(state.keysHeld).toBe(0);
+    expect(state.location.kind).toBe('overworld');
+    expect(keysHere(state)).toBe(0);
+
+    standOnEntrance(state, 1);
+    step(state, INTERACT, 1 / 60);
+    expect(state.location.dungeonId).toBe(1);
+    expect(keysHere(state)).toBe(0);
+    expect(state.keysByDungeon[0]).toBe(3);
   });
 
   it('blocks the mouth from the west, north and east, and lets you in from the south', () => {
@@ -586,18 +596,18 @@ describe('game: the trade', () => {
 
   it('opens a locked door with a key, consuming it', () => {
     const at = faceObstacle(state, Tile.DoorLocked);
-    state.keysHeld = 1;
+    state.keysByDungeon[0] = 1;
 
     step(state, INTERACT, 1 / 60);
 
-    expect(state.keysHeld).toBe(0);
+    expect(state.keysByDungeon[0]).toBe(0);
     const d = state.world.dungeons[0];
     expect(d.tiles[at.y * d.w + at.x]).toBe(Tile.DoorOpen);
   });
 
   it('refuses a locked door without a key', () => {
     const at = faceObstacle(state, Tile.DoorLocked);
-    state.keysHeld = 0;
+    state.keysByDungeon[0] = 0;
 
     step(state, INTERACT, 1 / 60);
 
@@ -632,9 +642,71 @@ describe('game: dungeon rewards and hazards', () => {
     placeAt(s, p.x, p.y);
   }
 
+  it('keeps the chest shut without the cave\'s key', () => {
+    const d = state.world.dungeons[0];
+    inDungeonAt(state, d.chest);
+    const hearts = state.player.maxHearts;
+
+    step(state, IDLE, 1 / 60);
+
+    expect(state.dungeonsCleared[0]).toBe(false);
+    expect(d.tiles[d.chest.y * d.w + d.chest.x]).toBe(Tile.Chest);
+    expect(state.player.maxHearts).toBe(hearts);
+    expect(state.message).toBe('The chest is locked. The key is somewhere in this cave.');
+  });
+
+  it('opens the chest with the cave\'s key, spending it', () => {
+    const d = state.world.dungeons[0];
+    inDungeonAt(state, d.key);
+    step(state, IDLE, 1 / 60);
+    expect(keysHere(state)).toBe(1);
+
+    placeAt(state, d.chest.x, d.chest.y);
+    step(state, IDLE, 1 / 60);
+
+    expect(state.dungeonsCleared[0]).toBe(true);
+    expect(d.tiles[d.chest.y * d.w + d.chest.x]).toBe(Tile.DungeonFloor);
+    expect(keysHere(state)).toBe(0);
+  });
+
+  it('still opens the chest after leaving with the key and coming back', () => {
+    const d = state.world.dungeons[0];
+    placeAt(state, d.overworldEntrance.x, d.overworldEntrance.y);
+    step(state, INTERACT, 1 / 60);
+    expect(state.location.dungeonId).toBe(0);
+
+    placeAt(state, d.key.x, d.key.y);
+    step(state, IDLE, 1 / 60);
+    expect(d.tiles[d.key.y * d.w + d.key.x]).toBe(Tile.DungeonFloor);
+
+    placeAt(state, d.stairs.x, d.stairs.y);
+    step(state, IDLE, 1 / 60);
+    expect(state.location.kind).toBe('overworld');
+
+    placeAt(state, d.overworldEntrance.x, d.overworldEntrance.y);
+    step(state, INTERACT, 1 / 60);
+    expect(state.location.dungeonId).toBe(0);
+    expect(keysHere(state)).toBe(1);
+
+    placeAt(state, d.chest.x, d.chest.y);
+    step(state, IDLE, 1 / 60);
+    expect(state.dungeonsCleared[0]).toBe(true);
+  });
+
+  it('opens an unlocked chest on contact, as multi-room dungeons do', () => {
+    const d = state.world.dungeons[0];
+    d.chestLocked = false;
+    inDungeonAt(state, d.chest);
+
+    step(state, IDLE, 1 / 60);
+
+    expect(state.dungeonsCleared[0]).toBe(true);
+  });
+
   it('grants the dungeon reward once and only once', () => {
     const d = state.world.dungeons[0];
     inDungeonAt(state, d.chest);
+    state.keysByDungeon[0] = 1;
 
     step(state, IDLE, 1 / 60);
     const afterFirst = {
@@ -657,7 +729,7 @@ describe('game: dungeon rewards and hazards', () => {
     const d = state.world.dungeons[0];
     inDungeonAt(state, d.key);
     step(state, IDLE, 1 / 60);
-    expect(state.keysHeld).toBe(1);
+    expect(state.keysByDungeon[0]).toBe(1);
   });
 
   it('costs a heart to fall in a pit, and puts you back on solid ground', () => {
@@ -683,6 +755,7 @@ describe('game: dungeon rewards and hazards', () => {
     if (!mountain) return;
 
     state.location = { kind: 'dungeon', interiorId: -1, dungeonId: mountain.id, returnTo: { x: 1, y: 1 } };
+    state.keysByDungeon[mountain.id] = 1;
     placeAt(state, mountain.chest.x, mountain.chest.y);
     step(state, IDLE, 1 / 60);
 
@@ -706,6 +779,7 @@ describe('game: dungeon rewards and hazards', () => {
     if (!scrub) return;
 
     state.location = { kind: 'dungeon', interiorId: -1, dungeonId: scrub.id, returnTo: { x: 1, y: 1 } };
+    state.keysByDungeon[scrub.id] = 1;
     placeAt(state, scrub.chest.x, scrub.chest.y);
     step(state, IDLE, 1 / 60);
 
@@ -774,5 +848,22 @@ describe('game: hot adopt', () => {
     expect(next.carried).toEqual([4, 0, 0, 0]);
     expect(next.delivered).toEqual([1, 2, 0, 0]);
     expect(next.dungeonsCleared).toHaveLength(state.world.dungeons.length);
+  });
+
+  it('moves a key held under the old one-count rules into the cave it came from', () => {
+    const cave = state.world.dungeons[1];
+    const running = {
+      ...state,
+      location: { kind: 'dungeon', dungeonId: cave.id, interiorId: -1, returnTo: cave.overworldEntrance },
+      keysHeld: 1,
+    } as GameState & { keysHeld?: number };
+    delete (running as { keysByDungeon?: number[] }).keysByDungeon;
+
+    const next = adoptHotState(running);
+
+    expect(next.keysByDungeon).toHaveLength(state.world.dungeons.length);
+    expect(next.keysByDungeon[cave.id]).toBe(1);
+    expect(keysHere(next)).toBe(1);
+    expect('keysHeld' in next).toBe(false);
   });
 });

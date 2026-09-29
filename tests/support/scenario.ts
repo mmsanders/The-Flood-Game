@@ -15,6 +15,7 @@ import {
   PLAYER_W,
   actionPrompt,
   createGame,
+  keysHere,
   snapCamera,
   step,
   type GameState,
@@ -86,7 +87,7 @@ export function digest(state: GameState) {
     carried: state.carried.join(','),
     delivered: state.delivered.join(','),
     rod: { tier: state.rodTier, reach: state.rodReach, yield: state.harvestYield },
-    keys: state.keysHeld,
+    keys: keysHere(state),
     skiff: {
       has: state.hasBoat,
       in: state.inBoat,

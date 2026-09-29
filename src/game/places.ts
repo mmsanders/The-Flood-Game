@@ -249,7 +249,6 @@ function enterDungeonAt(state: GameState, tx: number, ty: number): void {
     interiorId: -1,
     returnTo: { x: tx, y: ty },
   };
-  state.keysHeld = 0;
   state.safeSpot = null;
   state.inBoat = false;
   placeOn(state, { x: dungeon.stairs.x, y: Math.max(1, dungeon.stairs.y - 1) });
@@ -262,7 +261,6 @@ function exitDungeon(state: GameState): void {
   if (state.location.kind !== 'dungeon' || !back) return;
 
   state.location = { kind: 'overworld', dungeonId: -1, interiorId: -1, returnTo: null };
-  state.keysHeld = 0;
   state.safeSpot = null;
   placeOn(state, exitSpot(state, back));
   state.player.dir = Dir.Down;

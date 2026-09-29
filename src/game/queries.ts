@@ -103,6 +103,12 @@ export function facingTile(state: GameState): { map: TileMap; tx: number; ty: nu
   return { map, tx, ty };
 }
 
+/** Keys held for the cave the player is in; none anywhere else. */
+export function keysHere(state: GameState): number {
+  const cave = currentDungeon(state);
+  return cave ? (state.keysByDungeon[cave.id] ?? 0) : 0;
+}
+
 export function say(state: GameState, text: string): void {
   state.message = text;
   state.messageTimer = MESSAGE_TIME;

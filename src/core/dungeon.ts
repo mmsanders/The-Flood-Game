@@ -157,6 +157,12 @@ export interface Dungeon extends TileMap {
   overworldEntrance: Point;
   chest: Point;
   key: Point;
+  /**
+   * Whether the chest needs this cave's key. True in one-room caves, where the
+   * key is the reason to explore; false in multi-room dungeons, whose key opens
+   * the locked door on the way to the chest instead.
+   */
+  chestLocked: boolean;
   reward: RewardKind;
   /** Obstacles placed at generation time, for tests and the survey script. */
   obstacles: { tile: Tile; between: [number, number] }[];
@@ -250,6 +256,7 @@ export function generateDungeon(
     overworldEntrance,
     chest,
     key,
+    chestLocked: false,
     reward: pickDungeonReward(seed, biome),
     obstacles,
   };
@@ -259,9 +266,10 @@ export function generateDungeon(
 const SEAL_ROW = 4;
 
 /**
- * One panel, walls, a chest, and stairs. The overworld mouth warps here;
- * walking onto the stairs warps back. Enough cave to feel like a place
- * without a 16-room raid.
+ * One panel, walls, a chest, a key, and stairs. The overworld mouth warps
+ * here; walking onto the stairs warps back. The key lies on the near side of
+ * the seal and the chest, locked, on the far side. Enough cave to feel like a
+ * place without a 16-room raid.
  */
 export function generateDungeonRoom(
   _seed: number,
@@ -307,6 +315,7 @@ export function generateDungeonRoom(
     overworldEntrance,
     chest,
     key,
+    chestLocked: true,
     reward,
     obstacles: [],
   };

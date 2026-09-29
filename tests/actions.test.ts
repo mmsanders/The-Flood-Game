@@ -226,7 +226,7 @@ describe('E: cave seals and tolls', () => {
     expect(pressE(facingInCave(Tile.PitchSeal))).toMatchSnapshot();
   });
   it('opens a locked door with a key', () => {
-    expect(pressE(facingInCave(Tile.DoorLocked, (g) => (g.keysHeld = 1)))).toMatchSnapshot();
+    expect(pressE(facingInCave(Tile.DoorLocked, (g) => (g.keysByDungeon[0] = 1)))).toMatchSnapshot();
   });
   it('refuses a locked door without one', () => {
     expect(pressE(facingInCave(Tile.DoorLocked))).toMatchSnapshot();
