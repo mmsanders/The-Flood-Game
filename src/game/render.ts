@@ -18,6 +18,7 @@ import {
 } from '../core/flood.js';
 import { panelsHigh, panelsWide, type TileMap } from '../core/tilemap.js';
 import { Biome, RESOURCE_COUNT, Resource, Tile, carveTo, isCliffFace } from '../core/tiles.js';
+import { PersonRole, PersonStatus } from '../core/world.js';
 import { PALETTE } from '../render/palette.js';
 import { type Canvas, getTilesheet, tileSheetX, tileSheetY } from '../render/tilesheet.js';
 import {
@@ -112,6 +113,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, ui?: Ren
   drawWorld(ctx, state);
   drawArkMonument(ctx, state);
   drawAnimals(ctx, state);
+  drawPeople(ctx, state);
   drawPlayer(ctx, state);
   drawTodFilter(ctx, state);
   drawRain(ctx, state);
@@ -768,6 +770,59 @@ function drawAnimals(ctx: CanvasRenderingContext2D, state: GameState): void {
     if (tied) drawStake(ctx, x, y);
     const bob = tied ? 0 : Math.round(Math.sin(a.anim * 8 + a.id) * 0.8);
     drawCreature(ctx, a.kind, x, y + bob, a.dir, a.anim);
+  }
+}
+
+/**
+ * Townsfolk: a head, a head-cloth, a robe in one of eight dyes, and feet that
+ * step when they walk. Eight by twelve, drawn in rectangles like everything.
+ */
+const ROBES = ['#8a3a2a', '#3a5a8a', '#6a7a3a', '#a08a5a', '#5a3a6a', '#c8b89a', '#2a6a5a', '#9a5a2a'];
+const CLOTHS = ['#e8dcc0', '#c8a46a', '#7a2a2a', '#d8d0c0', '#4a5a7a', '#b08050', '#e0c890', '#6a4a3a'];
+const SKINS = ['#d8a878', '#b07a50', '#8a5a3a'];
+
+function drawPeople(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (state.location.kind !== 'overworld') return;
+  const people = state.world.people;
+  if (!people) return;
+  const cam = cameraOrigin(state);
+  for (const p of people) {
+    if (p.status === PersonStatus.Gone) continue;
+    const x = Math.round(lerp(p.prevX, p.x, renderAlpha) - cam.x);
+    const y = Math.round(lerp(p.prevY, p.y, renderAlpha) - cam.y);
+    if (x < -10 || y < -14 || x > SCREEN_W + 10 || y > PANEL_PX_H + 14) continue;
+    const robe = ROBES[p.look % ROBES.length];
+    const cloth = CLOTHS[(p.look * 3) % CLOTHS.length];
+    const skin = SKINS[p.id % SKINS.length];
+    const walking = p.x !== p.prevX || p.y !== p.prevY;
+    const stride = walking && (p.anim * 4) % 2 < 1 ? 1 : 0;
+    // Shadow.
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(x + 1, y + 11, 6, 1);
+    // Feet.
+    ctx.fillStyle = '#3a2412';
+    ctx.fillRect(x + 1 + stride, y + 10, 2, 2);
+    ctx.fillRect(x + 5 - stride, y + 10, 2, 2);
+    // Robe and belt.
+    ctx.fillStyle = robe;
+    ctx.fillRect(x + 1, y + 4, 6, 7);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(x + 1, y + 7, 6, 1);
+    // Head, and the cloth over it.
+    ctx.fillStyle = skin;
+    ctx.fillRect(x + 2, y + 1, 4, 4);
+    ctx.fillStyle = cloth;
+    ctx.fillRect(x + 1, y, 6, 2);
+    if (p.dir !== 1) {
+      ctx.fillRect(x + 1, y + 2, 1, 3);
+      ctx.fillRect(x + 6, y + 2, 1, 3);
+    }
+    if (p.role === PersonRole.Farmer) {
+      // A crook over the shoulder.
+      ctx.fillStyle = '#6a4a2a';
+      ctx.fillRect(x + 7, y + 1, 1, 10);
+      ctx.fillRect(x + 6, y, 2, 1);
+    }
   }
 }
 

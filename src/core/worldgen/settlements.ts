@@ -533,7 +533,7 @@ function placeHamlets(
   };
 }
 
-function waterDistance(plan: Uint8Array, w: number, h: number): Uint16Array {
+export function waterDistance(plan: Uint8Array, w: number, h: number): Uint16Array {
   const dist = new Uint16Array(w * h);
   dist.fill(0xffff);
   const q = new Int32Array(w * h);

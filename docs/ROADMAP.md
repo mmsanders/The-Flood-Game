@@ -14,7 +14,7 @@ wins if you still want it.
 **Status:** Every wave has shipped (frame budget; the world people left behind; the
 depth ladder and the things that beat it; interiors and instruments; contour ledges; the
 rain begins; the endless sand), along with the round-two fixes in *What the first full run
-changed* below. What's left is the deferred list at the bottom.
+changed* below. Next is Wave 7, which fills the world with signs of the people who live in it.
 
 > Full Wave 0 / Wave 1 prose is unchanged from `main` history. This file keeps the
 > Wave 2 write-up and the forward plan; expand from `main` if you need the long
@@ -241,6 +241,90 @@ second destination for the primitive yet.
 
 ---
 
+## Wave 7 — Signs of people
+
+The world is supposed to be one people left behind, but there isn't a person in it. Wave 7
+puts them back, along with the farms, trades and comforts that would explain why everything
+is where it is. The rule for every addition: **it needs a reason to be there.** Domestic
+animals live where people keep them; wild ones keep away from people; a tool lying on the
+ground was dropped by someone who was using it there.
+
+Decided with Michael, round three:
+
+- The town drinking house is a **tavern**.
+- **No townsfolk come aboard.** Genesis 7:23 holds. The people are there to be left behind.
+- Animals sold by farmers, or found at homesteads, are **one of the run's two of that
+  kind**, never a third. Same for every domestic kind, not just the ox.
+- Some homesteads are **abandoned**, with animals still penned; some have a **fallen fence**
+  and an animal that never strays more than a tile from home.
+- **Wild animals avoid people and settlements.**
+
+### 7.1 Homesteads, and animals that live somewhere — shipped
+
+Farmsteads scattered through the valley, forest and scrub: a house, a fenced paddock, a well,
+on buildable ground near water like the towns. The domestic kinds — sheep, goat, donkey,
+camel, ox, dove — are placed where people keep them: a paddock at a homestead, the town
+pasture, a dovecote, a caravan yard in the city. Each animal remembers its home and wanders
+only inside it.
+
+Every homestead is one of three things:
+
+- **Lived in.** The farmer is in the yard. His animal is his: walking into it with a rope
+  gets *"That's the farmer's ox."* He'll sell it for ark materials, priced by kind.
+- **Abandoned.** The house is a ruin, the fence still stands, the animal still waits inside.
+  Free to take.
+- **Fallen fence.** Gaps in the fence; the animal stays within a tile of home anyway.
+
+Wild kinds (lion, bear, serpent, raven) spawn well away from any settlement or homestead and
+steer away from people when they wander.
+
+### 7.2 People — shipped
+
+Townsfolk walk the towns and homesteads. Stand next to one and press `E` for a line. Lines
+follow the flood: in the prologue they mock the man building a boat on dry land, once the
+rain starts they get uneasy, and late on they ask to come aboard. They can't.
+
+As the water nears their home they move uphill to the next settlement that's still dry,
+when you're not looking, so the southern towns empty and the northern ones fill. A run
+ends with some of them gone. Only people on the current panel are simulated, so the frame
+budget is safe.
+
+### 7.3 Fuller towns, and the trades between them
+
+Towns get more houses, a well, market stalls and a signpost. The city gets a merchant's villa
+with a walled garden. Between towns, small sites that explain the landscape:
+
+- a **woodcutter's clearing** in the forest — stumps, chips, and an axe left in a stump
+- a **charcoal burner's** mounds at the forest edge
+- a **quarry** of cut blocks in the hills, with a worn pickaxe
+- a **potter's kiln** by valley water, where the clay is
+- a **vineyard and winepress** on a warm slope
+
+All placed from the seed on the worldgen plan, so connectivity and solvability checks keep
+holding.
+
+### 7.4 The tavern
+
+One per town. Rumours, one new one per visit, pointing at real things in this world: the
+axe in the woodcut, what the hermit wants, the stranger at the carpenter's, which farmer is
+selling. And rest: buy back a heart for fiber.
+
+### 7.5 Found tools
+
+The woodcutter's axe and the quarry pickaxe are free, but they wear out like the shop
+tools, so a find is a head start, not a broken economy.
+
+### 7.6 An ending with names (stretch)
+
+The end card names who you saved and who you left: *the potter's family at Kiln Hill; the
+oxen still in the Hollow Farm paddock.* Sites get names in 7.1 and 7.3 so this is mostly a
+text template.
+
+**Order:** 7.1 and 7.2 first, with the farmer's trade, as one PR — that's the change that
+makes the world feel inhabited. 7.3–7.6 as a second.
+
+---
+
 ## Order, and why
 
 ```
@@ -255,6 +339,7 @@ Wave 4  contour ledges                      ← shipped
 Wave 5  the prologue, dungeon flood,        ← shipped
         animal husbandry
 Wave 6  the endless sand                    ← shipped
+Wave 7  signs of people                     ← next
 ```
 
 ## Things I'd deliberately not do yet

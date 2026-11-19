@@ -390,6 +390,41 @@ const TILE_PAINTERS: Record<number, Painter> = {
     px(c, 13, 8, 2, 2, '#8a5a28');
     px(c, 7, 5, 2, 3, '#d2a05a');
   },
+  [Tile.Well]: (c) => {
+    // A ring of fieldstone round dark water, a bucket post over it.
+    base(c, PALETTE.dirt);
+    px(c, 2, 5, 12, 10, '#7a746a');
+    px(c, 3, 6, 10, 8, '#5a554c');
+    px(c, 4, 7, 8, 6, '#1e2a38');
+    px(c, 5, 8, 4, 2, '#2c4f72');
+    px(c, 2, 5, 12, 1, '#a09a8e');
+    px(c, 2, 1, 1, 6, '#5a3a1e');
+    px(c, 13, 1, 1, 6, '#5a3a1e');
+    px(c, 2, 1, 12, 1, '#6a4a2a');
+    px(c, 7, 2, 1, 5, '#c8a46a');
+  },
+  [Tile.Ruin]: (c) => {
+    // A farmhouse with its roof gone: walls to the shoulder, weeds inside.
+    base(c, PALETTE.grass);
+    specks(c, PALETTE.grassAlt, SPARSE);
+    px(c, 1, 6, 14, 9, '#7a6a52');
+    px(c, 3, 8, 10, 6, '#4a5a30');
+    px(c, 1, 4, 4, 3, '#7a6a52');
+    px(c, 11, 5, 4, 2, '#7a6a52');
+    px(c, 7, 11, 3, 4, '#2a1e12');
+    px(c, 4, 9, 2, 1, '#6a8a3a');
+    px(c, 10, 10, 2, 1, '#6a8a3a');
+    px(c, 2, 13, 3, 2, '#5a4a32');
+  },
+  [Tile.FenceDown]: (c) => {
+    // One post still standing, the rails on the grass beside it.
+    base(c, PALETTE.grass);
+    specks(c, PALETTE.grassAlt, SPARSE);
+    px(c, 2, 4, 2, 11, PALETTE.treeTrunk);
+    px(c, 4, 12, 11, 2, '#8a5a28');
+    px(c, 6, 9, 9, 1, '#7a4a20');
+    px(c, 7, 10, 1, 1, '#7a4a20');
+  },
   [Tile.Stranger]: (c) => {
     // A sunburnt traveller in a sand-coloured robe and head-cloth, sitting.
     base(c, PALETTE.dungeonFloor);
