@@ -54,6 +54,7 @@ describe('wave 3: interiors', () => {
         world.tiles[room.overworldEntrance.y * world.w + room.overworldEntrance.x];
       if (room.kind === InteriorKind.Carpenter) expect(entrance).toBe(Tile.BoatYard);
       else if (room.kind === InteriorKind.NoahTent) expect(entrance).toBe(Tile.CampTent);
+      else if (room.kind === InteriorKind.Tavern) expect(entrance).toBe(Tile.TavernDoor);
       else expect(entrance).toBe(Tile.TownDoor);
     }
   });

@@ -29,6 +29,7 @@ import { type Homestead, HomesteadState, type Point, type Settlement } from '../
 import { contourThresholds } from './contours.js';
 import { UNPLANNED, overwrite } from './plan.js';
 import { waterDistance } from './settlements.js';
+import { sharesPanel } from './sites.js';
 
 /** Farms per biome. Each keeps one of the biome's domestic pair. */
 const PER_BIOME = 2;
@@ -135,6 +136,7 @@ function pickFarmSite(
       if (biome[i] !== want) continue;
       if (!fitsOnePanel(x, y)) continue;
       if (!near(keepAway, x, y, MIN_FROM_TOWN) || !nearFarms(farms, x, y)) continue;
+      if (sharesPanel(keepAway, x, y)) continue;
       if (!footprintClear(elev, biome, plan, w, x, y, want, thresholds)) continue;
       // Near water, like every place people choose to live; a little noise so
       // the same valley doesn't always win.

@@ -77,6 +77,26 @@ export interface Homestead extends Point {
   yard: Point;
 }
 
+/** A working place between the towns. Wave 7. */
+export const enum SiteKind {
+  Woodcut = 0,
+  Charcoal = 1,
+  Quarry = 2,
+  Kiln = 3,
+  Vineyard = 4,
+}
+
+/** Point is the footprint's top-left. */
+export interface Site extends Point {
+  kind: SiteKind;
+  name: string;
+  biome: Biome;
+  /** Where someone works, if anyone does: their doorstep. */
+  keeper: Point | null;
+  /** The tool left lying here, if any. */
+  tool: Point | null;
+}
+
 /** Somewhere people live: a town, a hamlet, a farm. What townsfolk call home. */
 export interface Place extends Point {
   name: string;
@@ -170,6 +190,8 @@ export interface World extends TileMap {
   desert: Desert | null;
   /** Farmsteads, in every biome. Wave 7. */
   homesteads: Homestead[];
+  /** The trades: woodcut, charcoal, quarry, kiln, vineyard. */
+  sites: Site[];
   /** Towns, hamlets and farms, as places people live and flee between. */
   places: Place[];
   /** The people. They watch the water too. */

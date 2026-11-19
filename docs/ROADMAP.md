@@ -11,10 +11,10 @@ ones land on foundations that already exist.
 Nothing here is precious. Where I disagree with a note I say so and say why, and the note
 wins if you still want it.
 
-**Status:** Every wave has shipped (frame budget; the world people left behind; the
+**Status:** Waves 0–7 have shipped (frame budget; the world people left behind; the
 depth ladder and the things that beat it; interiors and instruments; contour ledges; the
-rain begins; the endless sand), along with the round-two fixes in *What the first full run
-changed* below. Next is Wave 7, which fills the world with signs of the people who live in it.
+rain begins; the endless sand; signs of people), along with the round-two fixes in *What the first full run
+changed* below. What's left is the deferred list at the bottom.
 
 > Full Wave 0 / Wave 1 prose is unchanged from `main` history. This file keeps the
 > Wave 2 write-up and the forward plan; expand from `main` if you need the long
@@ -289,7 +289,7 @@ when you're not looking, so the southern towns empty and the northern ones fill.
 ends with some of them gone. Only people on the current panel are simulated, so the frame
 budget is safe.
 
-### 7.3 Fuller towns, and the trades between them
+### 7.3 Fuller towns, and the trades between them — shipped
 
 Towns get more houses, a well, market stalls and a signpost. The city gets a merchant's villa
 with a walled garden. Between towns, small sites that explain the landscape:
@@ -303,18 +303,18 @@ with a walled garden. Between towns, small sites that explain the landscape:
 All placed from the seed on the worldgen plan, so connectivity and solvability checks keep
 holding.
 
-### 7.4 The tavern
+### 7.4 The tavern — shipped
 
 One per town. Rumours, one new one per visit, pointing at real things in this world: the
 axe in the woodcut, what the hermit wants, the stranger at the carpenter's, which farmer is
 selling. And rest: buy back a heart for fiber.
 
-### 7.5 Found tools
+### 7.5 Found tools — shipped
 
 The woodcutter's axe and the quarry pickaxe are free, but they wear out like the shop
 tools, so a find is a head start, not a broken economy.
 
-### 7.6 An ending with names (stretch)
+### 7.6 An ending with names — shipped
 
 The end card names who you saved and who you left: *the potter's family at Kiln Hill; the
 oxen still in the Hollow Farm paddock.* Sites get names in 7.1 and 7.3 so this is mostly a
@@ -339,7 +339,7 @@ Wave 4  contour ledges                      ← shipped
 Wave 5  the prologue, dungeon flood,        ← shipped
         animal husbandry
 Wave 6  the endless sand                    ← shipped
-Wave 7  signs of people                     ← next
+Wave 7  signs of people                     ← shipped
 ```
 
 ## Things I'd deliberately not do yet

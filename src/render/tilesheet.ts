@@ -390,6 +390,134 @@ const TILE_PAINTERS: Record<number, Painter> = {
     px(c, 13, 8, 2, 2, '#8a5a28');
     px(c, 7, 5, 2, 3, '#d2a05a');
   },
+  [Tile.TavernDoor]: (c) => {
+    // A house with a jug hung over the door: the tavern.
+    base(c, PALETTE.dirt);
+    px(c, 1, 7, 14, 8, '#9a6a3a');
+    px(c, 0, 3, 16, 5, '#5a2e16');
+    px(c, 2, 1, 12, 4, '#7a3e1a');
+    px(c, 6, 10, 4, 5, '#2a1a0e');
+    px(c, 11, 8, 1, 2, '#3a2412');
+    px(c, 10, 10, 3, 3, '#c8a46a');
+    px(c, 11, 10, 1, 1, '#e8d9a0');
+    px(c, 2, 9, 3, 2, '#e8c070');
+  },
+  [Tile.Stall]: (c) => {
+    // A striped awning over a counter of goods.
+    base(c, PALETTE.dirt);
+    px(c, 1, 2, 14, 4, '#e8dcc0');
+    px(c, 1, 2, 3, 4, '#b8583a');
+    px(c, 7, 2, 3, 4, '#b8583a');
+    px(c, 13, 2, 2, 4, '#b8583a');
+    px(c, 2, 6, 1, 8, '#5a3a1e');
+    px(c, 13, 6, 1, 8, '#5a3a1e');
+    px(c, 2, 10, 12, 3, '#8a5a28');
+    px(c, 4, 8, 2, 2, '#c8b040');
+    px(c, 7, 8, 2, 2, '#7a2a6a');
+    px(c, 10, 8, 2, 2, '#6a8a3a');
+  },
+  [Tile.Signpost]: (c) => {
+    // A post with two arms.
+    base(c, PALETTE.dirt);
+    px(c, 7, 3, 2, 12, '#5a3a1e');
+    px(c, 2, 3, 8, 3, '#a07a4a');
+    px(c, 7, 7, 7, 3, '#a07a4a');
+    px(c, 3, 4, 5, 1, '#3a2412');
+    px(c, 9, 8, 4, 1, '#3a2412');
+    px(c, 6, 14, 4, 1, 'rgba(0,0,0,0.3)');
+  },
+  [Tile.Stump]: (c) => {
+    base(c, PALETTE.dirt);
+    specks(c, '#c8a46a', SPARSE);
+    px(c, 3, 6, 10, 8, '#6a4a2a');
+    px(c, 3, 5, 10, 3, '#c8a46a');
+    px(c, 5, 6, 6, 1, '#a07a4a');
+    px(c, 7, 6, 2, 1, '#8a5a28');
+    px(c, 2, 13, 3, 2, '#5a3a1e');
+    px(c, 11, 13, 3, 2, '#5a3a1e');
+  },
+  [Tile.AxeLeft]: (c) => {
+    // Chips, a split log, and the axe lying where it was put down.
+    base(c, PALETTE.dirt);
+    specks(c, '#c8a46a', DENSE);
+    px(c, 2, 10, 7, 3, '#8a5a28');
+    px(c, 2, 10, 7, 1, '#c8a46a');
+    px(c, 9, 3, 1, 10, '#a07a4a');
+    px(c, 10, 3, 3, 3, '#c8c8d0');
+    px(c, 12, 3, 1, 3, '#f2f2f6');
+  },
+  [Tile.Charcoal]: (c) => {
+    // A turf-covered mound with a thread of smoke.
+    base(c, PALETTE.dirt);
+    px(c, 1, 8, 14, 7, '#3a3430');
+    px(c, 3, 6, 10, 3, '#3a3430');
+    px(c, 5, 5, 6, 2, '#4a4038');
+    px(c, 2, 9, 3, 1, '#5a6a2a');
+    px(c, 10, 11, 3, 1, '#5a6a2a');
+    px(c, 7, 2, 1, 3, '#8a8a8a');
+    px(c, 8, 0, 1, 2, '#b0b0b0');
+  },
+  [Tile.CutStone]: (c) => {
+    base(c, PALETTE.stoneGround);
+    px(c, 1, 4, 14, 10, '#b0aa9c');
+    px(c, 1, 4, 14, 2, '#d0cabc');
+    px(c, 1, 13, 14, 1, '#6a655a');
+    px(c, 8, 6, 1, 7, '#8a8478');
+  },
+  [Tile.PickaxeLeft]: (c) => {
+    base(c, PALETTE.stoneGround);
+    specks(c, '#9a9488', DENSE);
+    px(c, 3, 11, 10, 1, '#a07a4a');
+    px(c, 11, 7, 2, 2, '#8a8478');
+    px(c, 10, 8, 1, 6, '#8a8478');
+    px(c, 12, 6, 1, 1, '#c8c8d0');
+    px(c, 10, 13, 1, 1, '#c8c8d0');
+  },
+  [Tile.Kiln]: (c) => {
+    // A beehive kiln of red clay, the fire-mouth glowing.
+    base(c, PALETTE.dirt);
+    px(c, 2, 5, 12, 10, '#9a4a2a');
+    px(c, 4, 3, 8, 3, '#9a4a2a');
+    px(c, 6, 1, 4, 2, '#7a3a1a');
+    px(c, 6, 10, 4, 5, '#2a1208');
+    px(c, 7, 12, 2, 2, '#e8a040');
+    px(c, 3, 6, 2, 1, '#b8684a');
+  },
+  [Tile.Pots]: (c) => {
+    base(c, PALETTE.dirt);
+    for (const [x, y] of [
+      [1, 4],
+      [6, 3],
+      [11, 4],
+      [3, 10],
+      [9, 10],
+    ] as const) {
+      px(c, x, y + 1, 4, 4, '#c07a4a');
+      px(c, x + 1, y, 2, 1, '#c07a4a');
+      px(c, x, y + 1, 4, 1, '#a05a2a');
+    }
+  },
+  [Tile.Vine]: (c) => {
+    // A trellis post and wire, heavy with leaves and dark grapes.
+    base(c, PALETTE.dirt);
+    px(c, 2, 2, 1, 13, '#5a3a1e');
+    px(c, 13, 2, 1, 13, '#5a3a1e');
+    px(c, 2, 4, 12, 1, '#8a7a5a');
+    px(c, 1, 5, 14, 6, '#4a7a2a');
+    px(c, 3, 6, 3, 2, '#6a9a3a');
+    px(c, 9, 7, 3, 2, '#6a9a3a');
+    px(c, 5, 9, 2, 3, '#4a2a5a');
+    px(c, 10, 10, 2, 2, '#4a2a5a');
+  },
+  [Tile.Winepress]: (c) => {
+    // A stone basin and a beam to press with.
+    base(c, PALETTE.dirt);
+    px(c, 1, 7, 14, 8, '#7a746a');
+    px(c, 2, 8, 12, 5, '#4a2a3a');
+    px(c, 1, 7, 14, 1, '#a09a8e');
+    px(c, 1, 3, 14, 2, '#6a4a2a');
+    px(c, 7, 3, 2, 6, '#5a3a1e');
+  },
   [Tile.Well]: (c) => {
     // A ring of fieldstone round dark water, a bucket post over it.
     base(c, PALETTE.dirt);

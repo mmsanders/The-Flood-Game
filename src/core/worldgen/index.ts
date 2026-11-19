@@ -37,6 +37,7 @@ import { layRoads } from './roads.js';
 import { clearStairApproaches, paintSouthBeach, wallWorldRim } from './seams.js';
 import { placeHomesteads } from './homesteads.js';
 import { placeSettlements } from './settlements.js';
+import { placeSites } from './sites.js';
 
 export { ensureConnected, labelRegions } from './connectivity.js';
 export { generateElevation } from './elevation.js';
@@ -60,12 +61,23 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
     boatYard,
     ...pois,
   ]);
+  const sites = placeSites(seed, params, elev, biome, plan, [
+    ...settlements,
+    ...homesteads,
+    spawn,
+    ark,
+    boatYard,
+    ...pois,
+  ]);
 
   layRoads(seed, params, elev, biome, plan, settlements, {
     spawn,
     dungeons: pois.filter((p) => p.kind === PoiKind.Dungeon),
     docks: pois.filter((p) => p.kind === PoiKind.BoatYard),
-    farms: homesteads.map((f) => ({ x: f.yard.x, y: f.yard.y + 1 })),
+    farms: [
+      ...homesteads.map((f) => ({ x: f.yard.x, y: f.yard.y + 1 })),
+      ...sites.map((s) => ({ x: s.x + 1, y: s.y - 1 })),
+    ],
   });
 
   const tiles = paintTiles({ seed, params, elev, biome, plan });
@@ -93,7 +105,12 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
   for (const poi of pois) reserved.add(poi.y * w + poi.x);
   const livePastures = pastures.filter((i) => isWalkable(tiles[i]) && !reserved.has(i));
   // Where people live: wild things keep their distance from all of it.
-  const settled = [...settlements.map(({ x, y }) => ({ x, y })), ...homesteads.map(({ x, y }) => ({ x, y })), spawn];
+  const settled = [
+    ...settlements.map(({ x, y }) => ({ x, y })),
+    ...homesteads.map(({ x, y }) => ({ x, y })),
+    ...sites.map(({ x, y }) => ({ x, y })),
+    spawn,
+  ];
   const animals = spawnAnimals(seed, tiles, biome, w, reserved, spawn, livePastures, homesteads, settled);
 
   // One dungeon per entrance placed above: 4x4 rooms, stairs in the top row,
@@ -120,7 +137,7 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
   // sand. Plain ground only, so nothing above is disturbed.
   const desert = placeDesert(seed, tiles, elev, w, h);
   // And the people, from the final tiles, so everyone stands somewhere real.
-  const { places, people } = placePeople(seed, tiles, elev, w, h, settlements, homesteads);
+  const { places, people } = placePeople(seed, tiles, elev, w, h, settlements, homesteads, sites);
 
   const stats = collectStats(tiles, biome, w, h);
   stats.connected = connectivity.connected;
@@ -157,6 +174,7 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
     interiors,
     desert,
     homesteads,
+    sites,
     places,
     people,
     settled,
@@ -203,9 +221,14 @@ function placeInteriors(
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
-      if (tiles[i] !== Tile.TownDoor) continue;
+      if (tiles[i] !== Tile.TownDoor && tiles[i] !== Tile.TavernDoor) continue;
       const b = biomePlane[i] as Biome;
-      const kind = b === Biome.Mountain ? InteriorKind.Hermit : InteriorKind.Shop;
+      const kind =
+        tiles[i] === Tile.TavernDoor
+          ? InteriorKind.Tavern
+          : b === Biome.Mountain
+            ? InteriorKind.Hermit
+            : InteriorKind.Shop;
       interiors.push(generateInterior(kind, id++, b, { x, y }));
     }
   }

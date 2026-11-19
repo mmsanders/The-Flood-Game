@@ -9,6 +9,7 @@
 import { TILE_PX } from '../core/config.js';
 import { OBSTACLE_CLEARS_TO, OBSTACLE_COST, REWARD_NAMES, RewardKind } from '../core/dungeon.js';
 import type { TileMap } from '../core/tilemap.js';
+import { AXE_DURABILITY, PICKAXE_DURABILITY } from '../core/items.js';
 import { isWalkable, Resource, Tile } from '../core/tiles.js';
 import { syncInterpolation } from './camera.js';
 import {
@@ -41,6 +42,10 @@ function sealResourceOf(tile: number): Resource | null {
   }
 }
 
+/** A found tool has seen use: a head start, not a free shop. */
+export const FOUND_AXE = Math.ceil(AXE_DURABILITY * 0.6);
+export const FOUND_PICKAXE = Math.ceil(PICKAXE_DURABILITY * 0.6);
+
 export function stepTileEffects(state: GameState): void {
   const map = activeMap(state);
   const { player } = state;
@@ -65,6 +70,23 @@ export function stepTileEffects(state: GameState): void {
     case Tile.ArkSite:
       deliverToArk(state);
       break;
+    // Wave 7: tools left where someone was using them. Worn, but free.
+    case Tile.AxeLeft: {
+      map.tiles[i] = Tile.Dirt;
+      state.mapRevision++;
+      state.hasAxe = true;
+      state.axeDurability = Math.max(state.axeDurability, FOUND_AXE);
+      say(state, `An axe, left on the chips. Well used — ${FOUND_AXE}/${AXE_DURABILITY}.`);
+      break;
+    }
+    case Tile.PickaxeLeft: {
+      map.tiles[i] = Tile.StoneGround;
+      state.mapRevision++;
+      state.hasPickaxe = true;
+      state.pickaxeDurability = Math.max(state.pickaxeDurability, FOUND_PICKAXE);
+      say(state, `A quarryman's pickaxe, worn to the haft — ${FOUND_PICKAXE}/${PICKAXE_DURABILITY}.`);
+      break;
+    }
     case Tile.Key: {
       const cave = currentDungeon(state);
       if (!cave) break;

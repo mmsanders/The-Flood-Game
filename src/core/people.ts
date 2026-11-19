@@ -24,6 +24,8 @@ import {
   type Place,
   type Settlement,
   SettlementKind,
+  type Site,
+  SiteKind,
 } from './world.js';
 
 /** How many clothing palettes the renderer knows. */
@@ -60,6 +62,9 @@ function standable(tile: number): boolean {
   if (!isWalkable(tile)) return false;
   switch (tile) {
     case Tile.TownDoor:
+    case Tile.TavernDoor:
+    case Tile.AxeLeft:
+    case Tile.PickaxeLeft:
     case Tile.DungeonEntrance:
     case Tile.BoatYard:
     case Tile.Shrine:
@@ -82,6 +87,7 @@ export function placePeople(
   h: number,
   settlements: readonly Settlement[],
   homesteads: readonly Homestead[],
+  sites: readonly Site[] = [],
 ): { places: Place[]; people: Person[] } {
   const rng = stageRng(seed, 'people');
   const places: Place[] = [];
@@ -112,6 +118,12 @@ export function placePeople(
     // lived-in one has its farmer in the yard.
     const crowd = f.state === HomesteadState.LivedIn ? 1 : 0;
     settle(f.yard.x, f.yard.y, 2, f.name, f.id, crowd, PersonRole.Farmer);
+  }
+  for (const site of sites) {
+    // The trades that someone works: the potter, the vintner, the burners.
+    if (!site.keeper) continue;
+    const crowd = site.kind === SiteKind.Charcoal ? 2 : 1;
+    settle(site.keeper.x, site.keeper.y, 2, site.name, -1, crowd, PersonRole.Townsfolk);
   }
   return { places, people };
 }

@@ -325,6 +325,89 @@ function stampTown(
     }
   }
   overwrite(plan, cy * w + cx, Tile.TownDoor);
+  furnishTown(plan, w, h, cx, cy, rx, ry, kind);
+}
+
+/**
+ * What a town has besides houses (Wave 7): a well for the water, stalls on
+ * the square, a fingerpost, a tavern — and in the city, the merchant's villa
+ * behind its garden wall. Each one is a reason the place is here and a sign
+ * that people live in it.
+ */
+function furnishTown(
+  plan: Uint8Array,
+  w: number,
+  h: number,
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  kind: SettlementKind,
+): void {
+  const ok = (dx: number, dy: number) => {
+    const x = cx + dx;
+    const y = cy + dy;
+    if (x <= 1 || y <= 1 || x >= w - 2 || y >= h - 3 || onPanelEdge(x, y)) return false;
+    const t = plan[y * w + x];
+    return (
+      t !== Tile.Water && t !== Tile.Cliff && t !== Tile.Bridge && t !== Tile.TownDoor && t !== Tile.TavernDoor
+    );
+  };
+  const put = (dx: number, dy: number, tile: Tile) => {
+    if (ok(dx, dy)) overwrite(plan, (cy + dy) * w + cx + dx, tile);
+  };
+  const ground = kind === SettlementKind.City ? Tile.StoneGround : Tile.Dirt;
+
+  // The tavern beside the market door, its doorstep clear: whichever side of
+  // the square has room for it.
+  for (const [dx, dy] of [
+    [3, 0],
+    [-3, 0],
+    [0, -3],
+    [3, -2],
+    [-3, -2],
+    [2, 2],
+    [-2, 2],
+    [-1, -2],
+    [1, -2],
+    [-2, -2],
+    [2, -2],
+  ] as const) {
+    if (!ok(dx, dy) || !ok(dx, dy + 1)) continue;
+    put(dx, dy, Tile.TavernDoor);
+    put(dx, dy + 1, ground);
+    break;
+  }
+  // Stalls flanking the square, the well below it, a fingerpost at the corner.
+  put(-2, -1, Tile.Stall);
+  put(2, -1, Tile.Stall);
+  put(-1, -1, ground);
+  put(1, -1, ground);
+  put(-3, 2, Tile.Well);
+  put(-3, 1, ground);
+  put(-2, 2, ground);
+  put(1, 2, Tile.Signpost);
+  put(0, 1, ground);
+  put(0, 2, ground);
+
+  if (kind !== SettlementKind.City) return;
+  // The merchant's villa: a walled garden north of the square, the house at
+  // its head, the gate facing the town.
+  const gx = Math.min(rx - 3, 5);
+  const gy = -Math.min(ry - 1, 6);
+  for (let dy = 0; dy <= 4; dy++) {
+    for (let dx = 0; dx <= 5; dx++) {
+      const wall = dy === 0 || dy === 4 || dx === 0 || dx === 5;
+      if (wall) put(gx + dx, gy + dy, Tile.StoneWall);
+      else put(gx + dx, gy + dy, (dx + dy) % 3 === 0 ? Tile.Tree : Tile.Grass);
+    }
+  }
+  put(gx + 2, gy + 1, Tile.House);
+  put(gx + 3, gy + 1, Tile.House);
+  put(gx + 2, gy + 2, Tile.Grass);
+  put(gx + 3, gy + 2, Tile.Grass);
+  put(gx + 2, gy + 4, Tile.Road);
+  put(gx + 2, gy + 5, Tile.Road);
 }
 
 function stampPasture(
