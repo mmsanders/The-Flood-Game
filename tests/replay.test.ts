@@ -10,10 +10,11 @@
  * checkpoint must match: if a function lands on a different branch, runs in a
  * different order, or loses a side effect, some later checkpoint diverges.
  *
- * Re-captured once since, deliberately, for Wave 5: the prologue moved the
- * flood curve, caves became 4x4 and flood, and the flock is led on a rope, so
- * the rules a player can observe changed. Re-capture only for a change like
- * that, and say so in the commit.
+ * Re-captured since, deliberately, for changes a player can observe: Wave 5
+ * (the prologue moved the flood curve, caves became 4x4 and flood, the flock
+ * is led on a rope) and Wave 6 (worldgen cuts a sandy gate in the south wall,
+ * and the run state gained the desert's fields). Re-capture only for a change
+ * like that, and say so in the commit.
  */
 
 import { describe, expect, it } from 'vitest';

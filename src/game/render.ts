@@ -37,7 +37,6 @@ import {
   visitedCells,
 } from './minimap.js';
 import {
-  BANNER_TIME,
   Dir,
   type GameState,
   LODESTONE_DIR_NAME,
@@ -968,10 +967,12 @@ function drawPlayerShadow(
 
 /** Multiply the playfield. Day is white and is skipped. Dungeons have no sky. */
 function drawTodFilter(ctx: CanvasRenderingContext2D, state: GameState): void {
-  if (state.location.kind !== 'overworld') return;
+  const sky = state.location.kind;
+  if (sky !== 'overworld' && sky !== 'desert') return;
   const day = currentDay(state);
   const tod = todAt(day);
-  const gloom = gloomAt(day);
+  // The one place the rain does not fall: the sand keeps its sun.
+  const gloom = sky === 'desert' ? 0 : gloomAt(day);
   if (isDaylight(tod) && gloom <= 0) return;
 
   // The rain cools the light on top of the hour: the prologue is sunlit, the
@@ -1042,7 +1043,7 @@ function mod(a: number, n: number): number {
  */
 function drawBanner(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (!state.banner || state.bannerTimer <= 0 || state.phase !== 'playing') return;
-  const fade = Math.min(1, state.bannerTimer / 0.5, (BANNER_TIME - state.bannerTimer) / 0.5 + 0.2);
+  const fade = Math.min(1, state.bannerTimer / 0.5, (state.banner.time - state.bannerTimer) / 0.5 + 0.2);
   const midY = HUD_H + PANEL_PX_H / 2 - 18;
 
   ctx.globalAlpha = Math.max(0, fade);
@@ -1250,7 +1251,9 @@ function drawMiniMap(ctx: CanvasRenderingContext2D, state: GameState): void {
       ? state.exploredDungeons[state.location.dungeonId]
       : state.location.kind === 'interior'
         ? state.exploredInteriors[state.location.interiorId]
-        : state.exploredOverworld;
+        : state.location.kind === 'desert'
+          ? state.exploredDesert
+          : state.exploredOverworld;
   if (!grid) return;
 
   const worldRows = panelsHigh(map);

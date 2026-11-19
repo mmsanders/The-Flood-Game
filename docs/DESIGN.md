@@ -267,6 +267,36 @@ ordinary flood rules take over.
 
 ---
 
+## The endless sand
+
+An Easter egg (round-one note 5), built as a general primitive: **a small map that is not
+the overworld, not a dungeon, and does not obey euclidean adjacency** (`src/core/desert.ts`,
+`src/game/desert.ts`).
+
+**The gate.** Worldgen picks the east or west wall and cuts a four-row gap through its rock
+in the bottom two panel rows, where plain ground lies right behind it, then licks a tongue of
+sand in from the gap. Only plain ground is repainted and the gap's elevation is copied from
+the ground behind it, so connectivity and solvability are untouched and the gate floods with
+the lowlands — within days of the rain, which makes this an early-game secret.
+
+**The loop.** Walk off the edge through the gap: *"Endless sand stretches in every
+direction..."* The sand is a 3x3-panel map whose eight outer panels are identical to the
+centre. The player always stands in the centre: crossing into a neighbour starts the ordinary
+panel slide, and the game moves player and camera back one panel so the slide *ends* in the
+centre, which looks exactly like the next screen because it is this one. The same landmarks
+sit on every panel so the repeat is legible. Walking back the way you came returns you to the
+gate. The sand is off the world map, so it never floods, and the rain never falls there.
+
+**The path.** A stranger sits in the carpenter's workshop, beside a sand-coloured mat. Stand
+on it and press `E` and he gives an eight-step compass path (never the way back), shown as a
+banner long enough to copy down. Each correct step through the sand counts; a wrong step
+starts the count again (or at one, if it happens to be the path's first step). The eighth
+correct step slides you into the **oasis** — a pool, palms, and a heart container on the
+bank. Any way out of the oasis is the way home. Once the gate is under water, the stranger
+says so.
+
+---
+
 ## The frame budget
 
 A hard rule, ahead of every feature below: **no frame ever misses a vsync.**

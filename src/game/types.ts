@@ -54,7 +54,7 @@ export interface Camera {
 
 /** Where the player currently is. Dungeons and interiors are separate maps. */
 export interface Location {
-  kind: 'overworld' | 'dungeon' | 'interior';
+  kind: 'overworld' | 'dungeon' | 'interior' | 'desert';
   /** Index into `world.dungeons`, or -1 above ground / in an interior. */
   dungeonId: number;
   /** Index into `world.interiors`, or -1 above ground / in a dungeon. */
@@ -128,6 +128,12 @@ export interface GameState {
   exploredDungeons: Uint8Array[];
   /** One cell per interior (single-panel rooms). */
   exploredInteriors: Uint8Array[];
+  /** The sand's 3x3 panels. Only ever the centre, which is rather the point. */
+  exploredDesert: Uint8Array;
+  /** Steps of the stranger's path walked correctly, in a row. */
+  desertSteps: number;
+  /** In the sand, and the path has been walked: the centre is the oasis. */
+  inOasis: boolean;
   minimapViewY: number;
   minimapFilledSouth: boolean;
   /** Bumped whenever terrain changes under play. */
@@ -152,6 +158,8 @@ export interface GameState {
 export interface Banner {
   title: string;
   line: string;
+  /** Seconds it holds the screen, for the fade. */
+  time: number;
 }
 
 export interface StepInput {

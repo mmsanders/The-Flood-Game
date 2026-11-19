@@ -33,7 +33,7 @@ export function tickWeather(state: GameState, dt: number): void {
   }
   if (state.rainBegun || !isRaining(currentDay(state))) return;
   state.rainBegun = true;
-  state.banner = { title: RAIN_TITLE, line: RAIN_LINE };
+  state.banner = { title: RAIN_TITLE, line: RAIN_LINE, time: BANNER_TIME };
   state.bannerTimer = BANNER_TIME;
 }
 

@@ -29,6 +29,10 @@ export function markExplored(state: GameState): void {
     if (grid && i < grid.length) grid[i] = 1;
     return;
   }
+  if (state.location.kind === 'desert') {
+    if (i < state.exploredDesert.length) state.exploredDesert[i] = 1;
+    return;
+  }
   if (i < state.exploredOverworld.length) state.exploredOverworld[i] = 1;
 }
 

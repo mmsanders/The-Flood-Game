@@ -16,6 +16,7 @@ import {
   tileHeight,
   tileWidth,
 } from '../config.js';
+import { placeDesert } from '../desert.js';
 import { generateDungeon } from '../dungeon.js';
 import { generateInterior, InteriorKind } from '../interior.js';
 import { checkSolvable } from '../resources.js';
@@ -104,6 +105,10 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
     pois.filter((p) => p.kind === PoiKind.Shrine),
   );
 
+  // Last, once every road, door and node is down: the far south edge turns to
+  // sand. Plain ground only, so nothing above is disturbed.
+  const desert = placeDesert(seed, tiles, elev, w, h);
+
   const stats = collectStats(tiles, biome, w, h);
   stats.connected = connectivity.connected;
   stats.contours = {
@@ -137,6 +142,7 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
     animals,
     dungeons,
     interiors,
+    desert,
     stats,
   };
 }

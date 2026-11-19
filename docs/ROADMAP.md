@@ -11,10 +11,10 @@ ones land on foundations that already exist.
 Nothing here is precious. Where I disagree with a note I say so and say why, and the note
 wins if you still want it.
 
-**Status:** Waves 0–5 have shipped (frame budget; the world people left behind; the
+**Status:** Every wave has shipped (frame budget; the world people left behind; the
 depth ladder and the things that beat it; interiors and instruments; contour ledges; the
-rain begins), along with the round-two fixes in *What the first full run changed* below.
-What remains is Wave 6.
+rain begins; the endless sand), along with the round-two fixes in *What the first full run
+changed* below. What's left is the deferred list at the bottom.
 
 > Full Wave 0 / Wave 1 prose is unchanged from `main` history. This file keeps the
 > Wave 2 write-up and the forward plan; expand from `main` if you need the long
@@ -218,9 +218,26 @@ on the rope. The dove still scouts only wild animals. The HUD map doesn't show c
 **Tuning to playtest:** `RAIN_DAY` (5), `ROPE_COST` (4), `MAX_STRING` (6), the slowdown
 per animal (0.09), and `DUNGEON_SHALLOW_ROWS` (3).
 
-## Wave 6 — The endless sand
+## Wave 6 — The endless sand *(shipped)*
 
-Desert Easter egg; independent.
+Round-one note 5, built as the general primitive round one asked for: a map that does not
+obey euclidean adjacency. A 3x3-panel map whose outer panels match the centre; every panel
+crossing is folded back one panel so the slide always lands in the centre. Anything else
+that should loop (a lost woods, a stair that never ends) can reuse `wrapDesert`'s trick.
+
+- **Gate:** a four-row gap cut through the east or west rock wall in the bottom two panel
+  rows, with sand around it. It floods with the lowlands, around day 10 in the seeds
+  surveyed — an early secret.
+- **Path:** a stranger in the carpenter's workshop gives an eight-step compass path that
+  never includes the way back. A wrong step resets the count.
+- **Prize:** an oasis with a heart container. Any way out of it is the way home.
+
+Every world in the survey has a gate. If neither wall has plain ground behind it in the far
+south, the egg is simply absent and the stranger says the sea has it.
+
+**Left alone deliberately:** the dev tool doesn't show the sand; the stranger's path
+isn't saved anywhere but the banner (write it down — that is the genre); and there's no
+second destination for the primitive yet.
 
 ---
 
@@ -237,7 +254,7 @@ Wave 3  interiors, the people in them,      ← shipped
 Wave 4  contour ledges                      ← shipped
 Wave 5  the prologue, dungeon flood,        ← shipped
         animal husbandry
-Wave 6  the desert                          ← next; independent
+Wave 6  the endless sand                    ← shipped
 ```
 
 ## Things I'd deliberately not do yet

@@ -269,10 +269,16 @@ describe('worldgen: panel seams', () => {
         `beach ${x} seed ${seed}`,
       ).toBe(true);
     }
+    // Walled all round, except the one sandy gap in the far south that opens
+    // onto the endless sand (Wave 6).
+    const gate = world.desert?.gate;
+    const inGate = (side: 1 | -1, y: number) =>
+      gate !== undefined && gate.side === side && y >= gate.y0 && y <= gate.y1;
     for (let y = 0; y < h; y++) {
-      expect(isWalkable(tiles[y * w]), `west rim ${y} seed ${seed}`).toBe(false);
-      expect(isWalkable(tiles[y * w + w - 1]), `east rim ${y} seed ${seed}`).toBe(false);
+      if (!inGate(-1, y)) expect(isWalkable(tiles[y * w]), `west rim ${y} seed ${seed}`).toBe(false);
+      if (!inGate(1, y)) expect(isWalkable(tiles[y * w + w - 1]), `east rim ${y} seed ${seed}`).toBe(false);
     }
+    if (gate) expect(gate.y1 - gate.y0).toBeLessThan(6);
 
     expect(spawn.x).toBeGreaterThan(0);
     expect(spawn.x).toBeLessThan(w - 1);

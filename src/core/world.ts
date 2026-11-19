@@ -9,6 +9,7 @@
 
 import { PANEL_H, PANEL_W, type WorldParams } from './config.js';
 import type { Dungeon } from './dungeon.js';
+import type { Desert } from './desert.js';
 import type { Interior } from './interior.js';
 import type { TileMap } from './tilemap.js';
 import { Biome, Tile } from './tiles.js';
@@ -84,6 +85,8 @@ export interface World extends TileMap {
   dungeons: Dungeon[];
   /** Shops, hermitage, carpenter, Noah's tent — one-room maps. */
   interiors: Interior[];
+  /** The endless sand off the far south edge, or null if no edge would take it. */
+  desert: Desert | null;
   stats: WorldStats;
 }
 

@@ -7,6 +7,7 @@ import { BOAT_PORTAGE_SPEED_SCALE, BOAT_SPEED_SCALE } from '../core/boat.js';
 import { TILE_PX } from '../core/config.js';
 import { PLAYER_TILES_PER_SEC } from '../core/resources.js';
 import { isWalkable, Tile } from '../core/tiles.js';
+import { desertOpening } from './desert.js';
 import { stringSpeedScale } from './flock.js';
 import { canStepOnEntrance } from './places.js';
 import { activeMap, depthAt, isBoatableTile } from './queries.js';
@@ -96,7 +97,7 @@ function cornerClear(state: GameState, cx: number, cy: number, sailing: boolean)
   const map = activeMap(state);
   const tx = Math.floor(cx / TILE_PX);
   const ty = Math.floor(cy / TILE_PX);
-  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return false;
+  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return desertOpening(state, tx, ty);
 
   const i = ty * map.w + tx;
   const tile = map.tiles[i];
