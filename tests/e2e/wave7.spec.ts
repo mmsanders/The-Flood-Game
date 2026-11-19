@@ -76,4 +76,58 @@ test.describe('wave 7', () => {
     await page.screenshot({ path: `${OUT}/game-town-people.png` });
     expect(errors, errors.join('\n')).toEqual([]);
   });
+
+  test('the trades, the tavern, and the ending', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(String(e)));
+    await page.goto(`/?seed=${SEED}&speed=1`);
+    await page.waitForFunction(() => 'flood' in window);
+    await page.waitForTimeout(300);
+
+    const sites = await page.evaluate(() =>
+      (window as unknown as Win).flood.state.world.sites.map((x: any) => ({ x: x.x, y: x.y, kind: x.kind })),
+    );
+    const names = ['woodcut', 'charcoal', 'quarry', 'kiln', 'vineyard'];
+    for (const site of sites) {
+      await standAt(page, site.x + 2, site.y - 1);
+      await page.screenshot({ path: `${OUT}/game-site-${names[site.kind]}.png` });
+    }
+
+    // A town square: market, tavern, stalls, well, signpost.
+    const town = await page.evaluate(() => {
+      const s = (window as unknown as Win).flood.state;
+      const t = s.world.settlements.find((q: any) => q.kind === 1) ?? s.world.settlements[0];
+      return { x: t.x, y: t.y };
+    });
+    await standAt(page, town.x, town.y + 2);
+    await page.screenshot({ path: `${OUT}/game-town-square.png` });
+
+    // Inside the tavern, asking the keeper.
+    await page.evaluate(() => {
+      const s = (window as unknown as Win).flood.state;
+      const room = s.world.interiors.find((r: any) => r.kind === 4);
+      s.location = { kind: 'interior', dungeonId: -1, interiorId: room.id, returnTo: room.overworldEntrance };
+      s.player.x = room.focus.x * 16 + 3;
+      s.player.y = room.focus.y * 16 + 2;
+      s.player.prevX = s.player.x;
+      s.player.prevY = s.player.y;
+      s.camera.panelX = 0;
+      s.camera.panelY = 0;
+      s.camera.fromX = 0;
+      s.camera.fromY = 0;
+    });
+    await page.waitForTimeout(150);
+    await page.keyboard.press('e');
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${OUT}/game-tavern.png` });
+
+    // The ending, with names.
+    await page.evaluate(() => {
+      const s = (window as unknown as Win).flood.state;
+      s.phase = 'lost';
+    });
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: `${OUT}/game-end-names.png` });
+    expect(errors, errors.join('\n')).toEqual([]);
+  });
 });

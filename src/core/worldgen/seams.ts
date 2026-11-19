@@ -217,6 +217,9 @@ function isPlannedKeep(tile: number): boolean {
     tile === Tile.DungeonEntrance ||
     tile === Tile.HeartContainer ||
     tile === Tile.TownDoor ||
+    tile === Tile.TavernDoor ||
+    tile === Tile.AxeLeft ||
+    tile === Tile.PickaxeLeft ||
     tile === Tile.BoatYard ||
     tile === Tile.CampTent ||
     tile === Tile.Shrine

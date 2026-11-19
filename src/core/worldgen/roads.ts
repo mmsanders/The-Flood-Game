@@ -243,6 +243,10 @@ function isReserved(tile: number): boolean {
     tile === Tile.FenceDown ||
     tile === Tile.Well ||
     tile === Tile.Ruin ||
+    tile === Tile.Stall ||
+    tile === Tile.Signpost ||
+    tile === Tile.TavernDoor ||
+    tile >= Tile.Stump && tile <= Tile.Winepress ||
     tile === Tile.TownDoor ||
     tile === Tile.Shrine ||
     tile === Tile.ArkSite ||

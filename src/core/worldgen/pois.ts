@@ -68,7 +68,7 @@ export function placePois(
 
   for (let b = 0; b < BIOME_COUNT; b++) {
     const town = settlements.find((s) => s.biome === b);
-    const spot = pickDungeon(rng, plan, biome, w, h, b as Biome, taken, town);
+    const spot = pickDungeon(rng, plan, biome, w, h, b as Biome, taken, town, arkIndex);
     if (spot === undefined) continue;
     taken.add(spot);
     stampDungeonMouth(plan, w, h, spot, b as Biome);
@@ -320,13 +320,19 @@ function pickDungeon(
   want: Biome,
   taken: Set<number>,
   town: Settlement | undefined,
+  arkIndex: number,
 ): number | undefined {
   const candidates: number[] = [];
+  // Never in the ark's own wall: the platform's cliffs would take a cave
+  // mouth as readily as any other, and then the stairs are not the only way up.
+  const arkPx = Math.floor((arkIndex % w) / PANEL_W);
+  const arkPy = Math.floor(((arkIndex / w) | 0) / PANEL_H);
   for (let y = 3; y < h - 4; y++) {
     for (let x = 3; x < w - 3; x++) {
       const i = y * w + x;
       if (biome[i] !== want) continue;
       if (onPanelEdge(x, y) || isWorldRim(x, y, w, h)) continue;
+      if (Math.floor(x / PANEL_W) === arkPx && Math.floor(y / PANEL_H) === arkPy) continue;
       if (taken.has(i)) continue;
       const t = plan[i];
       if (t === Tile.TownDoor || t === Tile.Shrine || t === Tile.ArkSite) continue;

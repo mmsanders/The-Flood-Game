@@ -18,6 +18,8 @@ export const enum InteriorKind {
   Hermit = 1,
   Carpenter = 2,
   NoahTent = 3,
+  /** One per town. Rumours at the counter, rest by the fire. Wave 7. */
+  Tavern = 4,
 }
 
 export const INTERIOR_NAMES: Record<InteriorKind, string> = {
@@ -25,6 +27,7 @@ export const INTERIOR_NAMES: Record<InteriorKind, string> = {
   [InteriorKind.Hermit]: 'the hermitage',
   [InteriorKind.Carpenter]: 'the carpenter',
   [InteriorKind.NoahTent]: 'your tent',
+  [InteriorKind.Tavern]: 'the tavern',
 };
 
 export interface Interior extends TileMap {
@@ -77,6 +80,15 @@ export function generateInterior(
     // A stranger warming himself by the shavings, and the mat beside him.
     planes.tiles[STRANGER.y * w + STRANGER.x] = Tile.Stranger;
     planes.tiles[(STRANGER.y + 1) * w + STRANGER.x] = Tile.Sand;
+  } else if (kind === InteriorKind.Tavern) {
+    // Barrels behind the counter, the hearth on the west wall with a mat
+    // before it, tables down the room.
+    planes.tiles[(focus.y - 1) * w + focus.x - 2] = Tile.Pots;
+    planes.tiles[(focus.y - 1) * w + focus.x + 2] = Tile.Pots;
+    planes.tiles[HEARTH.y * w + HEARTH.x] = Tile.Kiln;
+    planes.tiles[(HEARTH.y + 1) * w + HEARTH.x] = Tile.Sand;
+    planes.tiles[6 * w + 10] = Tile.Stall;
+    planes.tiles[6 * w + 12] = Tile.Stall;
   } else {
     planes.tiles[2 * w + 3] = Tile.Tent;
     planes.tiles[2 * w + (w - 4)] = Tile.Tent;
@@ -93,12 +105,20 @@ export function generateInterior(
     stairs,
     overworldEntrance,
     focus,
-    lore: kind === InteriorKind.Carpenter ? { x: STRANGER.x, y: STRANGER.y + 1 } : null,
+    lore:
+      kind === InteriorKind.Carpenter
+        ? { x: STRANGER.x, y: STRANGER.y + 1 }
+        : kind === InteriorKind.Tavern
+          ? { x: HEARTH.x, y: HEARTH.y + 1 }
+          : null,
   };
 }
 
 /** Where the stranger sits in the carpenter's workshop. */
 const STRANGER = { x: 12, y: 5 } as const;
+
+/** The tavern's hearth, with the mat to rest on below it. */
+const HEARTH = { x: 3, y: 5 } as const;
 
 function focusTile(kind: InteriorKind): Tile {
   switch (kind) {
@@ -110,6 +130,8 @@ function focusTile(kind: InteriorKind): Tile {
       return Tile.BoatYard;
     case InteriorKind.NoahTent:
       return Tile.Path;
+    case InteriorKind.Tavern:
+      return Tile.TavernDoor;
   }
 }
 
@@ -117,6 +139,7 @@ function focusTile(kind: InteriorKind): Tile {
 export function isInteriorEntrance(tile: number): boolean {
   return (
     tile === Tile.TownDoor ||
+    tile === Tile.TavernDoor ||
     tile === Tile.BoatYard ||
     tile === Tile.CampTent
   );

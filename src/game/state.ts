@@ -132,6 +132,7 @@ export function createGame(world: World): GameState {
     exploredInteriors: (world.interiors ?? []).map(() => new Uint8Array(1)),
     exploredDesert: new Uint8Array(9),
     desertSteps: 0,
+    rumoursHeard: 0,
     inOasis: false,
     minimapViewY: 0,
     minimapFilledSouth: false,

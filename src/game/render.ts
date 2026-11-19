@@ -19,6 +19,7 @@ import {
 import { panelsHigh, panelsWide, type TileMap } from '../core/tilemap.js';
 import { Biome, RESOURCE_COUNT, Resource, Tile, carveTo, isCliffFace } from '../core/tiles.js';
 import { PersonRole, PersonStatus } from '../core/world.js';
+import { leftBehind } from './people.js';
 import { PALETTE } from '../render/palette.js';
 import { type Canvas, getTilesheet, tileSheetX, tileSheetY } from '../render/tilesheet.js';
 import {
@@ -1801,6 +1802,39 @@ function drawArkMeter(
   ctx.fillText(`${Math.round(progress * 100)}%`, x + 24 + barW, y);
 }
 
+/**
+ * The message box. Long lines — a rumour, someone pleading — wrap onto a
+ * second line at a word boundary. The split is cached per message, so the
+ * box measures text only when the message changes, not every frame.
+ */
+const wrapped = { text: '', a: '', b: '', width: 0 };
+
+function wrapMessage(ctx: CanvasRenderingContext2D, text: string, max: number): void {
+  wrapped.text = text;
+  const full = ctx.measureText(text).width;
+  if (full <= max) {
+    wrapped.a = text;
+    wrapped.b = '';
+    wrapped.width = full;
+    return;
+  }
+  // Break at the space nearest the middle that leaves both halves fitting.
+  let best = -1;
+  let bestScore = Infinity;
+  for (let i = text.indexOf(' '); i >= 0; i = text.indexOf(' ', i + 1)) {
+    const wa = ctx.measureText(text.slice(0, i)).width;
+    const wb = ctx.measureText(text.slice(i + 1)).width;
+    const score = Math.max(wa, wb);
+    if (score < bestScore) {
+      bestScore = score;
+      best = i;
+    }
+  }
+  wrapped.a = best < 0 ? text : text.slice(0, best);
+  wrapped.b = best < 0 ? '' : text.slice(best + 1);
+  wrapped.width = Math.min(max, bestScore);
+}
+
 function drawMessage(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (!state.message) return;
 
@@ -1809,21 +1843,33 @@ function drawMessage(ctx: CanvasRenderingContext2D, state: GameState): void {
   ctx.textBaseline = 'middle';
 
   const text = state.message;
-  const w = Math.min(SCREEN_W - 16, ctx.measureText(text).width + 16);
+  const max = SCREEN_W - 32;
+  if (wrapped.text !== text) wrapMessage(ctx, text, max);
+  const lines = wrapped.b ? 2 : 1;
+  const boxH = lines === 2 ? 26 : 16;
+  const w = Math.min(SCREEN_W - 16, wrapped.width + 16);
   const x = (SCREEN_W - w) / 2;
-  const y = SCREEN_H - 26;
+  const y = SCREEN_H - 10 - boxH;
 
   ctx.fillStyle = PALETTE.hudBack;
-  ctx.fillRect(x, y, w, 16);
+  ctx.fillRect(x, y, w, boxH);
   ctx.strokeStyle = '#3a4356';
   ctx.lineWidth = 1;
-  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, 15);
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, boxH - 1);
 
   ctx.fillStyle = '#e6e9ef';
-  ctx.fillText(text, SCREEN_W / 2, y + 8);
+  if (lines === 1) {
+    ctx.fillText(wrapped.a, SCREEN_W / 2, y + 8, max);
+  } else {
+    ctx.fillText(wrapped.a, SCREEN_W / 2, y + 8, max);
+    ctx.fillText(wrapped.b, SCREEN_W / 2, y + 18, max);
+  }
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
 }
+
+/** The end card's names, computed once per ending rather than per frame. */
+const endCardLeft = { phase: '', elapsed: -1, text: '' };
 
 function drawEndCard(ctx: CanvasRenderingContext2D, state: GameState): void {
   const won = state.phase === 'won';
@@ -1857,8 +1903,21 @@ function drawEndCard(ctx: CanvasRenderingContext2D, state: GameState): void {
     midY + 16,
   );
 
+  // Who was left: by name, because a number would let you look away.
+  if (endCardLeft.phase !== state.phase || endCardLeft.elapsed !== state.elapsed) {
+    endCardLeft.phase = state.phase;
+    endCardLeft.elapsed = state.elapsed;
+    endCardLeft.text = leftBehind(state);
+  }
+  if (endCardLeft.text) {
+    ctx.fillStyle = '#7a8698';
+    ctx.fillText('Left to the water:', SCREEN_W / 2, midY + 30);
+    ctx.fillStyle = '#b8c2d0';
+    ctx.fillText(endCardLeft.text, SCREEN_W / 2, midY + 40, SCREEN_W - 12);
+  }
+
   ctx.fillStyle = '#8d98ab';
-  ctx.fillText('press R to begin again', SCREEN_W / 2, midY + 30);
+  ctx.fillText('press R to begin again', SCREEN_W / 2, midY + 56);
 
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';

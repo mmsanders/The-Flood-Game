@@ -81,7 +81,7 @@ test.describe('wave 6', () => {
     await page.waitForTimeout(300);
     await page.evaluate(() => {
       const s = (window as unknown as Win).flood.state;
-      const room = s.world.interiors.find((r: any) => r.lore);
+      const room = s.world.interiors.find((r: any) => r.kind === 2);
       s.location = { kind: 'interior', dungeonId: -1, interiorId: room.id, returnTo: room.overworldEntrance };
       s.player.x = room.lore.x * 16 + 3;
       s.player.y = room.lore.y * 16 + 2;

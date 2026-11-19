@@ -71,6 +71,32 @@ export const enum Tile {
   Ruin = 0x3b,
   /** A fence rail on the ground. Walkable: this is the gap. */
   FenceDown = 0x3c,
+  /** The tavern's door. Walkable; enter like a market. */
+  TavernDoor = 0x3d,
+  /** A market stall under an awning. Blocking. */
+  Stall = 0x3e,
+  /** A fingerpost at the square. Blocking; read it from beside it. */
+  Signpost = 0x3f,
+
+  // -- 0x70 the trades: sites that explain the land (Wave 7) ----------------
+  /** A cut stump. Blocking. */
+  Stump = 0x70,
+  /** An axe left beside a stump on the chips. Walkable: step on it to take it. */
+  AxeLeft = 0x71,
+  /** A charcoal burner's turf mound, smoking. Blocking. */
+  Charcoal = 0x72,
+  /** A squared block of quarried stone. Blocking. */
+  CutStone = 0x73,
+  /** A worn pickaxe on the quarry floor. Walkable: step on it to take it. */
+  PickaxeLeft = 0x74,
+  /** A potter's kiln. Blocking. */
+  Kiln = 0x75,
+  /** Pots drying in rows. Blocking. */
+  Pots = 0x76,
+  /** Vines on a trellis. Blocking: the rows are the paths. */
+  Vine = 0x77,
+  /** A stone winepress. Blocking. */
+  Winepress = 0x78,
 
   // -- 0x40 dungeon terrain -------------------------------------------------
   DungeonFloor = 0x40,
@@ -200,6 +226,15 @@ const BLOCKING: readonly Tile[] = [
   Tile.Stranger,
   Tile.Well,
   Tile.Ruin,
+  Tile.Stall,
+  Tile.Signpost,
+  Tile.Stump,
+  Tile.Charcoal,
+  Tile.CutStone,
+  Tile.Kiln,
+  Tile.Pots,
+  Tile.Vine,
+  Tile.Winepress,
 
   Tile.DungeonWall,
 
@@ -326,6 +361,18 @@ export const TILE_NAMES: Record<number, string> = {
   [Tile.Well]: 'Well',
   [Tile.Ruin]: 'Ruin',
   [Tile.FenceDown]: 'Fallen fence',
+  [Tile.TavernDoor]: 'Tavern',
+  [Tile.Stall]: 'Market stall',
+  [Tile.Signpost]: 'Signpost',
+  [Tile.Stump]: 'Stump',
+  [Tile.AxeLeft]: 'Axe',
+  [Tile.Charcoal]: 'Charcoal mound',
+  [Tile.CutStone]: 'Cut stone',
+  [Tile.PickaxeLeft]: 'Pickaxe',
+  [Tile.Kiln]: 'Kiln',
+  [Tile.Pots]: 'Pots',
+  [Tile.Vine]: 'Vines',
+  [Tile.Winepress]: 'Winepress',
   [Tile.DungeonFloor]: 'Dungeon Floor',
   [Tile.DungeonWall]: 'Dungeon Wall',
   [Tile.Stairs]: 'Stairs',

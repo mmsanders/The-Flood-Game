@@ -157,7 +157,7 @@ function canStand(state: GameState, x: number, y: number): boolean {
   if (tx < 1 || ty < 1 || tx >= map.w - 1 || ty >= map.h - 1) return false;
   const tile = map.tiles[ty * map.w + tx];
   if (!isWalkable(tile)) return false;
-  if (tile === Tile.TownDoor || tile === Tile.DungeonEntrance || tile === Tile.ArkSite) return false;
+  if (tile === Tile.TownDoor || tile === Tile.TavernDoor || tile === Tile.DungeonEntrance || tile === Tile.ArkSite) return false;
   return depthAt(state, tx, ty) === 0;
 }
 
@@ -311,6 +311,42 @@ export function ownerOf(state: GameState, farm: number): Person | null {
     }
   }
   return null;
+}
+
+// -- the end card ------------------------------------------------------------
+
+/**
+ * Who the run left behind, by name, for the end card (ROADMAP 7.6). The
+ * people always: nobody else was ever coming aboard. And any farm's animal
+ * that never made it up the ramp, because that one you could have saved.
+ */
+export function leftBehind(state: GameState): string {
+  const { world } = state;
+  const names: string[] = [];
+
+  // The farm animal first: the one the player could have brought.
+  for (const a of world.animals) {
+    if (!a.home || a.status === AnimalStatus.Boarded) continue;
+    const farm = (world.homesteads ?? []).find(
+      (f) => a.home && f.paddock.x0 >= a.home.x0 && f.paddock.x0 <= a.home.x0 + 1 && f.paddock.y0 >= a.home.y0 && f.paddock.y0 <= a.home.y0 + 1,
+    );
+    if (!farm) continue;
+    names.push(`the ${ANIMAL_DEFS[a.kind].name} at ${farm.name}`);
+    break;
+  }
+  // Then the largest town's people, by where they came from.
+  const towns = (world.places ?? []).filter((p) => p.homestead < 0);
+  let biggest: Place | null = null;
+  let most = 0;
+  for (const place of towns) {
+    const n = (world.people ?? []).filter((p) => world.places[p.origin] === place).length;
+    if (n > most) {
+      most = n;
+      biggest = place;
+    }
+  }
+  if (biggest) names.unshift(`the people of ${biggest.name}`);
+  return names.join('; ');
 }
 
 // -- what they say -----------------------------------------------------------

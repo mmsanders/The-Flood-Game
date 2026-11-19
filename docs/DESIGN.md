@@ -332,6 +332,27 @@ from. With nowhere left, they are gone. Only people on the current screen move, 
 frame budget doesn't care how many there are. Noah walks through a crowd rather than
 getting stuck in it.
 
+**Fuller towns.** Round the square: market stalls, a well, a fingerpost that names the two
+nearest places and their bearings, and a **tavern** beside the market door — every town
+whose square has room for one. The city adds a merchant's villa behind a walled garden.
+
+**The trades** (`src/core/worldgen/sites.ts`). Small working places between the towns,
+each sited for its reason and given a footpath: *the old woodcut* in the forest (stumps,
+chips, an axe left lying), *the charcoal burners' camp* at the wood's edge, *the quarry*
+in the hills (cut blocks, a worn pickaxe), *the potter's yard* by valley water, and *the
+vineyard* on a warm slope. The potter, the vintner and the burners live there and flee
+like anyone. Found tools are worn — 60% of a new one's uses — so they are a head start,
+not a free shop.
+
+**The tavern.** Ask the keeper and he tells you the next rumour, every one built from the
+world as it stands: the axe at the woodcut (until you take it), which farmer will sell and
+which way, which abandoned farm still has an animal penned, what the hermit wants, the
+stranger at the carpenter's. By the fire, 2 fiber buys back a heart.
+
+**An ending with names.** The end card says who was left to the water: the people of the
+largest town, and any farm's animal that never made it aboard — *the people of the city;
+the goat at Reed Fold.*
+
 ---
 
 ## The frame budget

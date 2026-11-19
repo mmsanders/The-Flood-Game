@@ -107,6 +107,8 @@ export interface GameState {
   /** One market heart may be bought per settlement biome. */
   shopHeartMask: number;
   hermitHeartClaimed: boolean;
+  /** Rumours the tavern keepers have told, so each ask is the next one. */
+  rumoursHeard: number;
 
   /** At least one skiff has been built this run. */
   hasBoat: boolean;

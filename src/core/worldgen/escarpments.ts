@@ -168,6 +168,9 @@ function canSealAsCliff(tile: number): boolean {
     case Tile.DungeonEntrance:
     case Tile.HeartContainer:
     case Tile.TownDoor:
+    case Tile.TavernDoor:
+    case Tile.AxeLeft:
+    case Tile.PickaxeLeft:
     case Tile.BoatYard:
     case Tile.Shrine:
     case Tile.Pedestal:

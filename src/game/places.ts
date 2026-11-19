@@ -15,6 +15,7 @@ import type { Point } from '../core/world.js';
 import { placeOn } from './camera.js';
 import { activeMap, currentInterior, depthAt, dungeonFlood, say, tileUnder } from './queries.js';
 import { strangerPrompt, talkToStranger } from './desert.js';
+import { askKeeper, hearthPrompt, isTavern, restByFire, tavernCounterPrompt } from './town.js';
 import { ropePrompt, twistRope } from './flock.js';
 import { boatYardPrompt, handleBoatYard } from './skiff.js';
 import { hermitPrompt, interactSettlement, settlementPrompt, tradeWithHermit } from './trade.js';
@@ -50,11 +51,13 @@ function interiorPrompt(state: GameState): ObstaclePrompt | null {
   if (!room) return null;
   const { tx, ty } = tileUnder(state);
   if (room.lore && tx === room.lore.x && ty === room.lore.y) {
+    if (isTavern(room)) return hearthPrompt(state);
     return { tile: Tile.Stranger, ...strangerPrompt() };
   }
   const onFocus = tx === room.focus.x && ty === room.focus.y;
   if (!onFocus) return null;
 
+  if (isTavern(room)) return tavernCounterPrompt();
   if (room.kind === InteriorKind.Shop) {
     return settlementPrompt(state, room.biomeKind);
   }
@@ -78,11 +81,16 @@ function interactInterior(state: GameState): void {
   if (!room) return;
   const { tx, ty } = tileUnder(state);
   if (room.lore && tx === room.lore.x && ty === room.lore.y) {
-    talkToStranger(state);
+    if (isTavern(room)) restByFire(state);
+    else talkToStranger(state);
     return;
   }
   if (tx !== room.focus.x || ty !== room.focus.y) {
     say(state, 'The stairs lead back outside.');
+    return;
+  }
+  if (isTavern(room)) {
+    askKeeper(state, room);
     return;
   }
   if (room.kind === InteriorKind.Shop) {
