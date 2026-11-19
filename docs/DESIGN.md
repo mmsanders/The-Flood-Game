@@ -375,6 +375,31 @@ numbers live.
 The rule is load-bearing for the plan in `ROADMAP.md`: every wave of it adds per-frame work,
 and the budget is easier to defend than to recover.
 
+## The instruments
+
+Wave 8. Each one has a job you notice every run.
+
+- **Chart.** Colours the minimap, and the full-screen map (`M`, or MAP on the touch
+  controls). The map pauses the game, shows the world one pixel per tile scrolled with
+  up and down, and draws the flood as it stands. Unexplored screens are black; explored
+  ones without the Chart are grey (*"A map would help."*). With it: colour, and markers for
+  towns, caves, shrines, the ark, the slipway and the skiff. Resources and pickups are never
+  marked.
+- **Lodestone.** A needle in the HUD pointing to the ark, eight ways. No distance, by
+  decision.
+- **Sounding Line.** Facing water anywhere, it gives the depth and what it takes to
+  cross (wade it in galoshes, a skiff, a pitched skiff, nothing but the ark) and names any
+  resource on the bottom. From the skiff, or on foot in galoshes, the water clears within
+  two tiles of you and sunken resources glint at any depth.
+- **Fishing rod.** Sold by the fisherman at the slipway (6 fiber, 4 wood). From the shore,
+  wading in galoshes, or the skiff, cast at a sunken resource up to two tiles straight
+  ahead, at any depth. You stand still while the line is out (1.4 seconds) and it brings up
+  one. It only brings up what the Rod knows, so the shrine ladder still gates pitch.
+- **Galoshes.** Besides wading, they let the Rod dredge ankle-deep water on foot.
+- **Dove.** Unchanged: `E` outdoors points to the nearest free animal or dry land.
+
+---
+
 ## Deferred
 
 ### Enemies
@@ -405,9 +430,9 @@ deliberately flat and repetitive — Zelda 1, Pokémon Red — and the tilesheet
 code so there is nothing to re-export when it changes.
 
 ### Touch controls
-The game is keyboard-only; the inspector is the phone-facing half. Input is already
-abstracted into intents, so an on-screen d-pad feeds the same path without touching game
-logic.
+Shipped: an on-screen d-pad, A (swing) and B (use), and FLOCK and MAP buttons, feeding
+the same intents as the keyboard (`src/game/mobile.ts`). Nothing here is deferred any more;
+kept as a heading so the history reads.
 
 ---
 

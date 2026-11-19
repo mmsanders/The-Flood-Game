@@ -111,6 +111,8 @@ export interface Place extends Point {
 export const enum PersonRole {
   Townsfolk = 0,
   Farmer = 1,
+  /** Mends nets at the slipway; sells the fishing rod. Wave 8. */
+  Fisherman = 2,
 }
 
 export const enum PersonStatus {

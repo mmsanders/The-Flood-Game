@@ -88,6 +88,7 @@ export function placePeople(
   settlements: readonly Settlement[],
   homesteads: readonly Homestead[],
   sites: readonly Site[] = [],
+  slipway: { x: number; y: number } | null = null,
 ): { places: Place[]; people: Person[] } {
   const rng = stageRng(seed, 'people');
   const places: Place[] = [];
@@ -119,6 +120,8 @@ export function placePeople(
     const crowd = f.state === HomesteadState.LivedIn ? 1 : 0;
     settle(f.yard.x, f.yard.y, 2, f.name, f.id, crowd, PersonRole.Farmer);
   }
+  // The fisherman, mending nets by the slipway (Wave 8).
+  if (slipway) settle(slipway.x, slipway.y, 3, 'the slipway', -1, 1, PersonRole.Fisherman);
   for (const site of sites) {
     // The trades that someone works: the potter, the vintner, the burners.
     if (!site.keeper) continue;

@@ -17,6 +17,8 @@ export const enum ItemKind {
   Chart = 5,
   Lodestone = 6,
   Dove = 7,
+  /** Casts to the bottom at any depth, two tiles out. Wave 8. */
+  FishingRod = 8,
 }
 
 export const ITEM_NAMES: Record<ItemKind, string> = {
@@ -28,6 +30,7 @@ export const ITEM_NAMES: Record<ItemKind, string> = {
   [ItemKind.Chart]: 'Chart',
   [ItemKind.Lodestone]: 'Lodestone',
   [ItemKind.Dove]: 'Dove',
+  [ItemKind.FishingRod]: 'Fishing Rod',
 };
 
 export interface BarterPart {
@@ -85,6 +88,10 @@ export const ITEM_COST: Record<ItemKind, readonly BarterPart[]> = {
   [ItemKind.Dove]: [
     { resource: Resource.Fiber, amount: 10 },
     { resource: Resource.Wood, amount: 5 },
+  ],
+  [ItemKind.FishingRod]: [
+    { resource: Resource.Fiber, amount: 6 },
+    { resource: Resource.Wood, amount: 4 },
   ],
 };
 

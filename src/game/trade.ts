@@ -82,6 +82,8 @@ function ownsMarketItem(state: GameState, biome: Biome, item: ItemKind): boolean
       return state.hasLodestone;
     case ItemKind.Dove:
       return state.hasDove;
+    case ItemKind.FishingRod:
+      return state.hasFishingRod;
   }
 }
 

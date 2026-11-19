@@ -18,7 +18,8 @@ npx tsx scripts/survey.ts 12   # worldgen tuning report
 ## The two things to look at
 
 **[The game](https://mmsanders.github.io/The-Flood-Game/)** (`/`) — arrows or WASD to move, space swings the Rod of Aaron, `E` uses
-(enter a dungeon, imbue the Rod at a shrine, frame the skiff, launch, tie the flock's string), `B` opens the flock,
+(enter a dungeon, imbue the Rod at a shrine, frame the skiff, launch, tie the flock's string, cast a line), `B` opens the flock,
+`M` opens the map (▲▼ to scroll),
 `F3` shows frame times, `R` restarts, hold shift to fast-forward the clock. `?seed=12345`
 replays an exact world; `?speed=60` compresses the two-hour run into a couple of minutes
 for testing.
