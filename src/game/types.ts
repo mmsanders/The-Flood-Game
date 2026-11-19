@@ -133,6 +133,15 @@ export interface GameState {
   /** Bumped whenever terrain changes under play. */
   mapRevision: number;
 
+  /** A rope, twisted at the tent, for leading the flock. */
+  hasRope: boolean;
+  /** Animal ids on the rope, nearest the player first. */
+  string: number[];
+  /** Breadcrumbs of the player's path, (x, y) pairs in a ring. */
+  trail: Float32Array;
+  /** Index of the newest crumb in `trail`. */
+  trailHead: number;
+
   /** The prologue has ended: the rain has been announced. */
   rainBegun: boolean;
   /** A full-screen announcement, or null. The voice of God speaks here. */

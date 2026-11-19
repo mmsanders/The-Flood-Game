@@ -2,9 +2,8 @@
  * What the ground does: tiles that act when stepped on (keys, chests, pits),
  * and obstacles cleared with E.
  *
- * The locked-door and chasm/ledge toll branches in `obstacleInFront` and
- * `tryClear` are dormant: only the multi-room dungeon generator places those
- * tiles, and it is unused until Wave 5 floods dungeons and revives it.
+ * The locked door and the chasm/ledge tolls are placed by the 4x4 dungeon
+ * generator, live again since Wave 5 made dungeons flood room row by row.
  */
 
 import { TILE_PX } from '../core/config.js';

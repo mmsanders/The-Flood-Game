@@ -7,6 +7,7 @@ import { BOAT_PORTAGE_SPEED_SCALE, BOAT_SPEED_SCALE } from '../core/boat.js';
 import { TILE_PX } from '../core/config.js';
 import { PLAYER_TILES_PER_SEC } from '../core/resources.js';
 import { isWalkable, Tile } from '../core/tiles.js';
+import { stringSpeedScale } from './flock.js';
 import { canStepOnEntrance } from './places.js';
 import { activeMap, depthAt, isBoatableTile } from './queries.js';
 import { maybeBeach, tryShoveOff } from './skiff.js';
@@ -44,7 +45,9 @@ export function movePlayer(state: GameState, input: StepInput, dt: number): void
       : wading
         ? WADE_SPEED_SCALE
         : 1;
-  const speed = SPEED_PX * scale * dt;
+  // Every animal on the rope drags at your heels.
+  const leading = state.string.length > 0 ? stringSpeedScale(state.string.length) : 1;
+  const speed = SPEED_PX * scale * leading * dt;
 
   moveAxis(state, dx * speed, 0);
   moveAxis(state, 0, dy * speed);

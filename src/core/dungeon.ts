@@ -269,7 +269,9 @@ export function generateDungeon(
 const SEAL_ROW = 4;
 
 /**
- * One panel, walls, a chest, a key, and stairs. The overworld mouth warps
+ * One panel, walls, a chest, a key, and stairs. Worldgen built these between
+ * the playtest that shrank caves and Wave 5, which brought back the 4x4
+ * generator above; kept for tests and hand-built rooms. The overworld mouth warps
  * here; walking onto the stairs warps back. The key lies on the near side of
  * the seal and the chest, locked, on the far side. Enough cave to feel like a
  * place without a 16-room raid.

@@ -11,10 +11,10 @@ ones land on foundations that already exist.
 Nothing here is precious. Where I disagree with a note I say so and say why, and the note
 wins if you still want it.
 
-**Status:** Waves 0–4 have shipped (frame budget; the world people left behind; the
-depth ladder and the things that beat it; interiors and instruments; contour ledges),
-along with the round-two fixes in *What the first full run changed* below. What remains
-is Waves 5 and 6.
+**Status:** Waves 0–5 have shipped (frame budget; the world people left behind; the
+depth ladder and the things that beat it; interiors and instruments; contour ledges; the
+rain begins), along with the round-two fixes in *What the first full run changed* below.
+What remains is Wave 6.
 
 > Full Wave 0 / Wave 1 prose is unchanged from `main` history. This file keeps the
 > Wave 2 write-up and the forward plan; expand from `main` if you need the long
@@ -172,14 +172,51 @@ calendar.
   about 54 ledge tiles per world against about 37 with contours off, and single-attempt
   solvability is unchanged. The inspector shows lines, stairs and repair cuts per world.
 
-## Wave 5 — The rain begins
+## Wave 5 — The rain begins *(shipped)*
 
-Prologue, dungeon flood, animal husbandry.
+Round-one notes 12, 13 and 16: the prologue, the dungeon flood, animals as logistics.
 
-Dungeon flooding **revives the 4×4 multi-room generator** (`generateDungeon` in
-`src/core/dungeon.ts`), with row as depth: the water climbs a dungeon room by room. Its
-chasm and ledge tolls and its locked door in `src/game/ground.ts` are kept dormant for
-this.
+### 5.1 The prologue — shipped
+
+`RAIN_DAY = 5` in `src/core/flood.ts`. The water is pinned at zero until then and climbs a
+steeper ramp to the same day 40. The gorge front, the dungeon flood and the palette all
+key off the same constant. Every tile drowns on the same day or later than under the old
+two-day grace, so worldgen validation can only have got easier (tested).
+
+The moment (`src/game/weather.ts`): a banner, *THE RAIN BEGINS.*, with the voice's first
+real line; the light cools to slate over a third of a day on top of the time-of-day tint;
+rain streaks the overworld; and a wet streak with a sliding bead runs down about half the
+cliff faces, keyed to world tiles so a scrolling camera doesn't reshuffle them. A tick on
+the HUD's day bar marks the rain day. All of it allocation-free per frame.
+
+### 5.2 The dungeon flood — shipped
+
+The 4×4 generator is back in worldgen, with the stairs in the top row and the room row as
+depth. The treasure is the deepest leaf room, so cutting it back to one approach never
+strands anything; a seal ring of the biome's resource surrounds the chest, so the Rod
+ladder still gates the reward. The valley cave's tolls are all rope (no planks before the
+Rod knows wood). The chasm/ledge tolls and the locked door in `ground.ts` are live again.
+
+Water pools from the bottom row once the rain begins and fills on the cave's own clock —
+full the day the mouth drowns (`dungeonFloodRows`). A three-row ankle-deep band rides the
+waterline over depth 2. Survey, 12 seeds: entrances seal on day 6.4 / 23.6 / 37.7 (first /
+median / last), so the valley cave is a prologue raid and the mountain cave fills over
+weeks.
+
+### 5.3 Husbandry — shipped
+
+Built as the counter-proposal in round one: fiber twists a rope at Noah's tent (4, once);
+the rope leads a string of up to six, following your breadcrumb trail; each animal slows
+you, to 0.46× with six. Within two tiles of the ark site the string walks aboard. `E` ties
+it anywhere (any high ground is a paddock), walking back into a tied animal re-leads it,
+and the flood drowns tied animals and any led animal in water over its head. The string
+ties itself when you go indoors, underground or afloat.
+
+**Left alone deliberately:** the hermit still takes a sheep that is already aboard, not one
+on the rope. The dove still scouts only wild animals. The HUD map doesn't show cave water.
+
+**Tuning to playtest:** `RAIN_DAY` (5), `ROPE_COST` (4), `MAX_STRING` (6), the slowdown
+per animal (0.09), and `DUNGEON_SHALLOW_ROWS` (3).
 
 ## Wave 6 — The endless sand
 
@@ -198,9 +235,9 @@ Wave 2  the depth ladder, the skiff as an   ← shipped
 Wave 3  interiors, the people in them,      ← shipped
         the item set
 Wave 4  contour ledges                      ← shipped
-Wave 5  the prologue, dungeon flood,        ← next
+Wave 5  the prologue, dungeon flood,        ← shipped
         animal husbandry
-Wave 6  the desert                          ← independent; whenever
+Wave 6  the desert                          ← next; independent
 ```
 
 ## Things I'd deliberately not do yet

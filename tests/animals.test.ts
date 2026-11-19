@@ -65,7 +65,7 @@ describe('animals: worldgen', () => {
 });
 
 describe('animals: gathering', () => {
-  it('boards a creature the player walks into, without winning the run', () => {
+  it('does not board a creature on touch: it has to be led to the ark', () => {
     const state = createGame(generateWorld(4242, SMALL));
     const sheep = state.world.animals.find((a) => a.kind === AnimalKind.Sheep);
     expect(sheep).toBeDefined();
@@ -76,8 +76,9 @@ describe('animals: gathering', () => {
     placeAt(state, tx, ty);
     step(state, IDLE, 1 / 60);
 
-    expect(sheep.status).toBe(AnimalStatus.Boarded);
-    expect(flockScore(state).rescued).toBeGreaterThanOrEqual(1);
+    expect(sheep.status).toBe(AnimalStatus.Wild);
+    expect(flockScore(state).rescued).toBe(0);
+    expect(state.message).toMatch(/rope/);
     expect(state.phase).toBe('playing');
   });
 

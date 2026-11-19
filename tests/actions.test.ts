@@ -141,8 +141,20 @@ describe('E: interiors', () => {
     s.carried.fill(99);
     expect(pressE(s)).toMatchSnapshot();
   });
-  it('rests in the tent', () => {
-    expect(pressE(inInterior(InteriorKind.NoahTent))).toMatchSnapshot();
+  it('rests in the tent, once there is a rope', () => {
+    const s = inInterior(InteriorKind.NoahTent);
+    s.hasRope = true;
+    expect(pressE(s)).toMatchSnapshot();
+  });
+  it('twists a rope in the tent', () => {
+    const s = inInterior(InteriorKind.NoahTent);
+    s.carried[Resource.Fiber] = 6;
+    expect(pressE(s)).toMatchSnapshot();
+  });
+  it('asks for fiber before it will twist a rope', () => {
+    const s = inInterior(InteriorKind.NoahTent);
+    s.carried[Resource.Fiber] = 1;
+    expect(pressE(s)).toMatchSnapshot();
   });
 });
 

@@ -3,18 +3,11 @@
  * damage and drowning, the flock, and how the run ends.
  */
 
-import {
-  ANIMAL_DEFS,
-  animalDef,
-  animalOverlaps,
-  AnimalStatus,
-  type FlockScore,
-  flockScoreOf,
-  stepAnimals,
-} from '../core/animals.js';
+import { animalDef, type FlockScore, flockScoreOf, stepAnimals } from '../core/animals.js';
 import { TILE_PX } from '../core/config.js';
 import { ARK_RECIPE } from '../core/resources.js';
 import { Resource, RESOURCE_COUNT } from '../core/tiles.js';
+import { stepHusbandry } from './flock.js';
 import { depthAt, say, waterLevel } from './queries.js';
 import { type GameState, PLAYER_H, PLAYER_W } from './types.js';
 
@@ -113,16 +106,5 @@ export function tickFlock(state: GameState, dt: number): void {
     }
   }
 
-  if (state.location.kind !== 'overworld') return;
-  const p = state.player;
-  for (const a of map.animals) {
-    if (!animalOverlaps(a, p.x, p.y, PLAYER_W, PLAYER_H)) continue;
-    a.status = AnimalStatus.Boarded;
-    const score = flockScoreOf(map.animals);
-    const def = ANIMAL_DEFS[a.kind];
-    const have = score.boarded[a.kind];
-    if (have >= 2) say(state, `A pair of ${def.plural}. Two of every kind.`);
-    else say(state, `A ${def.name} comes aboard. (${have}/2)`);
-    break;
-  }
+  stepHusbandry(state, dt);
 }

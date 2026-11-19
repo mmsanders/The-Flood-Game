@@ -14,6 +14,7 @@ import { isWalkable, Tile } from '../core/tiles.js';
 import type { Point } from '../core/world.js';
 import { placeOn } from './camera.js';
 import { activeMap, currentInterior, depthAt, dungeonFlood, say, tileUnder } from './queries.js';
+import { ropePrompt, twistRope } from './flock.js';
 import { boatYardPrompt, handleBoatYard } from './skiff.js';
 import { hermitPrompt, interactSettlement, settlementPrompt, tradeWithHermit } from './trade.js';
 import {
@@ -59,6 +60,8 @@ function interiorPrompt(state: GameState): ObstaclePrompt | null {
   if (room.kind === InteriorKind.Carpenter) {
     return boatYardPrompt(state, room.biomeKind);
   }
+  const rope = ropePrompt(state);
+  if (rope) return { tile: Tile.Path, ...rope };
   return {
     tile: Tile.Path,
     label: 'Your tent. Rest, then build.',
@@ -84,6 +87,10 @@ function interactInterior(state: GameState): void {
   }
   if (room.kind === InteriorKind.Carpenter) {
     handleBoatYard(state, room.biomeKind);
+    return;
+  }
+  if (!state.hasRope) {
+    twistRope(state);
     return;
   }
   say(state, 'Canvas and rope. Home, until the rain.');

@@ -758,14 +758,65 @@ const FACE_FOOT = '#0a0908';
 function drawAnimals(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (state.location.kind !== 'overworld') return;
   const cam = cameraOrigin(state);
+  drawRope(ctx, state, cam);
   for (const a of state.world.animals) {
-    if (a.status !== AnimalStatus.Wild) continue;
+    const led = a.status === AnimalStatus.Led;
+    const tied = a.status === AnimalStatus.Tethered;
+    if (a.status !== AnimalStatus.Wild && !led && !tied) continue;
     const x = Math.round(lerp(a.prevX, a.x, renderAlpha) - cam.x);
     const y = Math.round(lerp(a.prevY, a.y, renderAlpha) - cam.y);
     if (x < -16 || y < -16 || x > SCREEN_W + 16 || y > PANEL_PX_H + 16) continue;
-    const bob = Math.round(Math.sin(a.anim * 8 + a.id) * 0.8);
+    if (tied) drawStake(ctx, x, y);
+    const bob = tied ? 0 : Math.round(Math.sin(a.anim * 8 + a.id) * 0.8);
     drawCreature(ctx, a.kind, x, y + bob, a.dir, a.anim);
   }
+}
+
+const ROPE_COLOR = '#c8a46a';
+
+/** Prebuilt, so the HUD never formats a number per frame. */
+const STRING_LABEL = ['', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+
+/**
+ * The rope, hand to first animal and animal to animal, drawn as stepped
+ * pixels between interpolated positions so it reads as a line at 16-bit
+ * scale without anti-aliasing.
+ */
+function drawRope(ctx: CanvasRenderingContext2D, state: GameState, cam: { x: number; y: number }): void {
+  if (state.string.length === 0) return;
+  const p = state.player;
+  let fromX = lerp(p.prevX, p.x, renderAlpha) + PLAYER_W / 2 - cam.x;
+  let fromY = lerp(p.prevY, p.y, renderAlpha) + PLAYER_H / 2 + 2 - cam.y;
+  ctx.fillStyle = ROPE_COLOR;
+  for (const id of state.string) {
+    let a = null;
+    for (const c of state.world.animals) {
+      if (c.id === id) {
+        a = c;
+        break;
+      }
+    }
+    if (!a) continue;
+    const toX = lerp(a.prevX, a.x, renderAlpha) + ANIMAL_W / 2 - cam.x;
+    const toY = lerp(a.prevY, a.y, renderAlpha) + 2 - cam.y;
+    const steps = Math.max(1, Math.round(Math.max(Math.abs(toX - fromX), Math.abs(toY - fromY)) / 2));
+    for (let n = 1; n < steps; n++) {
+      const t = n / steps;
+      // A slight sag, so the rope hangs rather than strings taut.
+      const sag = Math.sin(t * Math.PI) * 2;
+      ctx.fillRect(Math.round(fromX + (toX - fromX) * t), Math.round(fromY + (toY - fromY) * t + sag), 1, 1);
+    }
+    fromX = toX;
+    fromY = toY;
+  }
+}
+
+/** A tethering stake with a loop of rope, beside a tied animal. */
+function drawStake(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  ctx.fillStyle = '#5a3a1e';
+  ctx.fillRect(x - 3, y + 1, 2, 7);
+  ctx.fillStyle = ROPE_COLOR;
+  ctx.fillRect(x - 2, y + 3, 3, 1);
 }
 
 function drawCreature(
@@ -1517,6 +1568,23 @@ function drawInstrumentBadges(
     ctx.fillRect(cursor + 1, y + 2, 5, 4);
     ctx.fillStyle = '#a09080';
     ctx.fillRect(cursor + 5, y + 3, 2, 2);
+    cursor += 10;
+  }
+  if (state.hasRope) {
+    // A coil, and how many are on it when you are leading.
+    ctx.fillStyle = ROPE_COLOR;
+    ctx.fillRect(cursor, y + 2, 6, 1);
+    ctx.fillRect(cursor, y + 6, 6, 1);
+    ctx.fillRect(cursor, y + 2, 1, 5);
+    ctx.fillRect(cursor + 5, y + 2, 1, 5);
+    if (state.string.length > 0) {
+      ctx.fillStyle = '#e6d9b0';
+      ctx.font = '5px monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(STRING_LABEL[state.string.length] ?? '', cursor + 7, y + 1);
+      cursor += 4;
+    }
     cursor += 10;
   }
   return cursor;

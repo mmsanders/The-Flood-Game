@@ -18,7 +18,7 @@ npx tsx scripts/survey.ts 12   # worldgen tuning report
 ## The two things to look at
 
 **[The game](https://mmsanders.github.io/The-Flood-Game/)** (`/`) — arrows or WASD to move, space swings the Rod of Aaron, `E` uses
-(enter a dungeon, imbue the Rod at a shrine, frame the skiff, launch), `B` opens the flock,
+(enter a dungeon, imbue the Rod at a shrine, frame the skiff, launch, tie the flock's string), `B` opens the flock,
 `F3` shows frame times, `R` restarts, hold shift to fast-forward the clock. `?seed=12345`
 replays an exact world; `?speed=60` compresses the two-hour run into a couple of minutes
 for testing.
@@ -68,15 +68,21 @@ than three systems that happen to overlap.
 **Water has depth.** One function answers "how much water is on this tile", 0 to 4, so
 wading, sailing, beaching and dredging cannot disagree. A pond is over your head whatever
 the sea is doing. The gorge fills from the top down — runoff arrives at the northern spring
-on day one and a front runs it south over about a day, so the channel is a river in the
+the day the rain begins and a front runs it south over about a day, so the channel is a river in the
 north while it is still a dry ditch in the south. Past depth 2 the skiff sails over drowned
 boulders instead of round them.
 
 **The flood is a scalar, not a schedule.** Water is a single rising number compared against
 per-tile elevation: `submerged ⟺ elev < waterLevel(day)`. Rows still go under at roughly one
 per day, because elevation trends north-south — but hilltops in a drowned row survive as
-shrinking islands and low valleys flood early, with no special-casing anywhere. Two days of
-grace before the water starts; everything is gone by day 40.
+shrinking islands and low valleys flood early, with no special-casing anywhere.
+
+**The rain begins on day 5.** The first five days are a dry prologue: sunlit, water pinned at
+zero, the clock yours for learning the map and climbing the Rod ladder (which is what gates
+the resources, so a long dry spell can't be spent stockpiling). Then *THE RAIN BEGINS*: a
+banner and a word from the voice, the light cools to slate, rain falls, water trickles down
+every ledge, and the flood climbs a steeper ramp to the same day 40. One constant,
+`RAIN_DAY` in `src/core/flood.ts`.
 
 **A panel is 176 bytes.** 16×11 tiles, exactly a Zelda 1 screen. A panel serialises to a
 tile plane plus an elevation plane (352 B); the whole 12×40 map is 169 KB explicit, or
@@ -96,9 +102,13 @@ generator.
 harvests a resource node now. From the deck of the skiff it dredges nodes the flood has
 already covered — there is no fishing pole.
 
-**Two of every kind.** Ten biblical kinds, two of each, wander their home biomes. Walking
-into one takes it aboard. A complete flock is a high score, not a win condition: the ark
-still launches on timber and pitch. Best flock is kept in localStorage.
+**Two of every kind, led on a rope.** Ten biblical kinds, two of each, wander their home
+biomes. Twist a rope at Noah's tent (4 fiber) and walking into a creature puts it on the
+rope; up to six follow you in a string, each one slowing you down. Bring the string within
+a couple of tiles of the ark and they walk aboard together. `E` ties the string wherever you
+stand so you can come back for it — but tied animals can't climb, and the flood takes a
+string left low. A complete flock is a high score, not a win condition: the ark still
+launches on timber and pitch. Best flock is kept in localStorage.
 
 **The skiff is not the ark.** Frame it at the valley slipway from 8 gopher wood and 6 fiber,
 then walk into water from any shore. It lets you occupy the flood instead of drowning in it.
@@ -106,8 +116,11 @@ then walk into water from any shore. It lets you occupy the flood instead of dro
 **Dungeons cost you the ark.** One per biome, 4x4 rooms where each room is exactly one panel
 — so they share the overworld's format, renderer and inspector for free. Chasms are bridged
 with gopher wood and ledges roped with fiber, both drawn from the same stock the hull needs,
-and the price is on screen while you decide. A dungeon's entrance seals when the water
-reaches it; the first usually goes under around day 7.
+and the price is on screen while you decide. The stairs are in the top row and the room row
+is depth: once the rain begins it pools on the bottom floor and fills upward, on the cave's
+own clock, so the last row goes under the day the entrance does. The treasure sits deep,
+inside a seal ring of the biome's resource. The first entrance usually goes under around
+day 6, so the valley cave is a prologue raid.
 
 ## Tuning
 
@@ -145,8 +158,9 @@ session and fails the build if it doesn't.
 ## Status
 
 Playable end to end: worldgen, the flood, resource gathering, the ark, the flock, the
-skiff, win/lose, and dungeons with the resource trade. Wave 1 of `docs/ROADMAP.md` is in:
-a river you can sail, escarpments you have to find stairs through, towns with roads that
-go somewhere, a pasture for the sheep, Noah's tent at spawn, and an ark that grows as you
-build it. Enemies, shops, the voice of God as a recurring character, and the ocean stage
-are still ahead.
+skiff, win/lose, and dungeons with the resource trade. Waves 0–5 of `docs/ROADMAP.md` are
+in: a river you can sail, escarpments and contour ledges, towns, shops and barter, the depth
+ladder and the gear that beats it, enterable buildings, a dry prologue before the rain,
+dungeons that flood from the bottom, and a flock you lead to the ark on a rope. Enemies, the
+voice of God as a full dialogue system, the desert Easter egg and the ocean stage are still
+ahead.

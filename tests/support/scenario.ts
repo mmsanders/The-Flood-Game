@@ -103,6 +103,7 @@ export function digest(state: GameState) {
       state.hasChart && 'chart',
       state.hasLodestone && 'lodestone',
       state.hasDove && 'dove',
+      state.hasRope && 'rope',
     ]
       .filter(Boolean)
       .join(' '),

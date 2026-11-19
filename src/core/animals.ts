@@ -32,6 +32,10 @@ export const enum AnimalStatus {
   Wild = 0,
   Boarded = 1,
   Drowned = 2,
+  /** On Noah's rope, following him in a string. */
+  Led = 3,
+  /** Tied where he left it. Still drowns if the water reaches it. */
+  Tethered = 4,
 }
 
 /** Same numbering as the player facing enum, so rendering can share a switch. */
@@ -205,6 +209,8 @@ export interface FlockScore {
   pairs: number;
   drowned: number;
   wild: number;
+  /** On the rope or tied up somewhere: caught, but not yet aboard. */
+  inHand: number;
   /** 0..2 boarded per kind, indexed by AnimalKind. */
   boarded: number[];
 }
@@ -222,21 +228,24 @@ export function flockScoreOf(animals: readonly Animal[]): FlockScore {
   let rescued = 0;
   let drowned = 0;
   let wild = 0;
+  let inHand = 0;
   for (const a of animals) {
     if (a.status === AnimalStatus.Boarded) {
       boarded[a.kind]++;
       rescued++;
     } else if (a.status === AnimalStatus.Drowned) {
       drowned++;
-    } else {
+    } else if (a.status === AnimalStatus.Wild) {
       wild++;
+    } else {
+      inHand++;
     }
   }
   let pairs = 0;
   for (let k = 0; k < ANIMAL_COUNT; k++) {
     if (boarded[k] >= ANIMALS_PER_KIND) pairs++;
   }
-  return { rescued, pairs, drowned, wild, boarded };
+  return { rescued, pairs, drowned, wild, inHand, boarded };
 }
 
 /** Pairs first, then bodies. A complete flock is 10 pairs / 20 boarded. */
@@ -386,6 +395,18 @@ export function stepAnimals(
   const level = waterLevel;
 
   for (const a of animals) {
+    if (a.status === AnimalStatus.Tethered) {
+      // Tied up, it cannot climb away from the water. That is the risk of
+      // leaving a string on low ground.
+      a.prevX = a.x;
+      a.prevY = a.y;
+      a.anim += dt;
+      if (isUnderAt(map, a.x + ANIMAL_W / 2, a.y + ANIMAL_H / 2, level)) {
+        a.status = AnimalStatus.Drowned;
+        drowned.push(a);
+      }
+      continue;
+    }
     if (a.status !== AnimalStatus.Wild) continue;
 
     a.prevX = a.x;
@@ -426,6 +447,14 @@ export function stepAnimals(
   }
 
   return { drowned };
+}
+
+function isUnderAt(map: TileMap, px: number, py: number, level: number): boolean {
+  if (!map.floods) return false;
+  const tx = Math.floor(px / TILE_PX);
+  const ty = Math.floor(py / TILE_PX);
+  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return false;
+  return map.elev[ty * map.w + tx] < level;
 }
 
 function chooseHeading(
