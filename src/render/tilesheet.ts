@@ -390,6 +390,20 @@ const TILE_PAINTERS: Record<number, Painter> = {
     px(c, 13, 8, 2, 2, '#8a5a28');
     px(c, 7, 5, 2, 3, '#d2a05a');
   },
+  [Tile.Stranger]: (c) => {
+    // A sunburnt traveller in a sand-coloured robe and head-cloth, sitting.
+    base(c, PALETTE.dungeonFloor);
+    px(c, 0, 0, TILE_PX, 1, '#44404d');
+    px(c, 3, 13, 10, 2, '#2a2730');
+    px(c, 4, 7, 8, 7, '#c9ad78');
+    px(c, 3, 10, 10, 4, '#b39463');
+    px(c, 5, 2, 6, 5, '#d8c08a');
+    px(c, 6, 4, 4, 3, '#8a5a34');
+    px(c, 6, 5, 1, 1, '#1a1410');
+    px(c, 9, 5, 1, 1, '#1a1410');
+    px(c, 11, 8, 3, 1, '#6a4a2a');
+    px(c, 13, 3, 1, 11, '#6a4a2a');
+  },
   [Tile.DungeonFloor]: (c) => {
     base(c, PALETTE.dungeonFloor);
     px(c, 0, 0, TILE_PX, 1, '#44404d');

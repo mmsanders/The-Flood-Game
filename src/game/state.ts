@@ -26,6 +26,7 @@ import { applyFlood, checkEndConditions, tickFlock } from './run.js';
 import { checkStrandedBoat } from './skiff.js';
 import { Dir, type GameState, PLAYER_H, PLAYER_W, type StepInput } from './types.js';
 import { tickWeather } from './weather.js';
+import { tryEnterDesert, wrapDesert } from './desert.js';
 import { emptyTrail, resetTrail } from './flock.js';
 
 export { actionPrompt } from './actions.js';
@@ -128,6 +129,9 @@ export function createGame(world: World): GameState {
     exploredOverworld: new Uint8Array(world.params.panelsX * world.params.panelsY),
     exploredDungeons: world.dungeons.map((d) => new Uint8Array(d.roomsX * d.roomsY)),
     exploredInteriors: (world.interiors ?? []).map(() => new Uint8Array(1)),
+    exploredDesert: new Uint8Array(9),
+    desertSteps: 0,
+    inOasis: false,
     minimapViewY: 0,
     minimapFilledSouth: false,
     mapRevision: 0,
@@ -260,6 +264,7 @@ export function step(state: GameState, input: StepInput, dt: number): void {
 
   movePlayer(state, input, dt);
   maybeDungeonWarp(state);
+  tryEnterDesert(state);
 
   if (input.attackPressed && p.cooldown <= 0) {
     p.swing = SWING_TIME;
@@ -274,5 +279,6 @@ export function step(state: GameState, input: StepInput, dt: number): void {
   stepTileEffects(state);
   applyFlood(state, dt);
   updateCamera(state);
+  wrapDesert(state);
   checkEndConditions(state);
 }

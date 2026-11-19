@@ -35,6 +35,11 @@ export interface Interior extends TileMap {
   overworldEntrance: Point;
   /** Where interact runs the room's action (counter, hearth, workbench). */
   focus: Point;
+  /**
+   * A second spot to stand and press E: beside someone with something to
+   * say. Only the carpenter's has one — the stranger from the sand.
+   */
+  lore: Point | null;
 }
 
 /**
@@ -69,6 +74,9 @@ export function generateInterior(
   } else if (kind === InteriorKind.Carpenter) {
     planes.tiles[focus.y * w + focus.x - 2] = Tile.Path;
     planes.tiles[focus.y * w + focus.x + 2] = Tile.Path;
+    // A stranger warming himself by the shavings, and the mat beside him.
+    planes.tiles[STRANGER.y * w + STRANGER.x] = Tile.Stranger;
+    planes.tiles[(STRANGER.y + 1) * w + STRANGER.x] = Tile.Sand;
   } else {
     planes.tiles[2 * w + 3] = Tile.Tent;
     planes.tiles[2 * w + (w - 4)] = Tile.Tent;
@@ -85,8 +93,12 @@ export function generateInterior(
     stairs,
     overworldEntrance,
     focus,
+    lore: kind === InteriorKind.Carpenter ? { x: STRANGER.x, y: STRANGER.y + 1 } : null,
   };
 }
+
+/** Where the stranger sits in the carpenter's workshop. */
+const STRANGER = { x: 12, y: 5 } as const;
 
 function focusTile(kind: InteriorKind): Tile {
   switch (kind) {

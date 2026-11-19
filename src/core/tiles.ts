@@ -63,6 +63,8 @@ export const enum Tile {
   Skiff = 0x37,
   /** Noah's camp tent. Walkable; enter from the south like a cave mouth. */
   CampTent = 0x38,
+  /** A sunburnt traveller from the far sand. Blocking; talk from beside him. */
+  Stranger = 0x39,
 
   // -- 0x40 dungeon terrain -------------------------------------------------
   DungeonFloor = 0x40,
@@ -189,6 +191,7 @@ const BLOCKING: readonly Tile[] = [
   Tile.StoneNode,
   Tile.PitchSeep,
   Tile.Pedestal,
+  Tile.Stranger,
 
   Tile.DungeonWall,
 
@@ -310,6 +313,7 @@ export const TILE_NAMES: Record<number, string> = {
   [Tile.Pedestal]: 'Pedestal',
   [Tile.Skiff]: 'Beached Skiff',
   [Tile.CampTent]: "Noah's Tent",
+  [Tile.Stranger]: 'Stranger',
   [Tile.DungeonFloor]: 'Dungeon Floor',
   [Tile.DungeonWall]: 'Dungeon Wall',
   [Tile.Stairs]: 'Stairs',

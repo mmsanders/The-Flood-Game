@@ -158,9 +158,9 @@ session and fails the build if it doesn't.
 ## Status
 
 Playable end to end: worldgen, the flood, resource gathering, the ark, the flock, the
-skiff, win/lose, and dungeons with the resource trade. Waves 0–5 of `docs/ROADMAP.md` are
+skiff, win/lose, and dungeons with the resource trade. Every wave of `docs/ROADMAP.md` is
 in: a river you can sail, escarpments and contour ledges, towns, shops and barter, the depth
 ladder and the gear that beats it, enterable buildings, a dry prologue before the rain,
-dungeons that flood from the bottom, and a flock you lead to the ark on a rope. Enemies, the
-voice of God as a full dialogue system, the desert Easter egg and the ocean stage are still
-ahead.
+dungeons that flood from the bottom, a flock you lead to the ark on a rope, and a secret in
+the far south for anyone who talks to strangers. Enemies, the voice of God as a full
+dialogue system, and the ocean stage are still ahead.

@@ -35,6 +35,9 @@ export function activeMap(state: GameState): TileMap {
   if (state.location.kind === 'interior') {
     return state.world.interiors[state.location.interiorId];
   }
+  if (state.location.kind === 'desert' && state.world.desert) {
+    return state.inOasis ? state.world.desert.oasis : state.world.desert.sand;
+  }
   return state.world;
 }
 

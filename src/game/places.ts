@@ -14,6 +14,7 @@ import { isWalkable, Tile } from '../core/tiles.js';
 import type { Point } from '../core/world.js';
 import { placeOn } from './camera.js';
 import { activeMap, currentInterior, depthAt, dungeonFlood, say, tileUnder } from './queries.js';
+import { strangerPrompt, talkToStranger } from './desert.js';
 import { ropePrompt, twistRope } from './flock.js';
 import { boatYardPrompt, handleBoatYard } from './skiff.js';
 import { hermitPrompt, interactSettlement, settlementPrompt, tradeWithHermit } from './trade.js';
@@ -48,6 +49,9 @@ function interiorPrompt(state: GameState): ObstaclePrompt | null {
   const room = currentInterior(state);
   if (!room) return null;
   const { tx, ty } = tileUnder(state);
+  if (room.lore && tx === room.lore.x && ty === room.lore.y) {
+    return { tile: Tile.Stranger, ...strangerPrompt() };
+  }
   const onFocus = tx === room.focus.x && ty === room.focus.y;
   if (!onFocus) return null;
 
@@ -73,6 +77,10 @@ function interactInterior(state: GameState): void {
   const room = currentInterior(state);
   if (!room) return;
   const { tx, ty } = tileUnder(state);
+  if (room.lore && tx === room.lore.x && ty === room.lore.y) {
+    talkToStranger(state);
+    return;
+  }
   if (tx !== room.focus.x || ty !== room.focus.y) {
     say(state, 'The stairs lead back outside.');
     return;
