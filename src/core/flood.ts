@@ -17,22 +17,35 @@ import type { World } from './world.js';
 const MAX_ELEV = 256;
 
 /**
- * Days of calm before the rain starts.
+ * The day the rain begins: the end of the prologue.
  *
- * Long enough to get your bearings, meet the voice telling you to build, and
- * gather from the lowlands you're standing in — short enough that it never
- * feels like a tutorial. The water still finishes the job on day 40; it just
- * climbs slightly faster once it starts.
+ * Before it the world is dry and sunny and the clock is yours — time to learn
+ * the map and climb the Rod ladder, which is what actually gates the
+ * resources, so a long dry spell cannot be spent stockpiling. After it the
+ * water climbs a steeper ramp to the same day 40. Forty days stays
+ * load-bearing (Genesis 7:12); only the curve changes.
+ *
+ * Five is a guess to be playtested. Everything downstream — the gorge front,
+ * the dungeon flood, the palette, every drown-day in worldgen validation —
+ * reads this one constant.
  */
-export const FLOOD_GRACE_DAYS = 2;
+export const RAIN_DAY = 5;
+
+/** Days of calm before the water starts. The prologue is the grace period. */
+export const FLOOD_GRACE_DAYS = RAIN_DAY;
+
+/** Has the rain begun by this day? */
+export function isRaining(day: number): boolean {
+  return day >= RAIN_DAY;
+}
 
 /**
  * Water height at a given time, in elevation units.
  *
- * day 0..2 -> 0   (the calm before)
+ * day 0..5 -> 0   (the prologue)
  * day 40   -> 256 (everything submerged)
  *
- * Deliberately linear after the grace period: the player should be able to
+ * Deliberately linear after the prologue: the player should be able to
  * learn the pace and plan against it. Uneven terrain supplies all the
  * variation the pacing needs.
  */
@@ -88,8 +101,8 @@ export function floodDepth(elev: number, waterLevel: number): number {
  * The gorge does not fill like a bathtub. It is rain coming off the high
  * ground, so the water arrives at the top of the channel and runs *down* it:
  * a front sweeping from the northern spring to the southern mouth. One day,
- * so it is something you watch happen on the first morning rather than a state
- * the world was already in.
+ * so it is something you watch happen the morning the rain begins rather than
+ * a state the world was already in.
  */
 export const GORGE_FILL_DAYS = 1;
 
@@ -105,13 +118,16 @@ const GORGE_FRONT_ROWS = 10;
 /**
  * How deep the gorge runs at a given row, on a given day.
  *
- * Starts at the top of the map on day one and reaches the mouth a day later.
+ * Held back through the prologue: the channel is a dry ditch until the rain
+ * begins, then the front starts at the top of the map and reaches the mouth a
+ * day later — the first thing on the map to say the weather has turned.
  * Sea level still applies on top: once the flood proper reaches the channel,
  * whichever is deeper wins.
  */
 export function gorgeDepthAt(day: number, y: number, mapHeight: number): number {
-  if (day <= 0) return 0;
-  const front = (day / GORGE_FILL_DAYS) * mapHeight;
+  const raining = day - RAIN_DAY;
+  if (raining <= 0) return 0;
+  const front = (raining / GORGE_FILL_DAYS) * mapHeight;
   if (y > front) return 0;
   return front - y < GORGE_FRONT_ROWS ? 1 : GORGE_RUNNING_DEPTH;
 }
@@ -126,7 +142,7 @@ export function gorgeDepthAt(day: number, y: number, mapHeight: number): number 
  *   whatever the sea is doing, which is what stops it being a shortcut you
  *   paddle across.
  * - **The gorge** carries runoff, which arrives at the top of the channel on
- *   day one and runs down it — so `runoff` is the depth for *this row*, not a
+ *   the day the rain begins and runs down it — so `runoff` is the depth for *this row*, not a
  *   single number for the whole channel.
  * - **Everything else** is the flood: elevation against sea level.
  */
@@ -140,6 +156,42 @@ export function waterDepth(
   if (tile === Tile.Water) return flood > 2 ? flood : 2;
   if (tile === Tile.Gorge) return flood > runoff ? flood : runoff;
   return flood;
+}
+
+/**
+ * The flood underground.
+ *
+ * A dungeon is not immune: the rain drains into it and pools on the bottom
+ * floor, then fills upward. Rooms are a single plane, so the **room row is
+ * depth** — the bottom row is the deepest floor, the stairs are in the top
+ * row, and the water climbs toward them.
+ *
+ * The clock is the mouth's own: dry through the prologue, then filling from
+ * the bottom so that the last tile row goes under on the day the entrance
+ * itself drowns. A low cave is a race over a couple of days; a mountain cave
+ * fills over weeks. Either way the deadline is the one you can already see
+ * from outside.
+ */
+export function dungeonFloodRows(day: number, mouthDrownDay: number, mapHeight: number): number {
+  const raining = day - RAIN_DAY;
+  if (raining <= 0) return 0;
+  const window = mouthDrownDay - RAIN_DAY;
+  if (window <= 0) return mapHeight;
+  return Math.min(1, raining / window) * mapHeight;
+}
+
+/** Tile rows of ankle-deep water at the dungeon's waterline: the galoshes band. */
+export const DUNGEON_SHALLOW_ROWS = 3;
+
+/**
+ * Standing water on one tile row of a dungeon, given how many rows the flood
+ * covers. Depth 1 at the waterline, depth 2 (over your head) below it — no
+ * skiff fits down the stairs, so 2 is as deep as a cave needs to get.
+ */
+export function dungeonDepthAt(ty: number, mapHeight: number, floodRows: number): number {
+  const under = floodRows - (mapHeight - 1 - ty);
+  if (under <= 0) return 0;
+  return under <= DUNGEON_SHALLOW_ROWS ? 1 : 2;
 }
 
 /**

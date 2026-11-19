@@ -132,6 +132,17 @@ export interface GameState {
   minimapFilledSouth: boolean;
   /** Bumped whenever terrain changes under play. */
   mapRevision: number;
+
+  /** The prologue has ended: the rain has been announced. */
+  rainBegun: boolean;
+  /** A full-screen announcement, or null. The voice of God speaks here. */
+  banner: Banner | null;
+  bannerTimer: number;
+}
+
+export interface Banner {
+  title: string;
+  line: string;
 }
 
 export interface StepInput {

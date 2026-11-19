@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PARAMS, PANEL_H, PANEL_W, withParams } from '../src/core/config.js';
 import {
+  BIOME_SEAL_RESOURCE,
   type Dungeon,
   type Dir4,
   OBSTACLE_COST,
   RewardKind,
+  SEAL_TILE,
   type RoomMeta,
   generateDungeon,
   generateDungeonRoom,
@@ -105,10 +107,44 @@ describe('dungeon: shape', () => {
     }
   });
 
-  it('puts the entrance on the bottom row, since you descend into it', () => {
+  it('puts the entrance on the top row, since you descend into it', () => {
     for (const seed of SEEDS.slice(0, 8)) {
       const d = make(seed);
-      expect(d.rooms[roomAt(d, 'entrance')].ry).toBe(d.roomsY - 1);
+      expect(d.rooms[roomAt(d, 'entrance')].ry).toBe(0);
+    }
+  });
+
+  it('puts the treasure deep, where the rain pools first', () => {
+    for (const seed of SEEDS) {
+      const d = make(seed);
+      const treasure = d.rooms[roomAt(d, 'treasure')];
+      // Deep, not merely far: never in the stairs' own row.
+      expect(treasure.ry, `seed ${seed}`).toBeGreaterThan(0);
+    }
+    const deepest = SEEDS.filter((seed) => {
+      const d = make(seed);
+      return d.rooms[roomAt(d, 'treasure')].ry === d.roomsY - 1;
+    });
+    expect(deepest.length).toBeGreaterThan(SEEDS.length / 2);
+  });
+
+  it('seals the chest inside a vault of its biome\'s resource', () => {
+    for (const biome of [Biome.Valley, Biome.Forest, Biome.Scrub, Biome.Mountain]) {
+      const d = generateDungeon(9, 0, biome, { x: 0, y: 0 });
+      const seal = SEAL_TILE[BIOME_SEAL_RESOURCE[biome]];
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          expect(d.tiles[(d.chest.y + dy) * d.w + d.chest.x + dx]).toBe(seal);
+        }
+      }
+    }
+  });
+
+  it('charges the early valley cave only in rope, never planks', () => {
+    for (const seed of SEEDS) {
+      const d = generateDungeon(seed, 0, Biome.Valley, { x: 0, y: 0 });
+      expect(d.obstacles.some((o) => o.tile === Tile.Chasm), `seed ${seed}`).toBe(false);
     }
   });
 

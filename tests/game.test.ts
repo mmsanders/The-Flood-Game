@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PANEL_H, PANEL_W, TILE_PX, withParams } from '../src/core/config.js';
 import { FLOOD_DAYS } from '../src/core/config.js';
+import { drownDayForElev, RAIN_DAY } from '../src/core/flood.js';
 import { ARK_RECIPE, SHRINE_COST } from '../src/core/resources.js';
 import { Biome, RESOURCE_COUNT, Resource, Tile } from '../src/core/tiles.js';
 import type { World } from '../src/core/world.js';
@@ -16,6 +17,7 @@ import {
   arkProgress,
   createGame,
   currentDay,
+  depthAt,
   keysHere,
   obstacleInFront,
   snapCamera,
@@ -458,15 +460,30 @@ describe('game: entering and leaving dungeons', () => {
     expect(state.location.kind).toBe('overworld');
   });
 
-  it('never drowns the player underground', () => {
+  it('stays dry underground through the prologue', () => {
     standOnEntrance(state);
     step(state, INTERACT, 1 / 60);
-    // Well past the point where the whole overworld is gone.
-    state.elapsed = state.world.params.secondsPerDay * 39;
-    run(state, 8);
+    state.elapsed = state.world.params.secondsPerDay * (RAIN_DAY - 0.1);
+    const d = state.world.dungeons[0];
+    for (let y = 0; y < d.h; y++) expect(depthAt(state, d.stairs.x, y)).toBe(0);
+  });
 
-    expect(state.player.hearts).toBe(3);
-    expect(state.phase).toBe('playing');
+  it('floods from the bottom row once the rain begins, and drowns a straggler', () => {
+    standOnEntrance(state);
+    step(state, INTERACT, 1 / 60);
+    const d = state.world.dungeons[0];
+    const mouth = state.world.elev[d.overworldEntrance.y * state.world.w + d.overworldEntrance.x];
+    const sealed = drownDayForElev(mouth);
+
+    // Halfway to the mouth drowning: the bottom floor is under, the stairs dry.
+    state.elapsed = state.world.params.secondsPerDay * (RAIN_DAY + (sealed - RAIN_DAY) / 2);
+    expect(depthAt(state, d.stairs.x, d.h - 2)).toBe(2);
+    expect(depthAt(state, d.stairs.x, d.stairs.y)).toBe(0);
+
+    // The day the mouth goes under, the cave is full: stay and drown.
+    state.elapsed = state.world.params.secondsPerDay * sealed;
+    run(state, 8);
+    expect(state.player.hearts).toBeLessThan(3);
   });
 
   it('keeps each cave\'s keys with that cave', () => {
@@ -644,6 +661,9 @@ describe('game: dungeon rewards and hazards', () => {
 
   it('keeps the chest shut without the cave\'s key', () => {
     const d = state.world.dungeons[0];
+    // A chest that takes the cave's key — the one-room cave's rule. A 4x4
+    // dungeon's key opens its locked door instead.
+    d.chestLocked = true;
     inDungeonAt(state, d.chest);
     const hearts = state.player.maxHearts;
 
@@ -657,6 +677,9 @@ describe('game: dungeon rewards and hazards', () => {
 
   it('opens the chest with the cave\'s key, spending it', () => {
     const d = state.world.dungeons[0];
+    // A chest that takes the cave's key — the one-room cave's rule. A 4x4
+    // dungeon's key opens its locked door instead.
+    d.chestLocked = true;
     inDungeonAt(state, d.key);
     step(state, IDLE, 1 / 60);
     expect(keysHere(state)).toBe(1);
@@ -671,6 +694,9 @@ describe('game: dungeon rewards and hazards', () => {
 
   it('still opens the chest after leaving with the key and coming back', () => {
     const d = state.world.dungeons[0];
+    // A chest that takes the cave's key — the one-room cave's rule. A 4x4
+    // dungeon's key opens its locked door instead.
+    d.chestLocked = true;
     placeAt(state, d.overworldEntrance.x, d.overworldEntrance.y);
     step(state, INTERACT, 1 / 60);
     expect(state.location.dungeonId).toBe(0);

@@ -25,6 +25,7 @@ import { swingRod } from './rod.js';
 import { applyFlood, checkEndConditions, tickFlock } from './run.js';
 import { checkStrandedBoat } from './skiff.js';
 import { Dir, type GameState, PLAYER_H, PLAYER_W, type StepInput } from './types.js';
+import { tickWeather } from './weather.js';
 
 export { actionPrompt } from './actions.js';
 export { markExplored, snapCamera, syncInterpolation } from './camera.js';
@@ -36,6 +37,7 @@ export {
   currentDungeon,
   currentInterior,
   depthAt,
+  dungeonFlood,
   facingTile,
   gorgeRunoff,
   isBoatableTile,
@@ -45,7 +47,9 @@ export {
 } from './queries.js';
 export { arkProgress, damage, flockScore } from './run.js';
 export { Dir, PLAYER_H, PLAYER_W } from './types.js';
+export { BANNER_TIME, dryDaysLeft, gloomAt, RAIN_LINE, RAIN_TITLE } from './weather.js';
 export type {
+  Banner,
   Camera,
   GameState,
   Location,
@@ -125,6 +129,9 @@ export function createGame(world: World): GameState {
     minimapViewY: 0,
     minimapFilledSouth: false,
     mapRevision: 0,
+    rainBegun: false,
+    banner: null,
+    bannerTimer: 0,
   };
   markExplored(state);
   return state;
@@ -231,6 +238,7 @@ export function step(state: GameState, input: StepInput, dt: number): void {
     state.messageTimer -= dt;
     if (state.messageTimer <= 0) state.message = null;
   }
+  tickWeather(state, dt);
   checkStrandedBoat(state);
 
   // Panel transitions lock input, Zelda-style: the screen slides, you wait.

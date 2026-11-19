@@ -7,7 +7,14 @@
 import { BASE_BOAT_DEPTH } from '../core/boat.js';
 import { TILE_PX } from '../core/config.js';
 import type { Dungeon } from '../core/dungeon.js';
-import { gorgeDepthAt, waterDepth, waterLevelAtSeconds } from '../core/flood.js';
+import {
+  drownDayForElev,
+  dungeonDepthAt,
+  dungeonFloodRows,
+  gorgeDepthAt,
+  waterDepth,
+  waterLevelAtSeconds,
+} from '../core/flood.js';
 import type { Interior } from '../core/interior.js';
 import type { TileMap } from '../core/tilemap.js';
 import { isWalkable } from '../core/tiles.js';
@@ -54,10 +61,23 @@ export function currentDay(state: GameState): number {
 /** Standing water on a tile of the active map. */
 export function depthAt(state: GameState, tx: number, ty: number): number {
   const map = activeMap(state);
-  if (!map.floods) return 0;
   if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return 0;
+  const cave = currentDungeon(state);
+  if (cave) return dungeonDepthAt(ty, cave.h, dungeonFlood(state, cave));
+  if (!map.floods) return 0;
   const i = ty * map.w + tx;
   return waterDepth(map.tiles[i], map.elev[i], waterLevel(state), gorgeRunoff(state, ty));
+}
+
+/**
+ * Tile rows of rain pooled in a cave, from the bottom. Its clock is the
+ * cave's own mouth: full on the day the entrance drowns.
+ */
+export function dungeonFlood(state: GameState, cave: Dungeon): number {
+  const { world } = state;
+  const mouth = cave.overworldEntrance;
+  const mouthElev = world.elev[mouth.y * world.w + mouth.x];
+  return dungeonFloodRows(currentDay(state), drownDayForElev(mouthElev), cave.h);
 }
 
 /** How deep the gorge runs at a given row right now. */

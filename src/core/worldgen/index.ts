@@ -16,7 +16,7 @@ import {
   tileHeight,
   tileWidth,
 } from '../config.js';
-import { generateDungeonRoom } from '../dungeon.js';
+import { generateDungeon } from '../dungeon.js';
 import { generateInterior, InteriorKind } from '../interior.js';
 import { checkSolvable } from '../resources.js';
 import { deriveSeed, stageRng } from '../rng.js';
@@ -84,11 +84,13 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
   const livePastures = pastures.filter((i) => isWalkable(tiles[i]) && !reserved.has(i));
   const animals = spawnAnimals(seed, tiles, biome, w, reserved, spawn, livePastures);
 
-  // One dungeon per entrance placed above. They are separate maps, so nothing
-  // here touches the overworld's own connectivity or solvability.
+  // One dungeon per entrance placed above: 4x4 rooms, stairs in the top row,
+  // the rain filling it from the bottom once the prologue ends. They are
+  // separate maps, so nothing here touches the overworld's own connectivity
+  // or solvability.
   const dungeons = pois
     .filter((poi) => poi.kind === PoiKind.Dungeon)
-    .map((poi, i) => generateDungeonRoom(seed, i, poi.biome, { x: poi.x, y: poi.y }));
+    .map((poi, i) => generateDungeon(seed, i, poi.biome, { x: poi.x, y: poi.y }));
 
   const interiors = placeInteriors(tiles, biome, w, h, spawn, boatYard);
 

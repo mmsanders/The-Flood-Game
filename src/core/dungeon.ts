@@ -18,7 +18,7 @@
 import { PANEL_H, PANEL_W } from './config.js';
 import { type Rng, randInt, shuffle, stageRng } from './rng.js';
 import { type TileMap, blankPlanes } from './tilemap.js';
-import { type Biome, Resource, Tile } from './tiles.js';
+import { Biome, Resource, Tile } from './tiles.js';
 import type { Point } from './world.js';
 
 /** Rooms per side. 4x4 = 16 rooms = 64x44 tiles. */
@@ -192,7 +192,9 @@ export function generateDungeon(
 
   const roomIndex = (rx: number, ry: number): number => ry * roomsX + rx;
 
-  const entranceRoom = roomIndex(randInt(rng, 0, roomsX - 1), roomsY - 1);
+  // You descend into a dungeon: the stairs are in the top row, and the room
+  // row is depth. That is what lets the rain fill it from the bottom up.
+  const entranceRoom = roomIndex(randInt(rng, 0, roomsX - 1), 0);
   rooms[entranceRoom].kind = 'entrance';
 
   carveSpanningTree(rng, rooms, roomsX, roomsY, entranceRoom);
@@ -201,10 +203,7 @@ export function generateDungeon(
   const distance = treeDistances(rooms, entranceRoom);
   for (let r = 0; r < rooms.length; r++) rooms[r].distance = distance[r];
 
-  let treasureRoom = entranceRoom;
-  for (let r = 0; r < rooms.length; r++) {
-    if (distance[r] > distance[treasureRoom]) treasureRoom = r;
-  }
+  const treasureRoom = pickTreasureRoom(rooms, entranceRoom);
   rooms[treasureRoom].kind = 'treasure';
 
   isolateTreasure(rooms, entranceRoom, treasureRoom);
@@ -223,7 +222,10 @@ export function generateDungeon(
   const approach = pathEdges.slice(0, -1);
   const chosen = shuffle(rng, approach.slice()).slice(0, MAX_OBSTACLES);
   for (const edge of chosen) {
-    const tile = rng() < 0.5 ? Tile.Chasm : Tile.Ledge;
+    // The valley cave is the early one, raced before the Rod knows wood, so
+    // its tolls are all rope. Elsewhere a chasm costs planks.
+    const roll = rng();
+    const tile = biome === Biome.Valley || roll < 0.5 ? Tile.Ledge : Tile.Chasm;
     setDoorTile(planes.tiles, w, rooms, edge.from, edge.dir, tile);
     obstacles.push({ tile, between: [edge.from, edge.to] });
   }
@@ -241,6 +243,7 @@ export function generateDungeon(
   planes.tiles[stairs.y * w + stairs.x] = Tile.Stairs;
   planes.tiles[chest.y * w + chest.x] = Tile.Chest;
   planes.tiles[key.y * w + key.x] = Tile.Key;
+  sealAround(planes.tiles, w, chest, SEAL_TILE[BIOME_SEAL_RESOURCE[biome]]);
 
   return {
     id,
@@ -384,6 +387,45 @@ function addLoopEdges(rng: Rng, rooms: RoomMeta[], roomsX: number, roomsY: numbe
   const extra = Math.min(candidates.length, Math.max(1, Math.floor(rooms.length / 6)));
   for (const edge of shuffle(rng, candidates).slice(0, extra)) {
     link(rooms, edge.a, edge.b, edge.dir);
+  }
+}
+
+/**
+ * The treasure is deep: the deepest room that no other room hangs off,
+ * furthest from the stairs among those. A leaf can be cut back to a single
+ * approach without stranding anything beyond it, so the locked door stays a
+ * real gate and every other room stays reachable.
+ */
+function pickTreasureRoom(rooms: RoomMeta[], entranceRoom: number): number {
+  const parents = treeParents(rooms, entranceRoom);
+  const hasChild = new Uint8Array(rooms.length);
+  for (let r = 0; r < rooms.length; r++) {
+    if (parents[r].from !== -1) hasChild[parents[r].from] = 1;
+  }
+
+  let best = entranceRoom;
+  for (let r = 0; r < rooms.length; r++) {
+    if (r === entranceRoom || hasChild[r]) continue;
+    const a = rooms[r];
+    const b = rooms[best];
+    if (best === entranceRoom || a.ry > b.ry || (a.ry === b.ry && a.distance > b.distance)) {
+      best = r;
+    }
+  }
+  return best;
+}
+
+/**
+ * A ring of seal around the chest: the vault inside the treasure room. Parted
+ * whole by a Rod imbued with the biome's resource, as in the one-room cave.
+ */
+function sealAround(tiles: Uint8Array, w: number, chest: Point, seal: Tile | undefined): void {
+  if (seal === undefined) return;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      tiles[(chest.y + dy) * w + chest.x + dx] = seal;
+    }
   }
 }
 
