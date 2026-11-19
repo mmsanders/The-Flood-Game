@@ -65,6 +65,12 @@ export const enum Tile {
   CampTent = 0x38,
   /** A sunburnt traveller from the far sand. Blocking; talk from beside him. */
   Stranger = 0x39,
+  /** A stone well. Every place people live has water. Blocking. */
+  Well = 0x3a,
+  /** A farmhouse with the roof fallen in. Blocking. */
+  Ruin = 0x3b,
+  /** A fence rail on the ground. Walkable: this is the gap. */
+  FenceDown = 0x3c,
 
   // -- 0x40 dungeon terrain -------------------------------------------------
   DungeonFloor = 0x40,
@@ -192,6 +198,8 @@ const BLOCKING: readonly Tile[] = [
   Tile.PitchSeep,
   Tile.Pedestal,
   Tile.Stranger,
+  Tile.Well,
+  Tile.Ruin,
 
   Tile.DungeonWall,
 
@@ -247,7 +255,8 @@ export function isCarvable(tile: number): boolean {
     tile === Tile.Fence ||
     tile === Tile.Tent ||
     tile === Tile.House ||
-    tile === Tile.StoneWall
+    tile === Tile.StoneWall ||
+    tile === Tile.Ruin
   );
 }
 
@@ -314,6 +323,9 @@ export const TILE_NAMES: Record<number, string> = {
   [Tile.Skiff]: 'Beached Skiff',
   [Tile.CampTent]: "Noah's Tent",
   [Tile.Stranger]: 'Stranger',
+  [Tile.Well]: 'Well',
+  [Tile.Ruin]: 'Ruin',
+  [Tile.FenceDown]: 'Fallen fence',
   [Tile.DungeonFloor]: 'Dungeon Floor',
   [Tile.DungeonWall]: 'Dungeon Wall',
   [Tile.Stairs]: 'Stairs',

@@ -96,7 +96,7 @@ export function tickFlock(state: GameState, dt: number): void {
       ? { x: state.player.x + PLAYER_W / 2, y: state.player.y + PLAYER_H / 2 }
       : null;
 
-  const { drowned } = stepAnimals(map.animals, map, waterLevel(state), dt, player);
+  const { drowned } = stepAnimals(map.animals, map, waterLevel(state), dt, player, map.settled ?? []);
   if (state.messageTimer <= 0) {
     if (drowned.length === 1) {
       const def = animalDef(drowned[0].kind);

@@ -39,6 +39,11 @@ function withRope(n = 0): { s: GameState; at: { x: number; y: number }; herd: An
   const at = stage(s);
   s.hasRope = true;
   const herd = s.world.animals.slice(0, n);
+  // Free and footloose for these tests: nobody's farm animal, no paddock.
+  for (const a of herd) {
+    a.owner = -1;
+    a.home = null;
+  }
   // Everything else far from the stage, so nothing wanders into the test.
   for (const a of s.world.animals) {
     if (herd.includes(a)) continue;

@@ -27,6 +27,8 @@ export interface RoadTargets {
   spawn: Point;
   dungeons: Point[];
   docks: Point[];
+  /** Farm doorsteps: a footpath out to the nearest town. */
+  farms?: Point[];
 }
 
 /** How far a settlement's paved aura reaches, in tiles. */
@@ -125,7 +127,17 @@ export function layRoads(
       'kind' in from ? auraRadius((from as Settlement).kind) : SPAWN_AURA;
     connect(plan, elev, biome, w, h, from, dock, 'road', fromAura, POI_AURA);
   }
+  // A farm is where it is because someone walks to market from it.
+  for (const farm of targets.farms ?? []) {
+    const from = nearest(settlements, farm) ?? targets.spawn;
+    const fromAura =
+      'kind' in from ? auraRadius((from as Settlement).kind) : SPAWN_AURA;
+    connect(plan, elev, biome, w, h, from, farm, 'foot', fromAura, FARM_AURA);
+  }
 }
+
+/** A farm track only needs to start at the gate. */
+const FARM_AURA = 3;
 
 function nearest(points: readonly Point[], p: Point): Point | null {
   let best: Point | null = null;
@@ -228,6 +240,9 @@ function isReserved(tile: number): boolean {
     tile === Tile.House ||
     tile === Tile.StoneWall ||
     tile === Tile.Fence ||
+    tile === Tile.FenceDown ||
+    tile === Tile.Well ||
+    tile === Tile.Ruin ||
     tile === Tile.TownDoor ||
     tile === Tile.Shrine ||
     tile === Tile.ArkSite ||

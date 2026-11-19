@@ -232,6 +232,15 @@ function catchByTouch(state: GameState): void {
     if (a.status === AnimalStatus.Tethered && a.cooldown > 0) continue;
     const def = ANIMAL_DEFS[a.kind];
 
+    // Somebody's ox is not yours to lead off. Ask at the house.
+    if (a.owner >= 0) {
+      if (state.messageTimer <= 0) {
+        const farm = state.world.homesteads[a.owner];
+        say(state, `That's the farmer's ${def.name}${farm ? `, at ${farm.name}` : ''}. Ask at the house.`);
+      }
+      return;
+    }
+
     if (!state.hasRope) {
       if (state.messageTimer <= 0) {
         say(state, `A ${def.name}. Twist a rope at your tent to lead it (${ROPE_COST} fiber).`);

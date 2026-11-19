@@ -161,6 +161,7 @@ Playable end to end: worldgen, the flood, resource gathering, the ark, the flock
 skiff, win/lose, and dungeons with the resource trade. Every wave of `docs/ROADMAP.md` is
 in: a river you can sail, escarpments and contour ledges, towns, shops and barter, the depth
 ladder and the gear that beats it, enterable buildings, a dry prologue before the rain,
-dungeons that flood from the bottom, a flock you lead to the ark on a rope, and a secret in
-the far south for anyone who talks to strangers. Enemies, the voice of God as a full
+dungeons that flood from the bottom, a flock you lead to the ark on a rope, a secret in
+the far south for anyone who talks to strangers, and farms and townsfolk who watch the
+water rise and move uphill ahead of it. Enemies, the voice of God as a full
 dialogue system, and the ocean stage are still ahead.

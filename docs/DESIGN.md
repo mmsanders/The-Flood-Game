@@ -297,6 +297,43 @@ says so.
 
 ---
 
+## Signs of people
+
+Wave 7. The world is one people left behind, so it has people in it, and everything they
+keep is where they would keep it.
+
+**Homesteads** (`src/core/worldgen/homesteads.ts`). Two farms per biome, sited like the
+towns on flat buildable ground near water, laid on the plan before roads so a farm track
+runs out to the nearest town. Each is a house, a well, a yard and a fenced paddock, named
+(*Hollow Farm*, *Cedar Steading*, *Thorn Yard*, *Flint Fold*). The first in each biome is
+**lived in**; the second is **abandoned** (the roof fallen in, the yard grown over, the fence
+still standing) or has a **fallen fence** (rails on the grass in places).
+
+**Animals that live somewhere.** Each biome's farms keep its domestic kind — ox in the
+valley, donkey in the forest, camel in the scrub, goat on the mountain — one of the pair
+per farm, so the flock is still exactly two of every kind. A kept animal remembers its home
+and its centre never leaves it; behind a fallen fence that is one tile past the rails.
+Sheep keep to the town pasture. Wild kinds (lion, bear, serpent, raven) are never placed
+within 16 tiles of a town, farm or the camp, and turn away when they wander within 10.
+
+**The farmer.** At a lived-in farm the animal is his: walking into it with a rope gets
+*"That's the farmer's ox, at Hollow Farm. Ask at the house."* Stand beside him and `E`
+buys it for ark materials, priced by kind and never in pitch. When the water drives him
+off, his animals are left to whoever comes.
+
+**People** (`src/core/people.ts`, `src/game/people.ts`). Every town, hamlet and farm is a
+*place* with tiles people stand on and the day the water reaches it. Townsfolk wander near
+their spot; `E` beside one gets a line, and the lines follow the flood — mockery in the
+prologue, unease in the rain, pleading at the end. Nobody comes aboard: Genesis 7:23. When
+the water nears a place, its people move to the nearest place that will stay dry at least
+two days longer. They move when you're not watching (if you are, they walk off the screen
+first), so the south empties and the north fills with refugees who say where they came
+from. With nowhere left, they are gone. Only people on the current screen move, so the
+frame budget doesn't care how many there are. Noah walks through a crowd rather than
+getting stuck in it.
+
+---
+
 ## The frame budget
 
 A hard rule, ahead of every feature below: **no frame ever misses a vsync.**

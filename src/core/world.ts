@@ -47,6 +47,87 @@ export interface Settlement extends Point {
   shrine: Point | null;
 }
 
+/** What became of a farmstead before the rain. Wave 7. */
+export const enum HomesteadState {
+  /** The farmer is in the yard, and the animal in the paddock is his. */
+  LivedIn = 0,
+  /** A ruin. The fence still stands and the animal still waits inside. */
+  Abandoned = 1,
+  /** Gaps in the fence. The animal stays within a tile of home anyway. */
+  FallenFence = 2,
+}
+
+/** Inclusive tile rectangle. */
+export interface TileRect {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/** A farmstead: house, well, yard, and a fenced paddock. Point is the house. */
+export interface Homestead extends Point {
+  id: number;
+  name: string;
+  biome: Biome;
+  state: HomesteadState;
+  /** Inside the fence. */
+  paddock: TileRect;
+  /** The doorstep, where the farmer stands. */
+  yard: Point;
+}
+
+/** Somewhere people live: a town, a hamlet, a farm. What townsfolk call home. */
+export interface Place extends Point {
+  name: string;
+  /** -1 for a town or hamlet, else the homestead's id. */
+  homestead: number;
+  /** Walkable tiles people stand on here. */
+  spots: number[];
+  /** The day the water reaches the middle of it. */
+  drownsOn: number;
+}
+
+export const enum PersonRole {
+  Townsfolk = 0,
+  Farmer = 1,
+}
+
+export const enum PersonStatus {
+  /** Where they belong, or where they fled to. */
+  Here = 0,
+  /** Walking off this screen to get away from the water. */
+  Leaving = 1,
+  /** Nowhere left to go. */
+  Gone = 2,
+}
+
+/**
+ * Someone who lives here. Not rescuable — Genesis 7:23 — and not an obstacle:
+ * Noah walks through a crowd rather than getting stuck on it.
+ */
+export interface Person {
+  id: number;
+  role: PersonRole;
+  /** Index into the clothing palettes. */
+  look: number;
+  /** Index into `world.places`: where they are now. */
+  place: number;
+  /** Where they started, so a refugee can say where they came from. */
+  origin: number;
+  /** The tile they wander around. */
+  anchor: number;
+  x: number;
+  y: number;
+  prevX: number;
+  prevY: number;
+  dir: number;
+  status: PersonStatus;
+  cooldown: number;
+  steps: number;
+  anim: number;
+}
+
 export interface WorldStats {
   /** Tiles per biome, indexed by Biome. */
   biomeTiles: number[];
@@ -87,6 +168,14 @@ export interface World extends TileMap {
   interiors: Interior[];
   /** The endless sand off the far south edge, or null if no edge would take it. */
   desert: Desert | null;
+  /** Farmsteads, in every biome. Wave 7. */
+  homesteads: Homestead[];
+  /** Towns, hamlets and farms, as places people live and flee between. */
+  places: Place[];
+  /** The people. They watch the water too. */
+  people: Person[];
+  /** Town, farm and camp centres: what wild animals keep away from. */
+  settled: Point[];
   stats: WorldStats;
 }
 

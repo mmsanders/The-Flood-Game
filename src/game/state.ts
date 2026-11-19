@@ -27,6 +27,7 @@ import { checkStrandedBoat } from './skiff.js';
 import { Dir, type GameState, PLAYER_H, PLAYER_W, type StepInput } from './types.js';
 import { tickWeather } from './weather.js';
 import { tryEnterDesert, wrapDesert } from './desert.js';
+import { stepPeople } from './people.js';
 import { emptyTrail, resetTrail } from './flock.js';
 
 export { actionPrompt } from './actions.js';
@@ -276,6 +277,7 @@ export function step(state: GameState, input: StepInput, dt: number): void {
 
   rememberSafeSpot(state);
   tickFlock(state, dt);
+  stepPeople(state, dt);
   stepTileEffects(state);
   applyFlood(state, dt);
   updateCamera(state);
