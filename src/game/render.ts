@@ -7,9 +7,15 @@
  * inspector cannot drift apart.
  */
 
-import { PANEL_H, PANEL_PX_H, PANEL_PX_W, PANEL_W, TILE_PX } from '../core/config.js';
+import { FLOOD_DAYS, PANEL_H, PANEL_PX_H, PANEL_PX_W, PANEL_W, TILE_PX } from '../core/config.js';
 import { ANIMAL_DEFS, ANIMAL_H, ANIMAL_W, AnimalDir, AnimalStatus, FLOCK_TOTAL } from '../core/animals.js';
-import { floodDepth, floodOverlayFill, gorgeDepthAt } from '../core/flood.js';
+import {
+  dungeonDepthAt,
+  floodDepth,
+  floodOverlayFill,
+  gorgeDepthAt,
+  RAIN_DAY,
+} from '../core/flood.js';
 import { panelsHigh, panelsWide, type TileMap } from '../core/tilemap.js';
 import { Biome, RESOURCE_COUNT, Resource, Tile, carveTo, isCliffFace } from '../core/tiles.js';
 import { PALETTE } from '../render/palette.js';
@@ -31,6 +37,7 @@ import {
   visitedCells,
 } from './minimap.js';
 import {
+  BANNER_TIME,
   Dir,
   type GameState,
   LODESTONE_DIR_NAME,
@@ -41,7 +48,9 @@ import {
   arkProgress,
   currentDay,
   currentDungeon,
+  dungeonFlood,
   flockScore,
+  gloomAt,
   keysHere,
   lodestoneBearing,
   waterLevel,
@@ -106,11 +115,13 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, ui?: Ren
   drawAnimals(ctx, state);
   drawPlayer(ctx, state);
   drawTodFilter(ctx, state);
+  drawRain(ctx, state);
   ctx.restore();
 
   drawHud(ctx, state);
   drawObstaclePrompt(ctx, state);
   drawMessage(ctx, state);
+  drawBanner(ctx, state);
   if (state.phase !== 'playing') drawEndCard(ctx, state);
   if (ui?.bestiary) drawBestiary(ctx, state, ui.best ?? { pairs: 0, rescued: 0 });
   if (ui?.perf) drawPerf(ctx, ui.perf);
@@ -211,6 +222,9 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
   const sheet = getTilesheet();
   const level = waterLevel(state);
   const day = map.floods ? currentDay(state) : 0;
+  // Underground the waterline is a row: rain pools on the bottom floor.
+  const cave = currentDungeon(state);
+  const caveRows = cave ? dungeonFlood(state, cave) : 0;
 
   const x0 = Math.floor(cam.x / TILE_PX);
   const y0 = Math.floor(cam.y / TILE_PX);
@@ -222,6 +236,7 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
   for (let ty = y0; ty <= y1; ty++) {
     // The runoff front runs north to south, so it is a property of the row.
     const runoff = map.floods ? gorgeDepthAt(day, ty, map.h) : 0;
+    const caveDepth = cave && ty >= 0 && ty < map.h ? dungeonDepthAt(ty, map.h, caveRows) : 0;
     for (let tx = x0; tx <= x1; tx++) {
       const sx = Math.round(tx * TILE_PX - cam.x);
       const sy = Math.round(ty * TILE_PX - cam.y);
@@ -270,11 +285,16 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
           floodScratch[floodLen + 2] = d;
           floodLen += 3;
         }
+      } else if (caveDepth > 0 && floodLen + 3 <= floodScratch.length) {
+        floodScratch[floodLen] = sx;
+        floodScratch[floodLen + 1] = sy;
+        floodScratch[floodLen + 2] = caveDepth;
+        floodLen += 3;
       }
     }
   }
 
-  drawElevationFaces(ctx, shadowLen);
+  drawElevationFaces(ctx, shadowLen, cam, map.floods ? gloomAt(currentDay(state)) : 0, state.elapsed);
 
   // Four fillStyles instead of one per tile — the overlay colours are discrete.
   for (let depth = 1; depth <= 4; depth++) {
@@ -662,7 +682,13 @@ function windowRow(
  * and a hard edge, which is how every 2D game from Zelda on has said "this is
  * higher than that".
  */
-function drawElevationFaces(ctx: CanvasRenderingContext2D, count: number): void {
+function drawElevationFaces(
+  ctx: CanvasRenderingContext2D,
+  count: number,
+  cam: { x: number; y: number },
+  wet: number,
+  elapsed: number,
+): void {
   // Lip first, so the whole run of steps shares one fillStyle each pass.
   ctx.fillStyle = FACE_LIP;
   for (let i = 0; i < count; i += 2) {
@@ -681,7 +707,47 @@ function drawElevationFaces(ctx: CanvasRenderingContext2D, count: number): void 
   for (let i = 0; i < count; i += 2) {
     ctx.fillRect(shadowScratch[i], shadowScratch[i + 1] + FACE_H, TILE_PX, 2);
   }
+  if (wet > 0) drawTrickles(ctx, count, cam, wet, elapsed);
 }
+
+/**
+ * Once the rain begins, water runs down every ledge: a wet streak on about
+ * half the faces and a bead sliding down it. Keyed to the *world* tile, not
+ * the screen, so a scrolling camera does not reshuffle which faces drip.
+ */
+function drawTrickles(
+  ctx: CanvasRenderingContext2D,
+  count: number,
+  cam: { x: number; y: number },
+  wet: number,
+  elapsed: number,
+): void {
+  ctx.globalAlpha = wet;
+  ctx.fillStyle = TRICKLE_STREAK;
+  for (let i = 0; i < count; i += 2) {
+    const h = faceHash(shadowScratch[i], shadowScratch[i + 1], cam);
+    if ((h & 1) === 0) continue;
+    ctx.fillRect(shadowScratch[i] + 2 + ((h >> 1) % 12), shadowScratch[i + 1], 1, FACE_H);
+  }
+  ctx.fillStyle = TRICKLE_BEAD;
+  for (let i = 0; i < count; i += 2) {
+    const h = faceHash(shadowScratch[i], shadowScratch[i + 1], cam);
+    if ((h & 1) === 0) continue;
+    const phase = (elapsed * 1.6 + (h >> 5) / 64) % 1;
+    const y = shadowScratch[i + 1] + Math.floor(phase * (FACE_H + 2));
+    ctx.fillRect(shadowScratch[i] + 2 + ((h >> 1) % 12), y, 1, 2);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function faceHash(sx: number, sy: number, cam: { x: number; y: number }): number {
+  const tx = Math.round((sx + cam.x) / TILE_PX);
+  const ty = Math.round((sy + cam.y) / TILE_PX);
+  return (Math.imul(tx, 0x27d4eb2d) ^ Math.imul(ty, 0x165667b1)) >>> 7;
+}
+
+const TRICKLE_STREAK = '#2c4f72';
+const TRICKLE_BEAD = '#9cc6ec';
 
 /** Height of a drawn drop, in pixels. Six of sixteen reads as a real step. */
 const FACE_H = 6;
@@ -692,14 +758,65 @@ const FACE_FOOT = '#0a0908';
 function drawAnimals(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (state.location.kind !== 'overworld') return;
   const cam = cameraOrigin(state);
+  drawRope(ctx, state, cam);
   for (const a of state.world.animals) {
-    if (a.status !== AnimalStatus.Wild) continue;
+    const led = a.status === AnimalStatus.Led;
+    const tied = a.status === AnimalStatus.Tethered;
+    if (a.status !== AnimalStatus.Wild && !led && !tied) continue;
     const x = Math.round(lerp(a.prevX, a.x, renderAlpha) - cam.x);
     const y = Math.round(lerp(a.prevY, a.y, renderAlpha) - cam.y);
     if (x < -16 || y < -16 || x > SCREEN_W + 16 || y > PANEL_PX_H + 16) continue;
-    const bob = Math.round(Math.sin(a.anim * 8 + a.id) * 0.8);
+    if (tied) drawStake(ctx, x, y);
+    const bob = tied ? 0 : Math.round(Math.sin(a.anim * 8 + a.id) * 0.8);
     drawCreature(ctx, a.kind, x, y + bob, a.dir, a.anim);
   }
+}
+
+const ROPE_COLOR = '#c8a46a';
+
+/** Prebuilt, so the HUD never formats a number per frame. */
+const STRING_LABEL = ['', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+
+/**
+ * The rope, hand to first animal and animal to animal, drawn as stepped
+ * pixels between interpolated positions so it reads as a line at 16-bit
+ * scale without anti-aliasing.
+ */
+function drawRope(ctx: CanvasRenderingContext2D, state: GameState, cam: { x: number; y: number }): void {
+  if (state.string.length === 0) return;
+  const p = state.player;
+  let fromX = lerp(p.prevX, p.x, renderAlpha) + PLAYER_W / 2 - cam.x;
+  let fromY = lerp(p.prevY, p.y, renderAlpha) + PLAYER_H / 2 + 2 - cam.y;
+  ctx.fillStyle = ROPE_COLOR;
+  for (const id of state.string) {
+    let a = null;
+    for (const c of state.world.animals) {
+      if (c.id === id) {
+        a = c;
+        break;
+      }
+    }
+    if (!a) continue;
+    const toX = lerp(a.prevX, a.x, renderAlpha) + ANIMAL_W / 2 - cam.x;
+    const toY = lerp(a.prevY, a.y, renderAlpha) + 2 - cam.y;
+    const steps = Math.max(1, Math.round(Math.max(Math.abs(toX - fromX), Math.abs(toY - fromY)) / 2));
+    for (let n = 1; n < steps; n++) {
+      const t = n / steps;
+      // A slight sag, so the rope hangs rather than strings taut.
+      const sag = Math.sin(t * Math.PI) * 2;
+      ctx.fillRect(Math.round(fromX + (toX - fromX) * t), Math.round(fromY + (toY - fromY) * t + sag), 1, 1);
+    }
+    fromX = toX;
+    fromY = toY;
+  }
+}
+
+/** A tethering stake with a loop of rope, beside a tied animal. */
+function drawStake(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  ctx.fillStyle = '#5a3a1e';
+  ctx.fillRect(x - 3, y + 1, 2, 7);
+  ctx.fillStyle = ROPE_COLOR;
+  ctx.fillRect(x - 2, y + 3, 3, 1);
 }
 
 function drawCreature(
@@ -852,14 +969,102 @@ function drawPlayerShadow(
 /** Multiply the playfield. Day is white and is skipped. Dungeons have no sky. */
 function drawTodFilter(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (state.location.kind !== 'overworld') return;
-  const tod = todAt(currentDay(state));
-  if (isDaylight(tod)) return;
+  const day = currentDay(state);
+  const tod = todAt(day);
+  const gloom = gloomAt(day);
+  if (isDaylight(tod) && gloom <= 0) return;
 
+  // The rain cools the light on top of the hour: the prologue is sunlit, the
+  // flood is grey, and night is darker under cloud than under stars.
+  const r = (tod.mulR * (255 - gloom * (255 - GLOOM_MUL[0]))) / 255;
+  const g = (tod.mulG * (255 - gloom * (255 - GLOOM_MUL[1]))) / 255;
+  const b = (tod.mulB * (255 - gloom * (255 - GLOOM_MUL[2]))) / 255;
+  setMultiply(r, g, b);
   ctx.globalCompositeOperation = 'multiply';
-  ctx.fillStyle = `rgb(${tod.mulR | 0},${tod.mulG | 0},${tod.mulB | 0})`;
+  ctx.fillStyle = multiplyStyle;
   ctx.fillRect(0, 0, SCREEN_W, PANEL_PX_H);
   ctx.globalCompositeOperation = 'source-over';
 }
+
+/** Daylight under cloud: a cool slate, still bright enough to read tiles by. */
+const GLOOM_MUL = [182, 194, 214] as const;
+
+/**
+ * The multiply colour as a CSS string, rebuilt only when a channel changes.
+ * The tod filter used to build one per frame; the light now changes for most
+ * of the run, and the frame budget forbids a fresh string every vsync.
+ */
+let multiplyKey = -1;
+let multiplyStyle = 'rgb(255,255,255)';
+function setMultiply(r: number, g: number, b: number): void {
+  const key = ((r | 0) << 16) | ((g | 0) << 8) | (b | 0);
+  if (key === multiplyKey) return;
+  multiplyKey = key;
+  multiplyStyle = `rgb(${r | 0},${g | 0},${b | 0})`;
+}
+
+/** Streaks of rain, once it has begun. Overworld only — caves have a roof. */
+const RAIN_DROPS = 70;
+const RAIN_FALL_PX_PER_S = 260;
+const RAIN_DRIFT_PX_PER_S = -40;
+
+function drawRain(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (state.location.kind !== 'overworld') return;
+  const gloom = gloomAt(currentDay(state));
+  if (gloom <= 0) return;
+  const t = state.elapsed;
+  ctx.globalAlpha = 0.45 * gloom;
+  ctx.fillStyle = RAIN_COLOR;
+  for (let n = 0; n < RAIN_DROPS; n++) {
+    const h = Math.imul(n + 1, 0x9e3779b1) >>> 0;
+    const speed = 0.75 + (h & 0xff) / 1024;
+    const x0 = (h >>> 8) % SCREEN_W;
+    const y0 = (h >>> 16) % PANEL_PX_H;
+    const x = mod(x0 + t * RAIN_DRIFT_PX_PER_S * speed, SCREEN_W);
+    const y = mod(y0 + t * RAIN_FALL_PX_PER_S * speed, PANEL_PX_H);
+    ctx.fillRect(x | 0, y | 0, 1, 4);
+    ctx.fillRect((x | 0) - 1, (y | 0) + 4, 1, 2);
+  }
+  ctx.globalAlpha = 1;
+}
+
+const RAIN_COLOR = '#cfe0f2';
+
+function mod(a: number, n: number): number {
+  const r = a % n;
+  return r < 0 ? r + n : r;
+}
+
+/**
+ * A full-width announcement across the playfield: the prologue ending, and
+ * the voice that goes with it. Fades in and out over its last and first half
+ * second so it lands as a moment, not a pop-up.
+ */
+function drawBanner(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (!state.banner || state.bannerTimer <= 0 || state.phase !== 'playing') return;
+  const fade = Math.min(1, state.bannerTimer / 0.5, (BANNER_TIME - state.bannerTimer) / 0.5 + 0.2);
+  const midY = HUD_H + PANEL_PX_H / 2 - 18;
+
+  ctx.globalAlpha = Math.max(0, fade);
+  ctx.fillStyle = 'rgba(8, 14, 26, 0.82)';
+  ctx.fillRect(0, midY - 20, SCREEN_W, 44);
+  ctx.fillStyle = '#4a6a92';
+  ctx.fillRect(0, midY - 20, SCREEN_W, 1);
+  ctx.fillRect(0, midY + 23, SCREEN_W, 1);
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 14px ui-monospace, monospace';
+  ctx.fillStyle = '#cfe0f2';
+  ctx.fillText(state.banner.title, SCREEN_W / 2, midY - 5);
+  ctx.font = '8px ui-monospace, monospace';
+  ctx.fillStyle = '#e6d9b0';
+  ctx.fillText(state.banner.line, SCREEN_W / 2, midY + 12, SCREEN_W - 12);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.globalAlpha = 1;
+}
+
 
 /** The Rod of Aaron: a budded staff, or a two-tile serpent once blessed. */
 function drawRod(ctx: CanvasRenderingContext2D, state: GameState, x: number, y: number): void {
@@ -1365,6 +1570,23 @@ function drawInstrumentBadges(
     ctx.fillRect(cursor + 5, y + 3, 2, 2);
     cursor += 10;
   }
+  if (state.hasRope) {
+    // A coil, and how many are on it when you are leading.
+    ctx.fillStyle = ROPE_COLOR;
+    ctx.fillRect(cursor, y + 2, 6, 1);
+    ctx.fillRect(cursor, y + 6, 6, 1);
+    ctx.fillRect(cursor, y + 2, 1, 5);
+    ctx.fillRect(cursor + 5, y + 2, 1, 5);
+    if (state.string.length > 0) {
+      ctx.fillStyle = '#e6d9b0';
+      ctx.font = '5px monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(STRING_LABEL[state.string.length] ?? '', cursor + 7, y + 1);
+      cursor += 4;
+    }
+    cursor += 10;
+  }
   return cursor;
 }
 
@@ -1471,6 +1693,9 @@ function drawDay(
   ctx.fillRect(x, y + 10, barW, 3);
   ctx.fillStyle = PALETTE.water;
   ctx.fillRect(x, y + 10, Math.round((day / 40) * barW), 3);
+  // Where the prologue ends: the bar is a calendar, and this is its one date.
+  ctx.fillStyle = day < RAIN_DAY ? '#e6d9b0' : '#4a6a92';
+  ctx.fillRect(x + Math.round((RAIN_DAY / FLOOD_DAYS) * barW), y + 9, 1, 5);
 }
 
 function drawInventory(

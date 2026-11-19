@@ -9,9 +9,15 @@
  * modules, and committed as snapshots. The split is a pure move, so every
  * checkpoint must match: if a function lands on a different branch, runs in a
  * different order, or loses a side effect, some later checkpoint diverges.
+ *
+ * Re-captured once since, deliberately, for Wave 5: the prologue moved the
+ * flood curve, caves became 4x4 and flood, and the flock is led on a rope, so
+ * the rules a player can observe changed. Re-capture only for a change like
+ * that, and say so in the commit.
  */
 
 import { describe, expect, it } from 'vitest';
+import { FLOOD_GRACE_DAYS } from '../src/core/flood.js';
 import { Resource } from '../src/core/tiles.js';
 import { mulberry32 } from '../src/core/rng.js';
 import type { GameState, StepInput } from '../src/game/state.js';
@@ -121,7 +127,7 @@ describe('replay determinism', () => {
     s.haulingBoat = true;
     s.hasDove = true;
     s.carried.fill(40);
-    s.elapsed = s.world.params.secondsPerDay * 9;
+    s.elapsed = s.world.params.secondsPerDay * (FLOOD_GRACE_DAYS + 7);
     const shore = findShore(s);
     placeAt(s, shore.x, shore.y);
     expect(play(s, tape(2, 4000))).toMatchSnapshot();

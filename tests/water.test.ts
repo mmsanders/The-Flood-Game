@@ -3,6 +3,7 @@ import { TILE_PX, withParams } from '../src/core/config.js';
 import {
   FLOOD_GRACE_DAYS,
   GORGE_FILL_DAYS,
+  RAIN_DAY,
   floodDepth,
   gorgeDepthAt,
   waterDepth,
@@ -53,27 +54,32 @@ describe('the depth model', () => {
     expect(waterDepth(Tile.Gorge, 250, 0, 0)).toBe(0);
   });
 
-  it('fills from the top of the map downwards, not like a bathtub', () => {
+  it('stays a dry ditch for the whole prologue', () => {
     const H = 440;
-    const day = GORGE_FILL_DAYS / 3;
+    for (let y = 0; y < H; y += 40) expect(gorgeDepthAt(RAIN_DAY - 0.01, y, H)).toBe(0);
+  });
+
+  it('fills from the top of the map downwards once the rain begins, not like a bathtub', () => {
+    const H = 440;
+    const day = RAIN_DAY + GORGE_FILL_DAYS / 3;
     expect(gorgeDepthAt(day, 0, H)).toBeGreaterThan(0);
     expect(gorgeDepthAt(day, H - 1, H)).toBe(0);
 
     let frontier = 0;
     for (let t = 0; t <= 1; t += 0.05) {
       let wet = 0;
-      for (let y = 0; y < H; y++) if (gorgeDepthAt(t * GORGE_FILL_DAYS, y, H) > 0) wet++;
+      for (let y = 0; y < H; y++) if (gorgeDepthAt(RAIN_DAY + t * GORGE_FILL_DAYS, y, H) > 0) wet++;
       expect(wet).toBeGreaterThanOrEqual(frontier);
       frontier = wet;
     }
   });
 
-  it('has the whole channel running by the end of the first day', () => {
+  it('has the whole channel running by the end of the first day of rain', () => {
     const H = 440;
     for (let y = 0; y < H; y += 20) {
-      expect(gorgeDepthAt(GORGE_FILL_DAYS, y, H), `row ${y}`).toBeGreaterThan(0);
+      expect(gorgeDepthAt(RAIN_DAY + GORGE_FILL_DAYS, y, H), `row ${y}`).toBeGreaterThan(0);
     }
-    expect(gorgeDepthAt(GORGE_FILL_DAYS + 1, 0, H)).toBe(2);
+    expect(gorgeDepthAt(RAIN_DAY + GORGE_FILL_DAYS + 1, 0, H)).toBe(2);
   });
 
   it('runs the gorge in the high north long before the sea gets there', () => {

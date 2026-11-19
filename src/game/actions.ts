@@ -11,6 +11,7 @@
  * that declines and passes E on.
  */
 
+import { tetherAction } from './flock.js';
 import { obstacleAction } from './ground.js';
 import { doveAction } from './instruments.js';
 import { entranceAction, interiorAction } from './places.js';
@@ -31,6 +32,7 @@ const PROVIDERS: readonly ((state: GameState) => Action | null)[] = [
   setDownAction,
   dredgeHint,
   obstacleAction,
+  tetherAction,
   doveAction,
 ];
 

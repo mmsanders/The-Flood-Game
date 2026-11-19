@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TILE_PX, withParams } from '../src/core/config.js';
 import { AnimalKind, AnimalStatus } from '../src/core/animals.js';
 import { BASE_BOAT_DEPTH, PITCHED_BOAT_DEPTH, boatDestroyedAtDepth } from '../src/core/boat.js';
-import { FLOOD_RISE_PER_DAY } from '../src/core/flood.js';
+import { FLOOD_GRACE_DAYS, FLOOD_RISE_PER_DAY } from '../src/core/flood.js';
 import { marketAmount } from '../src/core/items.js';
 import { Biome, Resource, Tile } from '../src/core/tiles.js';
 import { PoiKind } from '../src/core/world.js';
@@ -53,7 +53,7 @@ describe('wave 2: the depth ladder', () => {
     const { spawn } = state.world;
     clearArea(state, spawn.x, spawn.y, 4);
     placeAt(state, spawn.x, spawn.y);
-    state.elapsed = state.world.params.secondsPerDay * 3;
+    state.elapsed = state.world.params.secondsPerDay * (FLOOD_GRACE_DAYS + 1);
 
     const i = spawn.y * state.world.w + spawn.x + 1;
     state.world.tiles[i] = Tile.Grass;

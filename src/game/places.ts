@@ -13,7 +13,8 @@ import {
 import { isWalkable, Tile } from '../core/tiles.js';
 import type { Point } from '../core/world.js';
 import { placeOn } from './camera.js';
-import { activeMap, currentInterior, depthAt, say, tileUnder } from './queries.js';
+import { activeMap, currentInterior, depthAt, dungeonFlood, say, tileUnder } from './queries.js';
+import { ropePrompt, twistRope } from './flock.js';
 import { boatYardPrompt, handleBoatYard } from './skiff.js';
 import { hermitPrompt, interactSettlement, settlementPrompt, tradeWithHermit } from './trade.js';
 import {
@@ -59,6 +60,8 @@ function interiorPrompt(state: GameState): ObstaclePrompt | null {
   if (room.kind === InteriorKind.Carpenter) {
     return boatYardPrompt(state, room.biomeKind);
   }
+  const rope = ropePrompt(state);
+  if (rope) return { tile: Tile.Path, ...rope };
   return {
     tile: Tile.Path,
     label: 'Your tent. Rest, then build.',
@@ -84,6 +87,10 @@ function interactInterior(state: GameState): void {
   }
   if (room.kind === InteriorKind.Carpenter) {
     handleBoatYard(state, room.biomeKind);
+    return;
+  }
+  if (!state.hasRope) {
+    twistRope(state);
     return;
   }
   say(state, 'Canvas and rope. Home, until the rain.');
@@ -251,9 +258,19 @@ function enterDungeonAt(state: GameState, tx: number, ty: number): void {
   };
   state.safeSpot = null;
   state.inBoat = false;
+  // Just past the stairs in the direction you walked in, so holding the key
+  // that carried you down does not carry you straight back out.
   placeOn(state, { x: dungeon.stairs.x, y: Math.max(1, dungeon.stairs.y - 1) });
   state.player.dir = Dir.Up;
-  say(state, 'Down into the dark. The water does not wait.');
+  const pooled = dungeonFlood(state, dungeon);
+  say(
+    state,
+    pooled <= 0
+      ? 'Down into the dark. Dry, for now.'
+      : pooled < dungeon.h / 2
+        ? 'Water stands on the lowest floor. It is rising.'
+        : 'The lower halls are drowned. Be quick.',
+  );
 }
 
 function exitDungeon(state: GameState): void {

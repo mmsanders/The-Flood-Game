@@ -78,7 +78,7 @@ Water is a single rising scalar, not a row-by-row schedule:
 
 ```
 submerged  ⟺  elev < waterLevel(day)
-waterLevel: 0 through day 2, then linear to 256 at day 40
+waterLevel: 0 through day 5 (the prologue), then linear to 256 at day 40
 ```
 
 Rows still drown at about one per day because elevation trends north-south. But the
@@ -86,7 +86,15 @@ model gives more than a schedule would: a hilltop in a drowned row becomes a shr
 island, a low valley in a dry row floods early, and water rises continuously through the
 day so parts of a panel go under at different times. None of that is special-cased.
 
-Two days of grace at the start — the calm before, and room for the opening scene.
+**The prologue.** Five dry days at the start (`RAIN_DAY`): sunlit, the water pinned at zero,
+the gorge a dry ditch, the caves dry. The exploration window doesn't break the economy
+because the Rod gates the resources, not the clock — you cannot stockpile wood before a
+shrine teaches the Rod wood, however long you're given. Forty days stays load-bearing; only
+the curve changes, so the back half is steeper and tenser than before. When it ends, *THE
+RAIN BEGINS*: a banner and the voice's first real line, the light cools to slate, rain
+streaks the screen, water trickles down every cliff face, and the gorge front leaves the
+northern spring. Every drown-day is the same or later than under the old two-day grace, so
+every world that validated before still does.
 
 Submerged ground blocks movement *into* it, but a player the water has risen under can
 keep wading (at 55% speed), taking a heart every two seconds. Otherwise a rising tide
@@ -102,8 +110,8 @@ tile", 0 (dry) to 4 (the deep), so wading, sailing, beaching and dredging cannot
   spring to the southern mouth over about a day, leaving the whole channel running at a
   depth you cannot wade. It is rain off the mountain, not the sea arriving, which is why
   the north is a river while the south is still a dry ditch — and why it is the first thing
-  on the map to tell you the weather has turned. When the prologue lands, holding the front
-  back until the rain starts is one constant.
+  on the map to tell you the weather has turned. The front is held back through the
+  prologue and released the day the rain begins.
 - **Everything else** is the flood: elevation against sea level.
 
 Sail over anything at depth 2 or more, boulders included; below that the drowned landscape
@@ -118,7 +126,7 @@ world in the first place.
 
 ## The run
 
-**Start:** 3 hearts, the Rod of Aaron, in the southern lowlands. Spawn is drawn from the
+**Start:** 3 hearts, the Rod of Aaron, in the southern lowlands, five dry days before the rain. Spawn is drawn from the
 middle of the southern elevation range, not the lowest ground — starting at the bottom
 drowns you in four days no matter how well you play.
 
@@ -158,8 +166,19 @@ home and wander until they drown or come aboard:
 | lions, serpents, camels | scrub |
 | goats, ravens | mountain |
 
-Walking into a wild creature boards it. Completing a pair is a moment, not a victory.
-Best flock (pairs first, then bodies) is stored per-browser.
+**Husbandry.** Walking into a creature does not board it. Fiber twists a rope at Noah's
+tent (4, once per run); with it, walking into a creature puts it on the rope. A rope leads
+a *string* of up to six, following the exact path you walked, and each animal on it slows
+you (to about half speed with six). Within two tiles of the ark site the whole string walks
+aboard. `E` ties the string where you stand — a paddock is any high ground you choose — and
+walking back into a tied animal picks it up again. Tied animals cannot climb, so the flood
+takes a string left low; a led animal drowns only in water over its head (depth 2). The
+string can't follow you indoors, underground or onto the skiff: it ties itself where it
+stands and waits. The decision is how many to lead at once, which turns twenty round trips
+into a few.
+
+Completing a pair is a moment, not a victory. Best flock (pairs first, then bodies) is
+stored per-browser.
 
 **The skiff.** Not the ark. A valley slipway (a wooden dock, preferably on a pond bank)
 frames a small boat from 8 gopher wood and 6 fiber. Once crafted, any shore will do:
@@ -172,15 +191,17 @@ A fishing-rod blessing is a later Rod of Aaron upgrade, not this system.
 ## Dungeons
 
 One per biome, 4x4 rooms where **each room is exactly one panel**, so a dungeon shares the
-overworld's byte format, renderer and inspector view with no new drawing code.
+overworld's byte format, renderer and inspector view with no new drawing code. **The room
+row is depth**: the stairs are in the top row and the treasure is deep, in the deepest room
+that no other room hangs off.
 
 **Structure is guaranteed, not hoped for**, mirroring the overworld connectivity pass:
 
 - a randomised spanning tree from the entrance means every room is reachable
 - loop edges are added *before* distances are measured, so a shortcut cannot bypass the
   edges obstacles were placed to gate
-- the treasure room is the furthest from the entrance, then cut back to a single approach
-  so the locked door is a real gate
+- the treasure room is the deepest leaf (furthest from the stairs among the deepest), then
+  cut back to a single approach so the locked door is a real gate
 - the key is placed strictly before the door it opens — asserted across many seeds
 
 **The trade is the point.** Obstacles are paid for out of the same stock the ark needs:
@@ -190,6 +211,10 @@ overworld's byte format, renderer and inspector view with no new drawing code.
 | Chasm | 2 gopher wood | Plank bridge |
 | Ledge | 2 fiber | Rope |
 | Locked door | a key found inside | Open door |
+| Seal ring round the chest | a Rod imbued with the biome's resource | Floor |
+
+The valley cave's tolls are all ledges. It is the early one, raced before the Rod knows
+wood, and a chasm there would have cost planks you cannot yet cut.
 
 Pitch is never spendable — it is the scarce thing gating the ark, and letting a dungeon eat
 it could strand a run underground. A whole dungeon costs about 6 units against a recipe
@@ -230,11 +255,15 @@ the high ground near their town, and worldgen rejects a world whose required shr
 too early to have afforded their price. Before that, the valley shrine drowned on a median
 of day 6.3 and as early as day 2.1, taking the run with it silently.
 
-**The flood reaches the entrance, not the interior.** Once the mouth submerges that dungeon
-is gone for the run, which makes a low-lying one a decision about *when*, not whether — the
-first typically seals around day 7, when you have barely gathered enough to pay its toll.
-Interiors never flood. Surfacing into water is not special-cased: the ordinary flood rules
-take over.
+**The flood drains in.** Dry through the prologue; once the rain begins it pools on the
+bottom floor and fills upward, on the cave's own clock: the last tile row goes under the day
+the entrance drowns (`dungeonFloodRows` in `src/core/flood.ts`). A low cave is a race over a
+day or two; a mountain cave fills over weeks. The waterline carries a three-row band of
+ankle-deep water (galoshes wade it) over water that is over your head — no skiff fits down
+the stairs, so 2 is as deep as a cave gets. Rooms seal from the bottom while you are in
+them, and staying too long drowns you. The first entrance typically goes under around day 6,
+so the valley cave is a prologue raid. Surfacing into water is not special-cased: the
+ordinary flood rules take over.
 
 ---
 
@@ -273,9 +302,9 @@ entering a building are Wave 2 — see `docs/ROADMAP.md`.
 
 ### The voice of God
 Over the top, brusque, King of All Cosmos. Speaks at the start of a run, on milestones
-(first pitch, half an ark, the first heart container), and at both endings. Currently a
-single opening line and two end cards; wants a proper dialogue system with a message queue
-and a portrait.
+(first pitch, half an ark, the first heart container), and at both endings. Currently an
+opening line, the rain banner, and two end cards; wants a proper dialogue system with a
+message queue and a portrait. The banner (`state.banner`) is the first piece of it.
 
 ### The ocean stage
 After the ark launches: exploration or survival on open water — did you store enough to

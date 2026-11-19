@@ -13,6 +13,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { Biome, Resource, Tile } from '../src/core/tiles.js';
+import { FLOOD_GRACE_DAYS } from '../src/core/flood.js';
 import { InteriorKind, generateInterior } from '../src/core/interior.js';
 import { AnimalKind, AnimalStatus } from '../src/core/animals.js';
 import { Dir, step, type GameState } from '../src/game/state.js';
@@ -55,8 +56,10 @@ function facingInCave(tile: Tile | null, setup?: (s: GameState) => void) {
   const s = newGame();
   const cave = s.world.dungeons[0];
   s.location = { kind: 'dungeon', dungeonId: 0, interiorId: -1, returnTo: cave.overworldEntrance };
-  const x = cave.chest.x;
-  const y = 6;
+  // Two tiles south-east of the stairs: the entrance room, which never holds
+  // a pit, in whatever shape the generator gave this cave.
+  const x = cave.stairs.x + 2;
+  const y = cave.stairs.y + 2;
   if (tile !== null) cave.tiles[(y - 1) * cave.w + x] = tile;
   placeAt(s, x, y);
   s.player.dir = Dir.Up;
@@ -138,8 +141,20 @@ describe('E: interiors', () => {
     s.carried.fill(99);
     expect(pressE(s)).toMatchSnapshot();
   });
-  it('rests in the tent', () => {
-    expect(pressE(inInterior(InteriorKind.NoahTent))).toMatchSnapshot();
+  it('rests in the tent, once there is a rope', () => {
+    const s = inInterior(InteriorKind.NoahTent);
+    s.hasRope = true;
+    expect(pressE(s)).toMatchSnapshot();
+  });
+  it('twists a rope in the tent', () => {
+    const s = inInterior(InteriorKind.NoahTent);
+    s.carried[Resource.Fiber] = 6;
+    expect(pressE(s)).toMatchSnapshot();
+  });
+  it('asks for fiber before it will twist a rope', () => {
+    const s = inInterior(InteriorKind.NoahTent);
+    s.carried[Resource.Fiber] = 1;
+    expect(pressE(s)).toMatchSnapshot();
   });
 });
 
@@ -206,7 +221,7 @@ describe('E: dredging from the skiff (a prompt-only hint)', () => {
       const y = Math.floor(g.world.h / 2);
       setTile(g, x + 1, y, Tile.Flax);
       g.world.elev[y * g.world.w + x + 1] = 0;
-      g.elapsed = g.world.params.secondsPerDay * depthDays;
+      g.elapsed = g.world.params.secondsPerDay * (FLOOD_GRACE_DAYS - 2 + depthDays);
       g.player.dir = Dir.Right;
       extra?.(g);
     });
@@ -271,7 +286,7 @@ describe('E: divergences between the prompt and the key, recorded as-is', () => 
       const y = Math.floor(g.world.h / 2);
       setTile(g, x + 1, y, Tile.Flax);
       g.world.elev[y * g.world.w + x + 1] = 0;
-      g.elapsed = g.world.params.secondsPerDay * 2.5;
+      g.elapsed = g.world.params.secondsPerDay * (FLOOD_GRACE_DAYS + 0.5);
       g.player.dir = Dir.Right;
     });
     expect(pressE(s)).toMatchSnapshot();

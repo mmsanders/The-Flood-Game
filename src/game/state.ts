@@ -25,6 +25,8 @@ import { swingRod } from './rod.js';
 import { applyFlood, checkEndConditions, tickFlock } from './run.js';
 import { checkStrandedBoat } from './skiff.js';
 import { Dir, type GameState, PLAYER_H, PLAYER_W, type StepInput } from './types.js';
+import { tickWeather } from './weather.js';
+import { emptyTrail, resetTrail } from './flock.js';
 
 export { actionPrompt } from './actions.js';
 export { markExplored, snapCamera, syncInterpolation } from './camera.js';
@@ -36,6 +38,7 @@ export {
   currentDungeon,
   currentInterior,
   depthAt,
+  dungeonFlood,
   facingTile,
   gorgeRunoff,
   isBoatableTile,
@@ -44,8 +47,11 @@ export {
   waterLevel,
 } from './queries.js';
 export { arkProgress, damage, flockScore } from './run.js';
+export { MAX_STRING, ROPE_COST, stringSpeedScale } from './flock.js';
 export { Dir, PLAYER_H, PLAYER_W } from './types.js';
+export { BANNER_TIME, dryDaysLeft, gloomAt, RAIN_LINE, RAIN_TITLE } from './weather.js';
 export type {
+  Banner,
   Camera,
   GameState,
   Location,
@@ -125,7 +131,15 @@ export function createGame(world: World): GameState {
     minimapViewY: 0,
     minimapFilledSouth: false,
     mapRevision: 0,
+    hasRope: false,
+    string: [],
+    trail: emptyTrail(),
+    trailHead: 0,
+    rainBegun: false,
+    banner: null,
+    bannerTimer: 0,
   };
+  resetTrail(state);
   markExplored(state);
   return state;
 }
@@ -161,6 +175,8 @@ export function adoptHotState(running: GameState): GameState {
     exploredOverworld: adoptGrid(running.exploredOverworld, next.exploredOverworld),
     exploredDungeons: adoptDungeonGrids(running.exploredDungeons, next.exploredDungeons),
     exploredInteriors: adoptDungeonGrids(running.exploredInteriors ?? [], next.exploredInteriors),
+    string: running.string ? [...running.string] : [],
+    trail: running.trail?.length === next.trail.length ? running.trail : next.trail,
   };
   delete (merged as LegacyState).keysHeld;
   markExplored(merged);
@@ -231,6 +247,7 @@ export function step(state: GameState, input: StepInput, dt: number): void {
     state.messageTimer -= dt;
     if (state.messageTimer <= 0) state.message = null;
   }
+  tickWeather(state, dt);
   checkStrandedBoat(state);
 
   // Panel transitions lock input, Zelda-style: the screen slides, you wait.

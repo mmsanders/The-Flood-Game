@@ -29,8 +29,8 @@ exports[`E: cave seals and tolls > bridges a chasm with wood 1`] = `
       "in": false,
     },
     "tile": {
-      "x": 8,
-      "y": 6,
+      "x": 10,
+      "y": 7,
     },
     "where": "dungeon",
   },
@@ -71,8 +71,8 @@ exports[`E: cave seals and tolls > holds a seal the Rod does not know 1`] = `
       "in": false,
     },
     "tile": {
-      "x": 8,
-      "y": 6,
+      "x": 10,
+      "y": 7,
     },
     "where": "dungeon",
   },
@@ -113,8 +113,8 @@ exports[`E: cave seals and tolls > opens a locked door with a key 1`] = `
       "in": false,
     },
     "tile": {
-      "x": 8,
-      "y": 6,
+      "x": 10,
+      "y": 7,
     },
     "where": "dungeon",
   },
@@ -155,8 +155,8 @@ exports[`E: cave seals and tolls > parts a seal the Rod knows 1`] = `
       "in": false,
     },
     "tile": {
-      "x": 8,
-      "y": 6,
+      "x": 10,
+      "y": 7,
     },
     "where": "dungeon",
   },
@@ -197,8 +197,8 @@ exports[`E: cave seals and tolls > refuses a ledge without fiber 1`] = `
       "in": false,
     },
     "tile": {
-      "x": 8,
-      "y": 6,
+      "x": 10,
+      "y": 7,
     },
     "where": "dungeon",
   },
@@ -239,8 +239,8 @@ exports[`E: cave seals and tolls > refuses a locked door without one 1`] = `
       "in": false,
     },
     "tile": {
-      "x": 8,
-      "y": 6,
+      "x": 10,
+      "y": 7,
     },
     "where": "dungeon",
   },
@@ -458,6 +458,48 @@ exports[`E: dredging from the skiff (a prompt-only hint) > within reach 1`] = `
 }
 `;
 
+exports[`E: interiors > asks for fiber before it will twist a rope 1`] = `
+{
+  "after": {
+    "carried": "1,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": 4,
+    "keys": 0,
+    "kit": "",
+    "message": "Not enough fiber — 4 needed, you have 1.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 8,
+      "y": 3,
+    },
+    "where": "interior",
+  },
+  "prompt": {
+    "affordable": false,
+    "label": "Twist a rope — 4 fiber (you have 1)",
+    "tile": 5,
+  },
+}
+`;
+
 exports[`E: interiors > frames a skiff at the carpenter 1`] = `
 {
   "after": {
@@ -500,7 +542,7 @@ exports[`E: interiors > frames a skiff at the carpenter 1`] = `
 }
 `;
 
-exports[`E: interiors > rests in the tent 1`] = `
+exports[`E: interiors > rests in the tent, once there is a rope 1`] = `
 {
   "after": {
     "carried": "0,0,0,0",
@@ -512,7 +554,7 @@ exports[`E: interiors > rests in the tent 1`] = `
     "hermit": false,
     "interiorId": 4,
     "keys": 0,
-    "kit": "",
+    "kit": "rope",
     "message": "Canvas and rope. Home, until the rain.",
     "phase": "playing",
     "rod": {
@@ -622,6 +664,48 @@ exports[`E: interiors > trades at the hermit counter 1`] = `
     "affordable": false,
     "label": "Hermit: one rescued sheep → Heart Container (0 aboard)",
     "tile": 51,
+  },
+}
+`;
+
+exports[`E: interiors > twists a rope in the tent 1`] = `
+{
+  "after": {
+    "carried": "2,0,0,0",
+    "cleared": "0000",
+    "delivered": "0,0,0,0",
+    "dir": 0,
+    "dungeonId": -1,
+    "hearts": "3/3",
+    "hermit": false,
+    "interiorId": 4,
+    "keys": 0,
+    "kit": "rope",
+    "message": "A rope, for leading the flock. Up to 6 at a time.",
+    "phase": "playing",
+    "rod": {
+      "reach": 1,
+      "tier": 0,
+      "yield": 1,
+    },
+    "shopHearts": 0,
+    "skiff": {
+      "at": "-1,-1",
+      "depth": 2,
+      "has": false,
+      "hauling": false,
+      "in": false,
+    },
+    "tile": {
+      "x": 8,
+      "y": 3,
+    },
+    "where": "interior",
+  },
+  "prompt": {
+    "affordable": true,
+    "label": "Twist a rope — 4 fiber (you have 6)",
+    "tile": 5,
   },
 }
 `;
