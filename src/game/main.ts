@@ -14,6 +14,7 @@ import { DEFAULT_PARAMS, type WorldParams } from '../core/config.js';
 import { parseSeed, randomSeed } from '../core/rng.js';
 import { generateValidWorld } from '../core/worldgen/index.js';
 import { flashHotfix, markLive } from './hot.js';
+import { MAP_SCROLL_TILES_PER_SEC } from './fullmap.js';
 import { Input } from './input.js';
 import { RestartDialog, TouchControls } from './mobile.js';
 import { PerfMonitor } from './perf.js';
@@ -94,6 +95,8 @@ let input = new live.Input();
 const perf = new PerfMonitor();
 let showPerf = Boolean(import.meta.hot?.data.showPerf);
 let bestiary = Boolean(import.meta.hot?.data.bestiary);
+let worldMap = false;
+let mapScroll = 0;
 let best: BestFlock = loadBestFlock();
 let state = bootState();
 let accumulator = (import.meta.hot?.data.accumulator as number | undefined) ?? 0;
@@ -109,6 +112,7 @@ function newRun(seed: number): GameState {
   const next = live.createGame(world);
   live.say(next, 'BUILD IT, NOAH. Forty days. Two of every kind.');
   bestiary = false;
+  worldMap = false;
 
   const params = new URL(window.location.href);
   params.searchParams.set('seed', String(seed));
@@ -178,8 +182,14 @@ let raf = 0;
 
 /** Reused every frame; see the note on allocations in `perf.ts`. */
 const stepInput = { moveX: 0, moveY: 0, attackPressed: false, interactPressed: false };
-const renderUi: { bestiary: boolean; best: BestFlock; alpha: number; perf: ReturnType<PerfMonitor['read']> | null } = {
+const renderUi: {
+  bestiary: boolean;
+  worldMap: boolean;
+  mapScroll: number;
+  best: BestFlock; alpha: number; perf: ReturnType<PerfMonitor['read']> | null } = {
   bestiary: false,
+  worldMap: false,
+  mapScroll: 0,
   best: { pairs: 0, rescued: 0 },
   alpha: 1,
   perf: null,
@@ -195,12 +205,22 @@ function frame(now: number): void {
   if (intents.restartPressed && !restartDialog.isOpen) restartDialog.open();
 
   if (!restartDialog.isOpen) {
-    if (intents.bestiaryPressed) bestiary = !bestiary;
+    if (intents.bestiaryPressed) {
+      bestiary = !bestiary;
+      worldMap = false;
+    }
+    if (intents.mapPressed) {
+      worldMap = !worldMap;
+      bestiary = false;
+      mapScroll = 0;
+    }
+    // While the map is open, up and down scroll it instead of walking.
+    if (worldMap) mapScroll += intents.moveY * MAP_SCROLL_TILES_PER_SEC * elapsed;
     if (intents.perfPressed) showPerf = !showPerf;
   }
 
   let steps = 0;
-  if (!bestiary && !restartDialog.isOpen) {
+  if (!bestiary && !worldMap && !restartDialog.isOpen) {
     const scale = timeScale * (intents.fastForward ? 8 : 1);
     accumulator += elapsed * scale;
 
@@ -239,12 +259,15 @@ function frame(now: number): void {
   perf.record(frameMs, steps);
 
   renderUi.bestiary = bestiary;
+  renderUi.worldMap = worldMap;
+  renderUi.mapScroll = mapScroll;
   renderUi.best = best;
   renderUi.alpha = accumulator / STEP;
   renderUi.perf = showPerf ? perf.read() : null;
 
   try {
     live.render(ctx as CanvasRenderingContext2D, state, renderUi);
+    mapScroll = renderUi.mapScroll;
   } catch (err) {
     console.error('[flood] render failed', err);
   }

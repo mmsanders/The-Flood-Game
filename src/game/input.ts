@@ -19,10 +19,12 @@ export interface Intents {
   fastForward: boolean;
   /** Toggles the frame-time overlay. */
   perfPressed: boolean;
+  /** Opens or closes the full-screen map. */
+  mapPressed: boolean;
 }
 
 /** Actions the on-screen controls are allowed to feed into the game. */
-export type VirtualAction = 'up' | 'down' | 'left' | 'right' | 'attack' | 'interact' | 'bestiary';
+export type VirtualAction = 'up' | 'down' | 'left' | 'right' | 'attack' | 'interact' | 'bestiary' | 'map';
 
 const KEYS = {
   up: ['ArrowUp', 'KeyW'],
@@ -33,6 +35,7 @@ const KEYS = {
   interact: ['KeyE', 'KeyX', 'Enter'],
   restart: ['KeyR'],
   bestiary: ['KeyB'],
+  map: ['KeyM'],
   fast: ['ShiftLeft', 'ShiftRight'],
   perf: ['F3'],
 } as const;
@@ -52,6 +55,7 @@ export class Input {
     bestiaryPressed: false,
     fastForward: false,
     perfPressed: false,
+    mapPressed: false,
   };
   private readonly target: EventTarget;
   private readonly onKeyDown: (e: Event) => void;
@@ -134,6 +138,7 @@ export class Input {
     i.bestiaryPressed = this.hit(KEYS.bestiary) || this.virtualPressed.has('bestiary');
     i.fastForward = this.held(KEYS.fast);
     i.perfPressed = this.hit(KEYS.perf);
+    i.mapPressed = this.hit(KEYS.map) || this.virtualPressed.has('map');
     return i;
   }
 

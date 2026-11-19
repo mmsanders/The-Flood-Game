@@ -28,6 +28,32 @@ export function lodestoneBearing(state: GameState): Dir | null {
   return dy > 0 ? Dir.Down : Dir.Up;
 }
 
+/** Eight-way bearings, clockwise from north. */
+export const OCTANT_NAME = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+export const OCTANT_DX = [0, 1, 1, 1, 0, -1, -1, -1];
+export const OCTANT_DY = [-1, -1, 0, 1, 1, 1, 0, -1];
+
+/**
+ * The Lodestone needle: which of eight ways the ark lies, 0 = north, going
+ * clockwise. Deliberately no distance (round four): it tells you the way,
+ * not how far.
+ */
+export function lodestoneOctant(state: GameState): number | null {
+  if (!state.hasLodestone) return null;
+  const px = Math.floor((state.player.x + PLAYER_W / 2) / TILE_PX);
+  const py = Math.floor((state.player.y + PLAYER_H / 2) / TILE_PX);
+  const dx = state.world.ark.x - px;
+  const dy = state.world.ark.y - py;
+  if (dx === 0 && dy === 0) return null;
+  return octantOf(dx, dy);
+}
+
+/** Octant of a tile offset, y down. */
+export function octantOf(dx: number, dy: number): number {
+  const a = Math.atan2(dx, -dy);
+  return (Math.round(a / (Math.PI / 4)) + 8) % 8;
+}
+
 /** Scout nearest dry land (above the flood) or a free animal. Usable at sea. */
 export function releaseDove(state: GameState): void {
   // The dove scouts the open sky; underground its bearings would be read off

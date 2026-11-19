@@ -101,6 +101,12 @@ export interface GameState {
   hasPickaxe: boolean;
   pickaxeDurability: number;
   hasSoundingLine: boolean;
+  /** Wave 8: bought from the fisherman at the slipway. */
+  hasFishingRod: boolean;
+  /** A cast in the water: target tile and seconds until it comes up. */
+  castX: number;
+  castY: number;
+  castT: number;
   hasChart: boolean;
   hasLodestone: boolean;
   hasDove: boolean;

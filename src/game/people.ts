@@ -24,6 +24,7 @@ import {
   PersonStatus,
   type Place,
 } from '../core/world.js';
+import { buyFishingRod, canAffordRod, fishingRodPrice, isFisherman } from './fishing.js';
 import { currentDay, depthAt, RESOURCE_LABEL, say } from './queries.js';
 import { type Action, Dir, type GameState, PLAYER_H, PLAYER_W } from './types.js';
 
@@ -242,6 +243,15 @@ export function personInReach(state: GameState): Person | null {
 export function talkAction(state: GameState): Action | null {
   const p = personInReach(state);
   if (!p) return null;
+  if (isFisherman(p) && p.place === p.origin && !state.hasFishingRod) {
+    return {
+      prompt: { tile: Tile.House, label: `Buy a fishing rod — ${fishingRodPrice()}`, affordable: canAffordRod(state) },
+      run: (s) => {
+        buyFishingRod(s);
+        return true;
+      },
+    };
+  }
   const sale = forSale(state, p);
   if (sale) {
     const def = ANIMAL_DEFS[sale.kind];
@@ -378,6 +388,11 @@ const REFUGEE = [
   'We left {from} with what we could carry.',
   '{from} is gone. We are going higher.',
 ];
+const FISHERMAN = [
+  'They bite best when the water is rising. Funny, that.',
+  'Cast past the weed line. What sinks, stays sunk — unless you go after it.',
+  'Forty years on this pond. Never seen it this high.',
+];
 const FARMER_GONE = ['Sold the {kind}. Hope it serves you.', 'Mind the {kind}. It knows the way home.'];
 
 function lineFor(state: GameState, p: Person): string {
@@ -387,6 +402,9 @@ function lineFor(state: GameState, p: Person): string {
 
   if (p.place !== p.origin && hash01(p.id, 31) < 0.7) {
     return quote(pick(REFUGEE).replace('{from}', places[p.origin]?.name ?? 'the valley'));
+  }
+  if (isFisherman(p)) {
+    return quote(pick(FISHERMAN));
   }
   if (p.role === PersonRole.Farmer && p.place === p.origin) {
     const farm = state.world.homesteads[places[p.origin]?.homestead ?? -1];

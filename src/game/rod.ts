@@ -55,8 +55,13 @@ function harvestAt(state: GameState, tx: number, ty: number, allowTool: boolean)
 
   const depth = depthAt(state, tx, ty);
   const submerged = depth > 0;
-  if (submerged && !state.inBoat) {
-    say(state, 'The waters cover it. You would need a boat.');
+  // Galoshes let the Rod reach ankle-deep water on foot (Wave 8).
+  const wading = state.hasGaloshes && depth === 1;
+  if (submerged && !state.inBoat && !wading) {
+    say(
+      state,
+      state.hasFishingRod ? 'The waters cover it. Cast for it, or take a boat.' : 'The waters cover it. You would need a boat.',
+    );
     return true;
   }
   if (submerged && depth > state.rodReach) {

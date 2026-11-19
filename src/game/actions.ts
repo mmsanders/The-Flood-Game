@@ -14,6 +14,7 @@
 import { tetherAction } from './flock.js';
 import { obstacleAction } from './ground.js';
 import { doveAction } from './instruments.js';
+import { fishAction, soundingHint } from './fishing.js';
 import { talkAction } from './people.js';
 import { signAction } from './town.js';
 import { entranceAction, interiorAction } from './places.js';
@@ -32,12 +33,14 @@ const PROVIDERS: readonly ((state: GameState) => Action | null)[] = [
   skiffPickupAction,
   launchAction,
   setDownAction,
+  fishAction,
   dredgeHint,
   obstacleAction,
   signAction,
   talkAction,
   tetherAction,
   doveAction,
+  soundingHint,
 ];
 
 /** Context action rendered by the HUD. */

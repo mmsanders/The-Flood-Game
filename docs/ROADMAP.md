@@ -11,9 +11,9 @@ ones land on foundations that already exist.
 Nothing here is precious. Where I disagree with a note I say so and say why, and the note
 wins if you still want it.
 
-**Status:** Waves 0–7 have shipped (frame budget; the world people left behind; the
+**Status:** Waves 0–8 have shipped (frame budget; the world people left behind; the
 depth ladder and the things that beat it; interiors and instruments; contour ledges; the
-rain begins; the endless sand; signs of people), along with the round-two fixes in *What the first full run
+rain begins; the endless sand; signs of people; instruments), along with the round-two fixes in *What the first full run
 changed* below. What's left is the deferred list at the bottom.
 
 > Full Wave 0 / Wave 1 prose is unchanged from `main` history. This file keeps the
@@ -325,6 +325,50 @@ makes the world feel inhabited. 7.3–7.6 as a second.
 
 ---
 
+## Wave 8 — Instruments that earn their place *(shipped)*
+
+The instruments all exist and all do something, but the Chart and Lodestone are thin HUD
+readouts and the Sounding Line only matters afloat. Wave 8 gives each a job you'd notice
+every run, and adds the fishing rod the Rod already hints at (*"Too deep for the Rod. You
+would need to fish."*).
+
+Decided with Michael, round four: the Lodestone gets eight directions and **no distance**;
+the fishing rod works **from the shore, wading in galoshes, and from the skiff**; the
+Sounding Line makes the water **transparent** around you, not just a depth number. Items
+doing a job aboard the ark is **dropped for now**.
+
+### 8.1 The full-screen map
+
+`M`, or a MAP button beside FLOCK on the touch controls. Pauses the flood like the
+bestiary. One pixel per tile, the whole width of the world, scrolled with up and down.
+Unexplored screens are black. Without the Chart, explored ones are grey and the map says
+*"A map would help."* With it they're in colour, the flood drawn as it stands, with markers
+for what you've seen: towns, caves, shrines, the ark, the skiff. Resources and pickups are
+never marked.
+
+### 8.2 The Lodestone needle
+
+A needle on a small dial in the HUD, pointing to the ark in eight directions. No distance.
+
+### 8.3 The Sounding Line sees the bottom
+
+With the Sounding Line, the water clears within a couple of tiles of you — from the skiff,
+or on foot in galoshes — and sunken resources there show at any depth, with a glint.
+Facing water anywhere, the prompt gives its depth and what it takes to cross: wade it in
+galoshes, a skiff, a pitched skiff, nothing but the ark.
+
+### 8.4 Fishing, and dredging in galoshes
+
+- **The fishing rod**, sold by a fisherman at the slipway. Cast up to two tiles ahead from
+  the shore, wading in galoshes, or from the skiff, and pull up a sunken resource at any
+  depth. A cast takes time and yields one; the Rod is still the way to gather. The line
+  brings up only what the Rod knows, so the shrine ladder still gates pitch.
+- **Galoshes and the Rod:** on foot in galoshes, the Rod dredges ankle-deep water.
+
+**Order:** 8.1 and 8.2, then 8.3 and 8.4.
+
+---
+
 ## Order, and why
 
 ```
@@ -340,6 +384,7 @@ Wave 5  the prologue, dungeon flood,        ← shipped
         animal husbandry
 Wave 6  the endless sand                    ← shipped
 Wave 7  signs of people                     ← shipped
+Wave 8  instruments that earn their place   ← shipped
 ```
 
 ## Things I'd deliberately not do yet

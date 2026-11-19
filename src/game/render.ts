@@ -17,9 +17,10 @@ import {
   RAIN_DAY,
 } from '../core/flood.js';
 import { panelsHigh, panelsWide, type TileMap } from '../core/tilemap.js';
-import { Biome, RESOURCE_COUNT, Resource, Tile, carveTo, isCliffFace } from '../core/tiles.js';
+import { Biome, RESOURCE_COUNT, Resource, Tile, carveTo, isCliffFace, isResourceNode } from '../core/tiles.js';
 import { PersonRole, PersonStatus } from '../core/world.js';
 import { leftBehind } from './people.js';
+import { drawFullMap } from './fullmap.js';
 import { PALETTE } from '../render/palette.js';
 import { type Canvas, getTilesheet, tileSheetX, tileSheetY } from '../render/tilesheet.js';
 import {
@@ -41,7 +42,6 @@ import {
 import {
   Dir,
   type GameState,
-  LODESTONE_DIR_NAME,
   PLAYER_H,
   PLAYER_W,
   actionPrompt,
@@ -49,11 +49,12 @@ import {
   arkProgress,
   currentDay,
   currentDungeon,
+  depthAt,
   dungeonFlood,
   flockScore,
   gloomAt,
   keysHere,
-  lodestoneBearing,
+  lodestoneOctant,
   waterLevel,
 } from './state.js';
 import { isDaylight, todAt } from './tod.js';
@@ -74,6 +75,9 @@ const SERPENT_TONGUE = '#c83c3c';
 
 export interface RenderUi {
   bestiary?: boolean;
+  /** The full-screen map is open, scrolled this many tiles from Noah. */
+  worldMap?: boolean;
+  mapScroll?: number;
   best?: BestFlock;
   /**
    * How far the display is between the last two simulation steps, 0..1.
@@ -116,6 +120,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, ui?: Ren
   drawAnimals(ctx, state);
   drawPeople(ctx, state);
   drawPlayer(ctx, state);
+  drawCast(ctx, state);
   drawTodFilter(ctx, state);
   drawRain(ctx, state);
   ctx.restore();
@@ -126,6 +131,11 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, ui?: Ren
   drawBanner(ctx, state);
   if (state.phase !== 'playing') drawEndCard(ctx, state);
   if (ui?.bestiary) drawBestiary(ctx, state, ui.best ?? { pairs: 0, rescued: 0 });
+  if (ui?.worldMap) {
+    // The draw clamps the scroll at the ends of the world; hand it back so
+    // holding a direction past the edge doesn't wind up a debt to unwind.
+    ui.mapScroll = drawFullMap(ctx, state, SCREEN_W, SCREEN_H, ui.mapScroll ?? 0);
+  }
   if (ui?.perf) drawPerf(ctx, ui.perf);
 }
 
@@ -232,6 +242,10 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
   const y0 = Math.floor(cam.y / TILE_PX);
   const x1 = Math.ceil((cam.x + SCREEN_W) / TILE_PX);
   const y1 = Math.ceil((cam.y + PANEL_PX_H) / TILE_PX);
+  // The Sounding Line, afloat or in galoshes: the water clears around Noah.
+  const sounding = soundingRadius(state) > 0;
+  const ptx = Math.floor((state.player.x + PLAYER_W / 2) / TILE_PX);
+  const pty = Math.floor((state.player.y + PLAYER_H / 2) / TILE_PX);
   let floodLen = 0;
   let shadowLen = 0;
 
@@ -284,13 +298,13 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
         if (d > 0) {
           floodScratch[floodLen] = sx;
           floodScratch[floodLen + 1] = sy;
-          floodScratch[floodLen + 2] = d;
+          floodScratch[floodLen + 2] = sounding && inSounding(tx - ptx, ty - pty) ? CLEAR_WATER : d;
           floodLen += 3;
         }
       } else if (caveDepth > 0 && floodLen + 3 <= floodScratch.length) {
         floodScratch[floodLen] = sx;
         floodScratch[floodLen + 1] = sy;
-        floodScratch[floodLen + 2] = caveDepth;
+        floodScratch[floodLen + 2] = sounding && inSounding(tx - ptx, ty - pty) ? CLEAR_WATER : caveDepth;
         floodLen += 3;
       }
     }
@@ -304,9 +318,92 @@ function drawWorld(ctx: CanvasRenderingContext2D, state: GameState): void {
     if (!fill) continue;
     ctx.fillStyle = fill;
     for (let i = 0; i < floodLen; i += 3) {
-      if (floodScratch[i + 2] === depth || (depth === 4 && floodScratch[i + 2] >= 4)) {
+      if (floodScratch[i + 2] === depth || (depth === 4 && floodScratch[i + 2] >= 4 && floodScratch[i + 2] !== CLEAR_WATER)) {
         ctx.fillRect(floodScratch[i], floodScratch[i + 1], TILE_PX, TILE_PX);
       }
+    }
+  }
+  if (sounding) drawSounding(ctx, state, map, cam, ptx, pty, floodLen);
+}
+
+/**
+ * A line in the water: rod tip to bobber, the bobber dipping as the cast
+ * runs out, then gone with whatever it brought up.
+ */
+function drawCast(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (state.castT <= 0 || state.castX < 0) return;
+  const cam = cameraOrigin(state);
+  const p = state.player;
+  const fx = lerp(p.prevX, p.x, renderAlpha) + PLAYER_W / 2 - cam.x;
+  const fy = lerp(p.prevY, p.y, renderAlpha) - 2 - cam.y;
+  const tx = state.castX * TILE_PX + TILE_PX / 2 - cam.x;
+  const ty = state.castY * TILE_PX + TILE_PX / 2 - cam.y;
+  const steps = Math.max(2, Math.round(Math.max(Math.abs(tx - fx), Math.abs(ty - fy)) / 2));
+  ctx.fillStyle = '#e6e9ef';
+  for (let n = 1; n < steps; n++) {
+    const t = n / steps;
+    ctx.fillRect(Math.round(fx + (tx - fx) * t), Math.round(fy + (ty - fy) * t + Math.sin(t * Math.PI) * -3), 1, 1);
+  }
+  const dip = Math.sin(state.elapsed * 9) > 0.6 ? 1 : 0;
+  ctx.fillStyle = '#e04a3a';
+  ctx.fillRect(Math.round(tx) - 1, Math.round(ty) - 1 + dip, 3, 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(Math.round(tx) - 1, Math.round(ty) + 1 + dip, 3, 1);
+}
+
+/** Marks a flooded tile the Sounding Line has cleared. */
+const CLEAR_WATER = 9;
+
+/** Tiles the Sounding Line sees around Noah: a disc a couple of tiles across. */
+export const SOUNDING_RADIUS = 2;
+
+function inSounding(dx: number, dy: number): boolean {
+  return dx * dx + dy * dy <= SOUNDING_RADIUS * SOUNDING_RADIUS + 1;
+}
+
+/** Radius the Sounding Line clears right now, or 0 if it can't be used. */
+function soundingRadius(state: GameState): number {
+  if (!state.hasSoundingLine) return 0;
+  if (state.location.kind !== 'overworld' && state.location.kind !== 'dungeon') return 0;
+  return state.inBoat || state.hasGaloshes ? SOUNDING_RADIUS : 0;
+}
+
+/**
+ * The cleared water: a pale tint so it still reads as water, a ripple at the
+ * edge of what the line can see, and a glint on anything lying on the bottom.
+ */
+function drawSounding(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  map: TileMap,
+  cam: { x: number; y: number },
+  ptx: number,
+  pty: number,
+  floodLen: number,
+): void {
+  ctx.fillStyle = 'rgba(90, 170, 230, 0.20)';
+  for (let i = 0; i < floodLen; i += 3) {
+    if (floodScratch[i + 2] === CLEAR_WATER) ctx.fillRect(floodScratch[i], floodScratch[i + 1], TILE_PX, TILE_PX);
+  }
+  const phase = Math.floor(state.elapsed * 3) % 4;
+  for (let dy = -SOUNDING_RADIUS - 1; dy <= SOUNDING_RADIUS + 1; dy++) {
+    for (let dx = -SOUNDING_RADIUS - 1; dx <= SOUNDING_RADIUS + 1; dx++) {
+      if (!inSounding(dx, dy)) continue;
+      const tx = ptx + dx;
+      const ty = pty + dy;
+      if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) continue;
+      if (!isResourceNode(map.tiles[ty * map.w + tx])) continue;
+      if (depthAt(state, tx, ty) <= 0) continue;
+      // A glint that walks round the node, so it reads even on a busy tile.
+      const sx = Math.round(tx * TILE_PX - cam.x);
+      const sy = Math.round(ty * TILE_PX - cam.y);
+      const gx = phase === 0 ? 3 : phase === 1 ? 11 : phase === 2 ? 11 : 3;
+      const gy = phase < 2 ? 3 : 11;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(sx + gx, sy + gy, 2, 2);
+      ctx.fillStyle = '#c8e8ff';
+      ctx.fillRect(sx + gx - 1, sy + gy + 1, 1, 1);
+      ctx.fillRect(sx + gx + 2, sy + gy, 1, 1);
     }
   }
 }
@@ -1588,6 +1685,39 @@ function drawKeys(ctx: CanvasRenderingContext2D, state: GameState, x: number, y:
 }
 
 
+/**
+ * The Lodestone: a little dial with a needle pointing to the ark, eight ways.
+ * Tip in red, tail in grey, a pivot dot. Spins slowly when you are standing
+ * on the ark itself and there is nowhere left to point.
+ */
+const NEEDLE_DX = [0, 1, 1, 1, 0, -1, -1, -1];
+const NEEDLE_DY = [-1, -1, 0, 1, 1, 1, 0, -1];
+
+function drawLodestone(ctx: CanvasRenderingContext2D, x: number, y: number, octant: number | null): void {
+  // Dial: a 9x9 disc, drawn as stacked rows.
+  ctx.fillStyle = '#2a3446';
+  ctx.fillRect(x + 2, y, 5, 9);
+  ctx.fillRect(x, y + 2, 9, 5);
+  ctx.fillRect(x + 1, y + 1, 7, 7);
+  ctx.fillStyle = '#3e4c64';
+  ctx.fillRect(x + 2, y + 1, 5, 7);
+  ctx.fillRect(x + 1, y + 2, 7, 5);
+  const cx = x + 4;
+  const cy = y + 4;
+  const o = octant ?? Math.floor(performance.now() / 250) % 8;
+  const dx = NEEDLE_DX[o];
+  const dy = NEEDLE_DY[o];
+  ctx.fillStyle = '#9aa6b8';
+  ctx.fillRect(cx - dx, cy - dy, 1, 1);
+  ctx.fillRect(cx - 2 * dx, cy - 2 * dy, 1, 1);
+  ctx.fillStyle = '#e04a3a';
+  ctx.fillRect(cx + dx, cy + dy, 1, 1);
+  ctx.fillRect(cx + 2 * dx, cy + 2 * dy, 1, 1);
+  ctx.fillRect(cx + 3 * dx, cy + 3 * dy, 1, 1);
+  ctx.fillStyle = '#e8f0ff';
+  ctx.fillRect(cx, cy, 1, 1);
+}
+
 function drawInstrumentBadges(
   ctx: CanvasRenderingContext2D,
   state: GameState,
@@ -1603,24 +1733,17 @@ function drawInstrumentBadges(
     cursor += 10;
   }
   if (state.hasLodestone) {
-    const bearing = lodestoneBearing(state);
-    ctx.fillStyle = '#8ab4d8';
-    ctx.beginPath();
-    ctx.moveTo(cursor + 3, y);
-    ctx.lineTo(cursor + 6, y + 8);
-    ctx.lineTo(cursor, y + 8);
-    ctx.fill();
-    if (bearing !== null) {
-      ctx.fillStyle = '#e8f0ff';
-      ctx.font = '5px monospace';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-      const label = LODESTONE_DIR_NAME[bearing][0]!.toUpperCase();
-      ctx.fillText(label, cursor + 7, y + 1);
-      cursor += 14;
-    } else {
-      cursor += 10;
-    }
+    drawLodestone(ctx, cursor, y - 1, lodestoneOctant(state));
+    cursor += 12;
+  }
+  if (state.hasFishingRod) {
+    // A rod and a hook.
+    ctx.fillStyle = '#a07a4a';
+    for (let k = 0; k < 7; k++) ctx.fillRect(cursor + k, y + 7 - k, 1, 1);
+    ctx.fillStyle = '#c8d0dc';
+    ctx.fillRect(cursor + 7, y + 1, 1, 5);
+    ctx.fillRect(cursor + 6, y + 6, 1, 1);
+    cursor += 10;
   }
   if (state.hasDove) {
     ctx.fillStyle = '#e8e0d0';

@@ -365,6 +365,7 @@ html.touch-ui .live-badge {
   grid-area: utility;
   align-items: center;
   justify-content: center;
+  gap: 8px;
 }
 
 .utility-button {

@@ -28,12 +28,19 @@ import { Dir, type GameState, PLAYER_H, PLAYER_W, type StepInput } from './types
 import { tickWeather } from './weather.js';
 import { tryEnterDesert, wrapDesert } from './desert.js';
 import { stepPeople } from './people.js';
+import { STILL, tickCast } from './fishing.js';
 import { emptyTrail, resetTrail } from './flock.js';
 
 export { actionPrompt } from './actions.js';
 export { markExplored, snapCamera, syncInterpolation } from './camera.js';
 export { obstacleInFront } from './ground.js';
-export { LODESTONE_DIR_NAME, lodestoneBearing, releaseDove } from './instruments.js';
+export {
+  LODESTONE_DIR_NAME,
+  OCTANT_NAME,
+  lodestoneBearing,
+  lodestoneOctant,
+  releaseDove,
+} from './instruments.js';
 export {
   activeMap,
   currentDay,
@@ -115,6 +122,10 @@ export function createGame(world: World): GameState {
     hasPickaxe: false,
     pickaxeDurability: 0,
     hasSoundingLine: false,
+    hasFishingRod: false,
+    castX: -1,
+    castY: -1,
+    castT: 0,
     hasChart: false,
     hasLodestone: false,
     hasDove: false,
@@ -264,7 +275,9 @@ export function step(state: GameState, input: StepInput, dt: number): void {
     return;
   }
 
-  movePlayer(state, input, dt);
+  // Noah stands still while a line is in the water.
+  movePlayer(state, state.castT > 0 ? STILL : input, dt);
+  tickCast(state, dt);
   maybeDungeonWarp(state);
   tryEnterDesert(state);
 

@@ -12,7 +12,7 @@
 import { ANIMAL_DEFS, AnimalStatus, FARM_KIND } from '../core/animals.js';
 import { type Interior, InteriorKind } from '../core/interior.js';
 import { Resource, Tile } from '../core/tiles.js';
-import { HomesteadState, type Point, SiteKind } from '../core/world.js';
+import { HomesteadState, PersonRole, type Point, SiteKind } from '../core/world.js';
 import { forSale, ownerOf } from './people.js';
 import { currentDay, facingTile, RESOURCE_LABEL, say } from './queries.js';
 import { RAIN_DAY } from '../core/flood.js';
@@ -62,6 +62,10 @@ export function rumours(state: GameState, here: Point): string[] {
   }
   if (!state.hermitHeartClaimed) {
     out.push('The hermit up the mountain would give a heart for a sheep. One of yours, off the boat.');
+  }
+  const fisher = (world.people ?? []).find((p) => p.role === PersonRole.Fisherman && p.place === p.origin && p.status !== 2);
+  if (fisher && !state.hasFishingRod) {
+    out.push(`Old fisherman at the slipway sells rods. Pulls things up from the deep with 'em. ${cap(bearing(here, world.boatYard))}.`);
   }
   if (world.desert) out.push("There's a sunburnt fellow at the carpenter's. Talks about the far sand.");
   if (world.sites?.some((s) => s.kind === SiteKind.Vineyard)) {

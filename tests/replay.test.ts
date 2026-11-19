@@ -14,7 +14,8 @@
  * (the prologue moved the flood curve, caves became 4x4 and flood, the flock
  * is led on a rope), Wave 6 (worldgen cuts a sandy gate in the south wall,
  * and the run state gained the desert's fields) and Wave 7 (homesteads and
- * people in worldgen; kept animals stay home and wild ones keep away).
+ * people in worldgen; kept animals stay home and wild ones keep away) and
+ * Wave 8 (a fisherman at the slipway; the run state gained the cast).
  * Re-capture only for a change like that, and say so in the commit.
  */
 

@@ -137,7 +137,7 @@ export function generateWorld(seed: number, params: WorldParams = DEFAULT_PARAMS
   // sand. Plain ground only, so nothing above is disturbed.
   const desert = placeDesert(seed, tiles, elev, w, h);
   // And the people, from the final tiles, so everyone stands somewhere real.
-  const { places, people } = placePeople(seed, tiles, elev, w, h, settlements, homesteads, sites);
+  const { places, people } = placePeople(seed, tiles, elev, w, h, settlements, homesteads, sites, boatYard);
 
   const stats = collectStats(tiles, biome, w, h);
   stats.connected = connectivity.connected;
